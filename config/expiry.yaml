@@ -1,0 +1,42 @@
+# Derivatives expiry rules per product, as dated periods (each rule applies from its `from` date until
+# the next rule). weekday: null = no contract of that kind in that period. Expiries that fall on a
+# non-trading day move to the previous trading day. Checked 2026-09-23 against exchange circulars and
+# broker notices (NSE FAOP64506, Zerodha/ICICI Direct/Business Standard summaries).
+# MCX contracts expire on contract-specific dates taken from the Fyers symbol master (not rules).
+
+products:
+  NSE:NIFTY50:
+    weekly:
+      - {from: 2019-02-11, weekday: thursday}
+      - {from: 2025-09-01, weekday: tuesday}
+    monthly:
+      - {from: 2000-06-12, weekday: thursday}
+      - {from: 2025-09-01, weekday: tuesday}
+
+  NSE:BANKNIFTY:
+    weekly:
+      - {from: 2016-05-27, weekday: thursday}
+      - {from: 2023-09-04, weekday: wednesday}
+      - {from: 2024-11-14, weekday: null}      # last weekly expiry 2024-11-13 (SEBI: one weekly index per exchange)
+    monthly:
+      - {from: 2005-06-13, weekday: thursday}
+      - {from: 2024-03-01, weekday: wednesday}
+      - {from: 2025-01-01, weekday: thursday}
+      - {from: 2025-09-01, weekday: tuesday}
+
+  BSE:SENSEX:
+    weekly:
+      - {from: 2023-05-15, weekday: friday}
+      - {from: 2025-01-01, weekday: tuesday}
+      - {from: 2025-09-01, weekday: thursday}
+    monthly:
+      - {from: 2023-05-15, weekday: friday}
+      - {from: 2025-01-01, weekday: tuesday}
+      - {from: 2025-09-01, weekday: thursday}
+
+# Every NSE equity in the watchlist trades in stock F&O (monthly only).
+defaults:
+  NSE:equity:
+    monthly:
+      - {from: 2001-11-09, weekday: thursday}
+      - {from: 2025-09-01, weekday: tuesday}

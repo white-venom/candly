@@ -313,6 +313,33 @@ These were agreed while building and override anything above.
   - Scorecard rows carry an internal `n_clusters` (Parquet only, not in the API yet).
 - **News:** the Python `NewsItem` is a pydantic model (`news/models.py`). A backtest must filter on `fetched_at` (as-of time), never on `published_at`.
 
+### Wave 2 additions: expiry and trader-test fixes
+
+**Expiry, in Python**
+- `candly.core.expiry.expiry_info(instrument_id, d) -> ExpiryInfo | None`
+  - Rule-based, for NSE/BSE, from `config/expiry.yaml`.
+  - `ExpiryInfo` fields: `next_expiry` (date), `kind` (weekly/monthly/contract), `days_to_expiry` (trading days; 0 on the day), `is_expiry_day`, `is_monthly_expiry_day`.
+- `candly.data.expiries.expiry_info(instrument_id, d) -> ExpiryInfo | None` (backend) is the single entry point for everyone else:
+  - NSE/BSE: delegates to core.
+  - MCX: uses the contract expiries from the Fyers symbol master, with `kind="contract"`.
+  - INDIAVIX: None.
+
+**Expiry, in the API**
+
+```ts
+type ExpiryInfo = { next: string /* YYYY-MM-DD, IST */; kind: "weekly" | "monthly" | "contract"; days_to_expiry: number; is_expiry_day: boolean };
+// Instrument gains:        expiry: ExpiryInfo | null
+// PatternSignal.context:   expiry_day: boolean | null; days_to_expiry: number | null
+// ScannerRow gains:        expiry: ExpiryInfo | null; abstain_reason: string | null
+// Forecast.drivers may include { name: "Expiry", ... } when the reference bar is on or near an expiry.
+// LevelsResponse gains:    as_of: number (UNIX s of the bar the levels come from); stale: boolean
+//                          (true when a newer session exists in any timeframe than the daily bar used)
+```
+
+**Signals and calls**
+- `ScannerRow` excludes instruments with `tradable=false` (e.g. INDIAVIX).
+- A directional call (`abstain=false`) always has a non-null `invalidation` at least `patterns.min_stop_atr` ATR from the reference close. Otherwise the forecast abstains.
+
 ### Grading definitions
 
 These are used by the ledger and the Accuracy page.
