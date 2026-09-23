@@ -378,6 +378,30 @@ expiry_check?: { status: "ok" | "mismatch" | "unavailable"; checked_at: number |
 source?: "exchange" | "rules";
 ```
 
+**Fyers first sync (one-step setup)**
+
+After the first successful Fyers login, the backend runs `jobs.sync.run_fyers_sync()` in the background:
+1. refresh expiries
+2. archive Yahoo series (move, never delete)
+3. 1D backfill from 2005
+4. 5m backfill from 2017-07-03
+5. 15m/1h resampled from 5m
+6. 1D gap fill
+7. quality report
+8. observed holidays → `data/derived/holidays_observed.json`
+9. `core.calendar.reload_calendar()`
+10. scorecards for 1D/1h/15m/5m
+
+The run is resumable, one at a time, and keeps its state in `data/sync/state.json`.
+
+```ts
+// POST /api/sync/fyers (JSON) -> 202 SyncStatus, or 409 if already running
+// GET  /api/sync/status       -> SyncStatus
+type SyncStatus = { status: "idle" | "running" | "done" | "error"; step: string | null; progress: number | null /* 0-1 */;
+                    message: string | null; started_at: number | null; finished_at: number | null };
+// Health gains: sync?: SyncStatus
+```
+
 **Signals and calls**
 - `ScannerRow` excludes instruments with `tradable=false` (e.g. INDIAVIX).
 - A directional call (`abstain=false`) always has a non-null `invalidation` at least `patterns.min_stop_atr` ATR from the reference close. Otherwise the forecast abstains.

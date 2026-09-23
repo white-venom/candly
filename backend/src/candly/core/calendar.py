@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 from functools import lru_cache
@@ -44,11 +45,13 @@ class ExchangeSpec:
 
 
 class MarketCalendar:
-    def __init__(self, raw: dict):
+    def __init__(self, raw: dict, observed_holidays: dict[str, list[date]] | None = None):
         holidays: dict[str, set[date]] = {}
         for h in raw.get("holidays") or []:
             for ex in h["exchanges"]:
                 holidays.setdefault(ex, set()).add(h["date"])
+        for ex, days in (observed_holidays or {}).items():
+            holidays.setdefault(ex, set()).update(days)
         specials: dict[str, dict[date, tuple[time, time] | None]] = {}
         for s in raw.get("special_sessions") or []:
             timing = (_hm(s["open"]), _hm(s["close"])) if s.get("open") and s.get("close") else None
@@ -189,6 +192,25 @@ class MarketCalendar:
         return self._shift_back(exchange, last_day)
 
 
+def load_observed_holidays(path: Path) -> dict[str, list[date]]:
+    """Weekday holidays derived from stored exchange data (written by the Fyers sync); {} if absent."""
+    if not path.exists():
+        return {}
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    return {ex: [date.fromisoformat(d) for d in days] for ex, days in raw.items()}
+
+
 @lru_cache
 def get_calendar() -> MarketCalendar:
-    return MarketCalendar.from_yaml(get_settings().config_dir / "markets.yaml")
+    settings = get_settings()
+    raw = yaml.safe_load((settings.config_dir / "markets.yaml").read_text(encoding="utf-8"))
+    observed = load_observed_holidays(settings.derived_dir / "holidays_observed.json")
+    return MarketCalendar(raw, observed)
+
+
+def reload_calendar() -> None:
+    """Drop cached calendars (and expiry rules built on them) after holidays change on disk."""
+    get_calendar.cache_clear()
+    from candly.core.expiry import get_expiry_rules
+
+    get_expiry_rules.cache_clear()

@@ -71,6 +71,27 @@ def test_weekly_expiry_regular_and_holiday_shift():
     assert cal.next_expiry("BSE", date(2026, 3, 23)) == date(2026, 3, 25)  # Ram Navami Thursday -> Wednesday
 
 
+def test_observed_holidays_from_the_sync_are_merged(tmp_data_dir):
+    import json
+
+    from candly.core.calendar import get_calendar as fresh_calendar
+    from candly.core.calendar import reload_calendar
+
+    path = tmp_data_dir / "derived" / "holidays_observed.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"NSE": ["2024-12-25", "2024-10-31"]}), encoding="utf-8")
+    reload_calendar()
+    try:
+        cal2 = fresh_calendar()
+        assert not cal2.is_trading_day("NSE", date(2024, 12, 25))
+        assert cal2.is_trading_day("BSE", date(2024, 12, 25))  # only NSE was observed
+        assert cal2.is_trading_day("NSE", date(2024, 12, 24))
+        assert not cal2.is_trading_day("NSE", date(2026, 10, 2))  # configured holidays still apply
+    finally:
+        path.unlink()
+        reload_calendar()
+
+
 def test_monthly_expiry_holiday_shift():
     # Last Tuesday of March 2026 is Mahavir Jayanti -> Monday 30 March
     assert cal.next_expiry("NSE", date(2026, 3, 25), monthly=True) == date(2026, 3, 30)
