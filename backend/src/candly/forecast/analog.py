@@ -9,6 +9,18 @@ an analog (analog.no_pattern).
 
 Consecutive analogs' outcome paths overlap, so the posterior and its CI use an effective sample of
 n / steps analogs (analog.effective_n); the abstain rule still counts all n analogs.
+
+A directional call (abstain=false) passes every gate in research.yaml `abstain`, in this order:
+- intraday_within_session: on intraday timeframes the last target bar closes by the reference day's
+  session close ("horizon crosses session close").
+- require_validated_bucket: in the scorecard's validation period, the analog bucket (the active
+  patterns in the reference bar's trend bucket, at this horizon) moved the call's way more often than
+  its base rate. No scorecard, or no pattern on the reference bar, is never validated ("unvalidated
+  bucket").
+- require_edge_over_costs: the median path's move the call's way clears the round-trip cost for the
+  instrument kind and holding type ("edge below costs").
+Its stop is the tightest active-pattern invalidation in the call's direction, else fallback_stop_atr
+ATR beyond the reference close, and never closer than patterns.yaml min_stop_atr ATR.
 """
 
 from __future__ import annotations
@@ -16,14 +28,17 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from candly.core.instruments import exchange_of
+from candly.core.calendar import get_calendar
+from candly.core.instruments import exchange_of, get_instrument
 from candly.core.schema import validate_candles
 from candly.core.timeframes import is_intraday
 from candly.features.context import compute_context
-from candly.forecast.models import Band, Candle, Driver, Forecast, ForecastContext
+from candly.features.expiry import expiry_on
+from candly.forecast.models import Band, Candle, Driver, Forecast, ForecastContext, Trade
 from candly.forecast.timing import drop_unclosed, future_bar_times, last_expected_closed_bar, to_unix
 from candly.patterns import PATTERN_INFO, detect_patterns, load_pattern_config
 from candly.research.config import ResearchConfig, load_research_config
+from candly.research.costs import round_trip_cost
 from candly.research.labels import forward_labels, forward_paths, path_columns
 from candly.research.scorecard import Scorecard
 from candly.research.stats import beta_interval, beta_posterior
@@ -49,6 +64,23 @@ def confidence_label(lo: float, hi: float, base: float, edge: float, cfg: Resear
         if big_enough and (excludes_base or not rule.ci_excludes_base):
             return label
     return "low"
+
+
+def ghost_path(paths: np.ndarray) -> np.ndarray:
+    """(steps, 4) OHLC in ATR units from the reference close, from analog paths (n, steps, 4).
+
+    Closes follow the median close path. Each step's body is the analogs' median body at that step,
+    signed by the median path's move; its wicks are the analogs' median upper and lower wicks. Medians
+    of O, H, L and C taken separately would cancel the bodies out and draw every step as a doji.
+    """
+    o, h, lo, c = (paths[:, :, k] for k in range(4))
+    close = np.median(c, axis=0)
+    body = np.median(np.abs(c - o), axis=0)
+    upper = np.median(h - np.maximum(o, c), axis=0)
+    lower = np.median(np.minimum(o, c) - lo, axis=0)
+    opens = close - np.sign(np.diff(close, prepend=0.0)) * body
+    top, bottom = np.maximum(opens, close), np.minimum(opens, close)
+    return np.column_stack([opens, top + upper, bottom - lower, close])
 
 
 def _pooled_paths(
@@ -88,10 +120,14 @@ def make_forecast(
     *,
     now: pd.Timestamp | None = None,
     check_stale: bool = True,
+    bucket_gate: bool = True,
 ) -> Forecast:
-    """Forecast from the last bar closed by `now`. `check_stale=False` skips the calendar's stale-data
-    abstention; only a historical replay (research.evaluate) should pass it, because the calendar has no
-    pre-2026 holidays."""
+    """Forecast from the last bar closed by `now`.
+
+    `check_stale=False` skips the calendar's stale-data abstention; only a historical replay
+    (research.evaluate) should pass it, because the calendar has no pre-2026 holidays.
+    `bucket_gate=False` skips abstain.require_validated_bucket; a replay of the validation period must
+    pass it, because the scorecard's validation statistics come from that same period."""
     cfg = load_research_config()
     steps = int(steps or cfg.forecast_steps)
     now = pd.Timestamp.now(tz="UTC") if now is None else pd.Timestamp(now).tz_convert("UTC")
@@ -99,20 +135,31 @@ def make_forecast(
     df = drop_unclosed(validate_candles(candles), exchange, tf, now)
     if df.empty:
         raise ValueError(f"no closed candles for {instrument_id} {tf}")
-    return _AnalogRun(instrument_id, tf, exchange, df, scorecard, steps, now, cfg, check_stale).run()
+    run = _AnalogRun(instrument_id, tf, exchange, df, scorecard, steps, now, cfg, check_stale, bucket_gate)
+    return run.run()
 
 
 class _AnalogRun:
     def __init__(
-        self, instrument_id, tf, exchange, df, scorecard, steps, now, cfg: ResearchConfig, check_stale=True
+        self,
+        instrument_id,
+        tf,
+        exchange,
+        df,
+        scorecard,
+        steps,
+        now,
+        cfg: ResearchConfig,
+        check_stale=True,
+        bucket_gate=True,
     ):
         self.instrument_id, self.tf, self.exchange = instrument_id, tf, exchange
         self.df, self.scorecard, self.steps, self.now, self.cfg = df, scorecard, steps, now, cfg
-        self.check_stale = check_stale
+        self.check_stale, self.bucket_gate = check_stale, bucket_gate
         self.ref = len(df) - 1
         self.ref_ts = df["ts"].iloc[-1]
         self.ref_close = float(df["close"].iloc[-1])
-        self.ctx = compute_context(df, tf, exchange)
+        self.ctx = compute_context(df, tf, exchange, instrument_id=instrument_id)
         self.patterns = detect_patterns(df, tf)
         self.active = self.patterns[self.patterns["ts"] == self.ref_ts]
         last = self.ctx.iloc[-1]
@@ -150,6 +197,7 @@ class _AnalogRun:
             "ghost_candles": [],
             "bands": [],
             "invalidation": None,
+            "trade": None,
             "drivers": [],
             "n_analogs": 0,
             "explanation": None,
@@ -217,17 +265,15 @@ class _AnalogRun:
         p_up = float(beta_posterior(hits / scale, n / scale, self.base, k))
         lo, hi = beta_interval(hits / scale, n / scale, self.base, k, cfg.ci_level)
         edge = p_up - self.base
-        bucket = f"{cfg.analog_bucket}={self.bucket}" + (
-            f", pattern in {{{', '.join(self.active['pattern'])}}}" if not self.active.empty else ", any bar"
-        )
         drivers.insert(
             0,
             Driver(
                 name="Analogs",
                 effect=_direction(p_up, self.base),
                 detail=(
-                    f"{n} {source} analogs ({bucket}; effective n {n / scale:.0f}): {hits} closed higher "
-                    f"after {self.steps} bars; posterior {_pct(p_up)} vs base rate {_pct(self.base)}"
+                    f"{n} {source} analogs ({self._bucket_label()}; effective n {n / scale:.0f}): {hits} "
+                    f"closed higher after {self.steps} bars; posterior {_pct(p_up)} vs base rate "
+                    f"{_pct(self.base)}"
                 ),
             ),
         )
@@ -239,47 +285,123 @@ class _AnalogRun:
         }
         if n < cfg.min_analogs:
             return self._forecast(abstain_reason=f"too few analogs: {n} < {cfg.min_analogs}", **fields)
-        ghosts, bands = self._ghosts(paths)
+        times = future_bar_times(self.exchange, self.tf, self.ref_ts, self.steps)
+        ghosts, bands = self._ghosts(paths, times)
+        expected_move = (ghosts[-1].close - self.ref_close) / self.ref_close if ghosts else None
         fields.update(
             ghost_candles=ghosts,
             bands=bands,
-            expected_move_pct=(100.0 * (ghosts[-1].close - self.ref_close) / self.ref_close)
-            if ghosts
-            else None,
+            expected_move_pct=100.0 * expected_move if expected_move is not None else None,
         )
         if abs(edge) < cfg.min_edge:
             return self._forecast(
                 abstain_reason=f"edge below minimum: |p_up - base_rate| = {abs(edge):.3f} < {cfg.min_edge}",
                 **fields,
             )
+        bullish = edge > 0
+        reason = self._call_gates(bullish, times, expected_move)
+        if reason is not None:
+            return self._forecast(abstain_reason=reason, **fields)
+        stop = self._stop(bullish)
+        target = bands[-1].p50
+        sign = 1.0 if bullish else -1.0
+        trade = Trade(
+            entry=self.ref_close,
+            stop=stop,
+            target=target,
+            reward_risk=sign * (target - self.ref_close) / abs(self.ref_close - stop),
+        )
         return self._forecast(
             abstain=False,
             confidence=confidence_label(float(lo), float(hi), self.base, edge, cfg),
-            invalidation=self._invalidation(edge),
+            invalidation=stop,
+            trade=trade,
             **fields,
         )
 
-    def _ghosts(self, paths: np.ndarray) -> tuple[list[Candle], list[Band]]:
-        times = future_bar_times(self.exchange, self.tf, self.ref_ts, self.steps)
-        med = np.median(paths, axis=0)
-        closes = paths[:, :, 3]
-        qs = np.quantile(closes, self.cfg.bands, axis=0)
+    def _bucket_label(self) -> str:
+        patterns = ", ".join(self.active["pattern"])
+        where = f"pattern in {{{patterns}}}" if not self.active.empty else "any bar"
+        return f"{self.cfg.analog_bucket}={self.bucket}, {where}"
+
+    def _ghosts(self, paths: np.ndarray, times: list[pd.Timestamp]) -> tuple[list[Candle], list[Band]]:
+        ohlc = self.ref_close + ghost_path(paths) * self.atr
+        qs = self.ref_close + np.quantile(paths[:, :, 3], self.cfg.bands, axis=0) * self.atr
         ghosts, bands = [], []
         for s, ts in enumerate(times):
-            o, h, lo, c = (self.ref_close + v * self.atr for v in med[s])
-            ghosts.append(
-                Candle(time=to_unix(ts), open=o, high=max(h, o, c), low=min(lo, o, c), close=c, volume=0.0)
-            )
-            p10, p50, p90 = (self.ref_close + q * self.atr for q in qs[:, s][:3])
+            o, h, lo, c = (float(v) for v in ohlc[s])
+            ghosts.append(Candle(time=to_unix(ts), open=o, high=h, low=lo, close=c, volume=0.0))
+            p10, p50, p90 = (float(v) for v in qs[:3, s])
             bands.append(Band(time=to_unix(ts), p10=p10, p50=p50, p90=p90))
         return ghosts, bands
 
-    def _invalidation(self, edge: float) -> float | None:
-        want = "bullish" if edge > 0 else "bearish"
+    def _crosses_session_close(self, times: list[pd.Timestamp]) -> bool:
+        if not is_intraday(self.tf):
+            return False
+        if not times:
+            return True
+        cal = get_calendar()
+        _, close = cal.session_times(self.exchange, cal.local_date(self.ref_ts))
+        return cal.bar_close_time(self.exchange, times[-1], self.tf) > close
+
+    def _call_gates(
+        self, bullish: bool, times: list[pd.Timestamp], expected_move: float | None
+    ) -> str | None:
+        """The abstain reason of the first research.yaml `abstain` gate the call fails, else None."""
+        cfg = self.cfg
+        crosses = self._crosses_session_close(times)
+        if cfg.intraday_within_session and crosses:
+            last = times[-1].isoformat() if times else "none"
+            return f"horizon crosses session close: last target bar {last} ends after this session"
+        if cfg.require_validated_bucket and self.bucket_gate:
+            reason = self._unvalidated(bullish)
+            if reason is not None:
+                return f"unvalidated bucket: {reason}"
+        if cfg.require_edge_over_costs:
+            holding = "intraday" if is_intraday(self.tf) and not crosses else "multi_day"
+            kind = get_instrument(self.instrument_id).kind
+            cost = round_trip_cost(kind, holding, side="long" if bullish else "short")
+            move = (1.0 if bullish else -1.0) * (expected_move or 0.0)
+            if move < cost:
+                return (
+                    f"edge below costs: median move {100 * move:.2f}% the call's way vs "
+                    f"{100 * cost:.2f}% round trip ({kind}, {holding.replace('_', '-')})"
+                )
+        return None
+
+    def _unvalidated(self, bullish: bool) -> str | None:
+        if self.active.empty:
+            return f"{self._bucket_label()} is not a scorecard bucket"
+        if self.scorecard is None:
+            return "no scorecard"
+        min_n = self.cfg.min_samples
+        v = self.scorecard.validate_bucket(
+            self.active["pattern"],
+            self.instrument_id,
+            f"{self.cfg.analog_bucket}={self.bucket}",
+            self.steps,
+            bullish,
+            min_n,
+        )
+        if v.instrument is None:
+            return f"{self._bucket_label()} has {v.n} validation events, fewer than {min_n}"
+        if not v.validated:
+            return (
+                f"{self._bucket_label()} ({v.instrument}) moved the call's way {_pct(v.hit_rate)} of the "
+                f"time in validation vs a base rate of {_pct(v.base_rate)}, n={v.n}"
+            )
+        return None
+
+    def _stop(self, bullish: bool) -> float:
+        want = "bullish" if bullish else "bearish"
         values = self.active.loc[self.active["direction"] == want, "invalidation"].dropna()
-        if values.empty:
-            return None
-        return float(values.max() if want == "bullish" else values.min())
+        if len(values):
+            stop = float(values.max() if bullish else values.min())
+        else:
+            away = self.cfg.fallback_stop_atr * self.atr
+            stop = self.ref_close - away if bullish else self.ref_close + away
+        floor = float(load_pattern_config()["min_stop_atr"]) * self.atr
+        return min(stop, self.ref_close - floor) if bullish else max(stop, self.ref_close + floor)
 
     def _pattern_drivers(self) -> list[Driver]:
         out = []
@@ -311,6 +433,19 @@ class _AnalogRun:
                 )
             )
         return out
+
+    def _expiry_driver(self, days_to_expiry) -> Driver | None:
+        if pd.isna(days_to_expiry) or days_to_expiry > 1:
+            return None
+        info = expiry_on(self.instrument_id, get_calendar().local_date(self.ref_ts))
+        if info is None:
+            return None
+        when = "on" if days_to_expiry == 0 else "1 trading day before"
+        return Driver(
+            name="Expiry",
+            effect="neutral",
+            detail=f"The reference bar is {when} the {info.kind} expiry ({info.next_expiry.isoformat()}).",
+        )
 
     def _context_drivers(self) -> list[Driver]:
         last = self.ctx.iloc[-1]
@@ -347,4 +482,7 @@ class _AnalogRun:
                     detail=f"close within {within} ATR of {last['near_level']}",
                 )
             )
+        expiry = self._expiry_driver(last["days_to_expiry"])
+        if expiry is not None:
+            out.append(expiry)
         return out

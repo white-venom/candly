@@ -165,13 +165,42 @@ def test_known_answer(name):
         info.label,
     )
     window = df.iloc[-info.bars :]
-    buffer = 0.1 * atr_fn(df, 14).iloc[-1]
+    atr = atr_fn(df, 14).iloc[-1]
+    close = df["close"].iloc[-1]
+    buffer, floor = 0.1 * atr, 0.5 * atr
     if info.direction == "bullish":
-        assert row["invalidation"] == pytest.approx(window["low"].min() - buffer)
+        assert row["invalidation"] == pytest.approx(min(window["low"].min() - buffer, close - floor))
     elif info.direction == "bearish":
-        assert row["invalidation"] == pytest.approx(window["high"].max() + buffer)
+        assert row["invalidation"] == pytest.approx(max(window["high"].max() + buffer, close + floor))
     else:
         assert np.isnan(row["invalidation"])
+
+
+@pytest.mark.parametrize(
+    ("name", "bar", "pushed"),
+    [
+        # closes on its low: low - 0.1 ATR would sit 0.1 ATR from the close, so the stop moves out
+        ("inverted_hammer", (0.3, 2.0, 0.0, 0.0), True),
+        # a long body: the pattern's own low is already well beyond the floor and is kept
+        ("bullish_marubozu", (0, 2.05, -0.05, 2.0), False),
+    ],
+)
+def test_stops_are_at_least_min_stop_atr_from_the_close(name, bar, pushed):
+    kind = "down" if name == "inverted_hammer" else "flat"
+    df = build(kind, [bar])
+    row = rows_at_last_bar(df, name).iloc[0]
+    atr = atr_fn(df, 14).iloc[-1]
+    close, low = df["close"].iloc[-1], df["low"].iloc[-1]
+    assert close - row["invalidation"] >= 0.5 * atr - 1e-9
+    expected = close - 0.5 * atr if pushed else low - 0.1 * atr
+    assert row["invalidation"] == pytest.approx(expected)
+
+
+def test_bearish_stops_are_pushed_above_the_close():
+    df = build("up", [(-0.3, 0.0, -2.0, 0.0)])  # hanging man closing on its high
+    row = rows_at_last_bar(df, "hanging_man").iloc[0]
+    atr = atr_fn(df, 14).iloc[-1]
+    assert row["invalidation"] == pytest.approx(df["close"].iloc[-1] + 0.5 * atr)
 
 
 @pytest.mark.parametrize("name", list(CASES))
@@ -216,6 +245,9 @@ def test_thresholds_come_from_config():
     cfg["buffer_atr"] = 0.5
     wide = rows_at_last_bar(df, "hammer", config=cfg).iloc[0]["invalidation"]
     assert wide == pytest.approx(df["low"].iloc[-1] - 0.5 * atr_fn(df, 14).iloc[-1])
+    cfg["min_stop_atr"] = 3.0
+    floored = rows_at_last_bar(df, "hammer", config=cfg).iloc[0]["invalidation"]
+    assert floored == pytest.approx(df["close"].iloc[-1] - 3.0 * atr_fn(df, 14).iloc[-1])
     cfg["patterns"]["hammer"]["min_wick_body"] = 10.0
     assert rows_at_last_bar(df, "hammer", config=cfg).empty
 

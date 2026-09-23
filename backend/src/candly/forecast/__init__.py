@@ -2,7 +2,7 @@
 
 from candly.forecast.analog import METHOD, make_forecast
 from candly.forecast.baselines import baseline_forecasts
-from candly.forecast.models import Band, Candle, Driver, Forecast, ForecastContext
+from candly.forecast.models import Band, Candle, Driver, Forecast, ForecastContext, Trade
 
 __all__ = [
     "METHOD",
@@ -11,6 +11,7 @@ __all__ = [
     "Driver",
     "Forecast",
     "ForecastContext",
+    "Trade",
     "baseline_forecasts",
     "make_forecast",
 ]

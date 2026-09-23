@@ -321,6 +321,8 @@ def detect_patterns(
     with np.errstate(invalid="ignore", divide="ignore"):
         masks, atr = _masks(frame, cfg)
     buffer = float(cfg["buffer_atr"]) * atr
+    close = frame["close"].to_numpy(dtype=float)
+    min_stop = float(cfg["min_stop_atr"]) * atr
     lows = {k: frame["low"].rolling(k).min().to_numpy() for k in (1, 2, 3)}
     highs = {k: frame["high"].rolling(k).max().to_numpy() for k in (1, 2, 3)}
     order = {name: i for i, name in enumerate(PATTERN_INFO)}
@@ -331,9 +333,9 @@ def detect_patterns(
             continue
         info = PATTERN_INFO[name]
         if info.direction == "bullish":
-            inv = lows[info.bars][idx] - buffer[idx]
+            inv = np.minimum(lows[info.bars][idx] - buffer[idx], close[idx] - min_stop[idx])
         elif info.direction == "bearish":
-            inv = highs[info.bars][idx] + buffer[idx]
+            inv = np.maximum(highs[info.bars][idx] + buffer[idx], close[idx] + min_stop[idx])
         else:
             inv = np.full(idx.size, np.nan)
         positions.append(idx)

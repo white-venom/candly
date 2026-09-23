@@ -1,13 +1,14 @@
 import copy
-from datetime import datetime
+from datetime import date, datetime
 
 import numpy as np
 import pandas as pd
 import pytest
 
 from candly.core.calendar import IST, get_calendar
+from candly.core.expiry import expiry_info
 from candly.features.context import CONTEXT_COLUMNS, compute_context, session_phases
-from candly.features.levels import LEVEL_KINDS, key_levels, level_frame, swing_points
+from candly.features.levels import LEVEL_KINDS, key_levels, level_frame, levels_as_of, swing_points
 from candly.patterns import load_pattern_config
 from candly.research.causality import check_causal
 from candly.research.synthetic import bar_times, synthetic_candles
@@ -160,6 +161,22 @@ def test_key_levels_daily_and_intraday():
     assert done_levels["pdh"] == intraday[day == last_day]["high"].max()
 
 
+def test_levels_as_of_names_the_source_session():
+    daily = synthetic_candles("1D", "2024-01-01", "2024-03-01", seed=4)
+    assert levels_as_of(daily, "1D", "NSE") == daily["ts"].iloc[-1]
+    intraday = synthetic_candles("1h", "2024-01-01", "2024-01-03", seed=5)
+    day = intraday["ts"].dt.tz_convert(IST).dt.date
+    last_day, prev_day = sorted(day.unique())[-1], sorted(day.unique())[-2]
+    mid = intraday[(day < last_day) | (intraday["ts"] < intraday["ts"][day == last_day].iloc[2])]
+    assert levels_as_of(mid, "1h", "NSE") == intraday["ts"][day == prev_day].iloc[0]
+    assert levels_as_of(intraday, "1h", "NSE") == intraday["ts"][day == last_day].iloc[0]
+    first_hours = intraday[day == sorted(day.unique())[0]].iloc[:3]
+    assert levels_as_of(first_hours, "1h", "NSE") == first_hours["ts"].iloc[-1]
+    assert key_levels(first_hours, "1h", "NSE") and not any(
+        lv.kind in {"pdh", "pdl", "pdc"} for lv in key_levels(first_hours, "1h", "NSE")
+    )
+
+
 @pytest.mark.parametrize(
     "tf,start,end", [("1D", "2021-01-01", "2022-12-31"), ("15m", "2024-01-01", "2024-02-29")]
 )
@@ -172,6 +189,55 @@ def test_context_and_levels_are_causal(tf, start, end):
     assert ctx["vol_regime"].notna().any() and ctx["near_level"].notna().any()
     check_causal(lambda d: compute_context(d, tf, "NSE", cfg), df, cuts)
     check_causal(lambda d: level_frame(d, tf, "NSE", cfg), df, cuts)
+
+
+def test_expiry_columns_match_the_expiry_function():
+    df = synthetic_candles("1D", "2026-08-20", "2026-10-10", seed=11)
+    ctx = compute_context(df, "1D", "NSE", instrument_id="NSE:NIFTY50")
+    days = df["ts"].dt.tz_convert(IST).dt.date
+    for d, flag, left in zip(days, ctx["expiry_day"], ctx["days_to_expiry"], strict=True):
+        info = expiry_info("NSE:NIFTY50", d)
+        assert flag is info.is_expiry_day and left == info.days_to_expiry, d
+    by_day = dict(zip(days, ctx["days_to_expiry"], strict=True))
+    assert by_day[date(2026, 9, 22)] == 0 and by_day[date(2026, 9, 21)] == 1  # weekly Tuesday
+    assert by_day[date(2026, 9, 23)] == 4  # to the monthly on Tue 29 Sep
+    assert ctx.loc[days == date(2026, 9, 29), "expiry_day"].item() is True
+
+
+def test_expiry_columns_are_empty_without_an_expiry():
+    df = synthetic_candles("1D", "2026-08-20", "2026-09-30", seed=12)
+    vix = compute_context(df, "1D", "NSE", instrument_id="NSE:INDIAVIX")
+    anonymous = compute_context(df, "1D", "NSE")
+    for ctx in (vix, anonymous):
+        assert ctx["expiry_day"].isna().all() and ctx["days_to_expiry"].isna().all()
+    stock = compute_context(df, "1D", "NSE", instrument_id="NSE:TCS")
+    assert stock["expiry_day"].sum() == 2  # monthly only: 25 Aug and 29 Sep 2026
+    assert stock["expiry_day"].notna().all()
+
+
+def test_index_relative_volume_is_left_out():
+    df = synthetic_candles("1D", "2024-01-01", "2024-06-30", seed=13)
+    stock = compute_context(df, "1D", "NSE", instrument_id="NSE:RELIANCE")
+    index = compute_context(df, "1D", "NSE", instrument_id="NSE:NIFTY50")
+    assert stock["rel_volume"].notna().any()
+    assert index["rel_volume"].isna().all()
+    pd.testing.assert_frame_equal(stock.drop(columns=EXCLUDED), index.drop(columns=EXCLUDED))
+
+
+EXCLUDED = ["rel_volume", "expiry_day", "days_to_expiry"]
+
+
+@pytest.mark.parametrize(("tf", "instrument"), [("1D", "NSE:NIFTY50"), ("15m", "NSE:BANKNIFTY")])
+def test_expiry_context_is_causal(tf, instrument):
+    start, end = ("2023-06-01", "2025-06-30") if tf == "1D" else ("2024-10-01", "2024-12-31")
+    df = synthetic_candles(tf, start, end, seed=14, vol=0.004)
+    cfg = small_vol_window_config() if tf != "1D" else load_pattern_config()
+    n = len(df)
+    ctx = compute_context(df, tf, "NSE", cfg, instrument_id=instrument)
+    assert ctx["expiry_day"].eq(True).any() and ctx["days_to_expiry"].notna().all()
+    check_causal(
+        lambda d: compute_context(d, tf, "NSE", cfg, instrument_id=instrument), df, [n // 3, n // 2, n - 30]
+    )
 
 
 def test_key_levels_ignore_future_bars():

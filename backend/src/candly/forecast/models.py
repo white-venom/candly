@@ -31,6 +31,18 @@ class Driver(BaseModel):
     detail: str
 
 
+class Trade(BaseModel):
+    """A directional call as a trade: enter at the reference close (filled at the next open), exit at
+    the stop (the invalidation) or the target (p50 of the last step). reward_risk is the target's
+    distance in the call's direction over the stop's distance, so it is negative when the median path
+    ends against the call."""
+
+    entry: float
+    stop: float
+    target: float
+    reward_risk: float
+
+
 class ForecastContext(BaseModel):
     """Conditions at the reference bar. Stored by the ledger for grouping; not part of the API shape."""
 
@@ -60,6 +72,7 @@ class Forecast(BaseModel):
     ghost_candles: list[Candle]
     bands: list[Band]
     invalidation: float | None
+    trade: Trade | None = None  # non-null only for directional calls (abstain=false)
     drivers: list[Driver]
     n_analogs: int
     explanation: str | None = None

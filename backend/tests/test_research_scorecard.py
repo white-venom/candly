@@ -53,7 +53,9 @@ def test_scorecard_on_random_data(tmp_data_dir, no_keys, random_frames):
     }
     assert set(rows["horizon_bars"]) == set(cfg.horizons)
     assert set(rows["instrument"]) == {*IDS, "ALL"}
-    assert {"all", "trend=up", "trend=down", "vol_regime=high"} <= set(rows["context"])
+    assert {"all", "trend=up", "trend=down", "vol_regime=high", "expiry=yes", "expiry=no"} <= set(
+        rows["context"]
+    )
     assert ((rows["ci_low"] <= rows["hit_rate"]) & (rows["hit_rate"] <= rows["ci_high"])).all()
     assert ((rows["p_value"] >= 0) & (rows["p_value"] <= 1)).all()
     assert (rows["n_clusters"] <= rows["n"]).all() and (rows["n_clusters"] >= 1).all()
@@ -94,6 +96,22 @@ def test_scorecard_on_random_data(tmp_data_dir, no_keys, random_frames):
     pd.testing.assert_frame_equal(loaded.rows, rows)
     stats = loaded.stats_for("inside_bar", "NSE:TCS", "up", 1, cfg.min_samples)
     assert stats is not None and stats.horizon_bars == 1
+
+
+def test_expiry_buckets_only_cover_instruments_with_expiries(tmp_data_dir, no_keys, random_frames):
+    ids = ["NSE:RELIANCE", "NSE:INDIAVIX"]
+    frames = {"NSE:RELIANCE": random_frames[IDS[0]], "NSE:INDIAVIX": random_frames[IDS[1]]}
+    rows = build_scorecard("1D", ids, load=make_loader(frames), persist=False).rows
+    expiry = rows[rows["context"].str.startswith("expiry=")]
+    assert set(expiry["instrument"]) == {"NSE:RELIANCE", "ALL"}
+    own = expiry[expiry["instrument"] == "NSE:RELIANCE"].set_index(KEY)["n"].sort_index()
+    assert pooled(expiry)["n"].equals(own)
+    # a stock has one monthly expiry a month, so about 1 bar in 20 is an expiry day
+    own_rows = rows[(rows["instrument"] == "NSE:RELIANCE") & (rows["horizon_bars"] == 1)]
+    busiest = own_rows.loc[own_rows["context"] == "all"].sort_values("n")["pattern"].iloc[-1]
+    by_ctx = own_rows[own_rows["pattern"] == busiest].set_index("context")["n"]
+    assert by_ctx["expiry=yes"] + by_ctx["expiry=no"] == by_ctx["all"]
+    assert 0 < by_ctx["expiry=yes"] < 0.1 * by_ctx["all"]
 
 
 def test_overlapping_windows_form_fewer_clusters(tmp_data_dir, no_keys, random_frames):

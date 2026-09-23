@@ -365,6 +365,12 @@ type ExpiryInfo = { next: string /* YYYY-MM-DD, IST */; kind: "weekly" | "monthl
 
   Position size is computed in the UI from the user's own capital and risk-% settings, as `qty = floor(capital × risk% / |entry − stop|)`.
 - New abstain reasons: "unvalidated bucket", "horizon crosses session close", "edge below costs".
+- Every abstain reason is `"<reason>"` or `"<reason>: <detail>"`. Match on the prefix, never on the full string.
+- Research hooks:
+  - `make_forecast(..., bucket_gate=True)`. Validation-period replays pass `bucket_gate=False`, because gating on validation stats while scoring that period would leak.
+  - `compute_context(..., instrument_id=None)`: `rel_volume` is None for indices.
+  - `cost_breakdown` includes `dp_charge`.
+  - `costs.yaml` `reference_notional_inr` sizes the flat charges.
 - `PatternSignal` rows can be filtered: `/api/patterns?...&directional_only=true&certified_only=true`.
 
 ### Grading definitions

@@ -74,7 +74,6 @@ ROW_COLUMNS = [
     "validation_base_rate",
     "certified",
 ]
-CONTEXT_DIMENSIONS = ("trend", "vol_regime")
 ANALOG_COLUMNS = ["instrument", "ts", "end_ts", "pattern", "direction", "trend", "vol_regime", "atr", "close"]
 SPLITS = ("train", "validation")
 ROW_KEYS = ["pattern", "direction", "context", "instrument", "horizon_bars"]
@@ -107,11 +106,53 @@ class ScoreStats(BaseModel):
     certified: bool
 
 
+@dataclass(frozen=True)
+class BucketValidation:
+    validated: bool
+    instrument: str | None  # whose rows decided (the instrument's own or "ALL"); None: too few events
+    n: int
+    hit_rate: float | None  # validation rate of moves in the call's direction
+    base_rate: float | None
+
+
 @dataclass
 class Scorecard:
     meta: ScorecardMeta
     rows: pd.DataFrame
     analogs: pd.DataFrame | None = None
+
+    def validate_bucket(
+        self,
+        patterns: Iterable[str],
+        instrument: str,
+        context: str,
+        horizon: int,
+        bullish: bool,
+        min_samples: int,
+    ) -> BucketValidation:
+        """Validation-period evidence for an analog bucket (the union of `patterns` in `context`) in the
+        call's direction. Each row's validation hit and base rates become rates of moves the call's way
+        (one minus them when the row counts hits the other way; flat closes are ignored), pooled over
+        the patterns by validation_n. The instrument's own rows decide when they hold at least
+        `min_samples` validation events, else the pooled ALL rows."""
+        n_seen = 0
+        for inst in (instrument, "ALL"):
+            n = hits = base = 0.0
+            for pattern in patterns:
+                row = self.lookup(pattern, inst, context, horizon)
+                if row is None:
+                    continue
+                vn = int(row.get("validation_n", 0) or 0)
+                vh, vb = _num(row.get("validation_hit_rate")), _num(row.get("validation_base_rate"))
+                if vn == 0 or vh is None or vb is None:
+                    continue
+                if (row["direction"] != "bearish") != bullish:
+                    vh, vb = 1.0 - vh, 1.0 - vb
+                n, hits, base = n + vn, hits + vn * vh, base + vn * vb
+            n_seen = max(n_seen, int(n))
+            if n >= min_samples:
+                return BucketValidation(hits > base, inst, int(n), hits / n, base / n)
+        return BucketValidation(False, None, n_seen, None, None)
 
     @cached_property
     def _index(self) -> dict[tuple, int]:
@@ -189,19 +230,30 @@ def _ns(ts: pd.Series) -> np.ndarray:
     return ts.dt.tz_convert("UTC").dt.tz_localize(None).to_numpy().astype("datetime64[ns]").view("int64")
 
 
-def _with_context(frame: pd.DataFrame) -> pd.DataFrame:
-    """One copy of each row per context bucket it belongs to: "all", "trend=<v>", "vol_regime=<v>"."""
+def _with_context(frame: pd.DataFrame, dims: Iterable[str]) -> pd.DataFrame:
+    """One copy of each row per context bucket it belongs to: "all" and "<dim>=<value>" for each of
+    research.yaml scorecard.context_buckets (rows with no value for a dimension skip its buckets)."""
     parts = [frame.assign(context="all")]
-    for dim in CONTEXT_DIMENSIONS:
+    for dim in dims:
         sub = frame[frame[dim].notna()]
         parts.append(sub.assign(context=dim + "=" + sub[dim].astype(str)))
     return pd.concat(parts, ignore_index=True)
 
 
-def _base_rates(bars: pd.DataFrame, instrument: str, horizons: Iterable[int]) -> pd.DataFrame:
+def _context_values(ctx: pd.DataFrame, dim: str) -> np.ndarray:
+    """Bucket values per bar; expiry is "yes"/"no" on instruments with expiries and None elsewhere."""
+    if dim == "expiry":
+        flag = ctx["expiry_day"]
+        return np.where(flag.eq(True), "yes", np.where(flag.eq(False), "no", None)).astype(object)
+    return ctx[dim].to_numpy()
+
+
+def _base_rates(
+    bars: pd.DataFrame, instrument: str, horizons: Iterable[int], dims: tuple[str, ...]
+) -> pd.DataFrame:
     """P(up at h) and P(down at h) over every bar of an instrument, per split x context bucket."""
     cols = [c for h in horizons for c in (f"up_{h}", f"down_{h}")]
-    frame = _with_context(bars.loc[bars["split"].isin(SPLITS), ["split", *CONTEXT_DIMENSIONS, *cols]])
+    frame = _with_context(bars.loc[bars["split"].isin(SPLITS), ["split", *dims, *cols]], dims)
     means = frame.groupby(["split", "context"], observed=True)[cols].mean()
     parts = [
         means[[f"up_{h}", f"down_{h}"]]
@@ -216,7 +268,7 @@ def _base_rates(bars: pd.DataFrame, instrument: str, horizons: Iterable[int]) ->
 def _prepare_instrument(inst: Instrument, tf: str, df: pd.DataFrame, cfg: ResearchConfig) -> _Prepared:
     ts = df["ts"]
     n = len(df)
-    ctx = compute_context(df, tf, inst.exchange)
+    ctx = compute_context(df, tf, inst.exchange, instrument_id=inst.id)
     atr = ctx["atr14"]
     labels = forward_labels(df, cfg.horizons)
     start = _ns(ts)
@@ -228,8 +280,7 @@ def _prepare_instrument(inst: Instrument, tf: str, df: pd.DataFrame, cfg: Resear
     day = ts.dt.tz_convert(IST).dt.date
     bar_cols: dict[str, np.ndarray] = {
         "split": split_labels(ts, tf, cfg),
-        "trend": ctx["trend"].to_numpy(),
-        "vol_regime": ctx["vol_regime"].to_numpy(),
+        **{dim: _context_values(ctx, dim) for dim in cfg.context_buckets},
         "start": start,
     }
     for h in cfg.horizons:
@@ -245,7 +296,7 @@ def _prepare_instrument(inst: Instrument, tf: str, df: pd.DataFrame, cfg: Resear
         bar_cols[f"net_long_{h}"] = trade - np.where(same_day, long_intra, long_multi)
         bar_cols[f"net_short_{h}"] = -trade - np.where(same_day, short_intra, short_multi)
     bars = pd.DataFrame(bar_cols, index=df.index)
-    base = _base_rates(bars, inst.id, cfg.horizons)
+    base = _base_rates(bars, inst.id, cfg.horizons, cfg.context_buckets)
 
     pats = detect_patterns(df, tf)
     p_idx = pd.Index(ts).get_indexer(pats["ts"])
@@ -276,7 +327,7 @@ def _prepare_instrument(inst: Instrument, tf: str, df: pd.DataFrame, cfg: Resear
 
 def _event_outcomes(events: pd.DataFrame, base: pd.DataFrame, cfg: ResearchConfig) -> pd.DataFrame:
     """One row per event x context bucket x horizon with its hit, net return, null base rate and window."""
-    bucketed = _with_context(events)
+    bucketed = _with_context(events, cfg.context_buckets)
     bullish = bucketed["direction"].eq("bullish").to_numpy()
     bearish = bucketed["direction"].eq("bearish").to_numpy()
     parts = []

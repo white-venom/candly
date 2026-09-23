@@ -8,10 +8,12 @@
 #       move = close[first-1] - close[first-1-lookback_bars], in ATR units.
 #       down needs move <= -min_move_atr, up needs move >= +min_move_atr.
 # Invalidation: pattern low - buffer_atr * ATR (bullish), pattern high + buffer_atr * ATR (bearish),
-# with ATR taken at the pattern's last bar. Neutral patterns have no invalidation.
+# with ATR taken at the pattern's last bar, pushed out to at least min_stop_atr * ATR from that bar's
+# close when the pattern's own level is closer. Neutral patterns have no invalidation.
 
 atr_period: 14
 buffer_atr: 0.1
+min_stop_atr: 0.5         # added 2026-09-23 after the first acceptance run (report F3), before any scorecard
 prior_trend:
   lookback_bars: 5
   min_move_atr: 1.0

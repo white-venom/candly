@@ -4,6 +4,7 @@ import pytest
 from scipy import stats as sps
 
 from candly.core.calendar import IST
+from candly.core.settings import get_settings
 from candly.research.config import load_costs_config, load_research_config
 from candly.research.costs import cost_breakdown, round_trip_cost, segment_for
 from candly.research.data import load_research_candles
@@ -95,10 +96,21 @@ def test_config_parses_every_section():
         "n_over_steps",
     )
     assert list(cfg.confidence) == ["high", "medium"]
+    assert cfg.require_validated_bucket and cfg.intraday_within_session and cfg.require_edge_over_costs
+    assert cfg.fallback_stop_atr > 0
+    assert cfg.context_buckets == ("trend", "vol_regime", "expiry")
     assert cfg.confidence["high"].min_edge_multiple > cfg.confidence["medium"].min_edge_multiple
     gng = cfg.go_no_go_1
     assert gng.slice.tf == "1D" and gng.slice.exchange == "NSE" and "NSE:INDIAVIX" in gng.slice.exclude
     assert gng.ece_bins > 1 and gng.ece_binning == "quantile"
+
+
+def test_config_rejects_unknown_context_buckets(tmp_path):
+    raw = (get_settings().config_dir / "research.yaml").read_text(encoding="utf-8")
+    bad = tmp_path / "research.yaml"
+    bad.write_text(raw.replace("[trend, vol_regime, expiry]", "[trend, weekday]"), encoding="utf-8")
+    with pytest.raises(ValueError, match="weekday"):
+        load_research_config(bad)
 
 
 def test_walk_forward_folds_respect_protocol():
@@ -208,6 +220,7 @@ def test_beta_binomial_shrinks_to_base_rate():
 
 def test_costs_follow_the_table():
     table = {
+        "reference_notional_inr": 50_000,
         "brokerage": {"fyers": {"per_order_inr": 20.0, "pct_cap": 0.0003, "delivery_free": True}},
         "segments": {
             "equity_intraday": {
@@ -236,16 +249,60 @@ def test_costs_follow_the_table():
     }
     delivery = 0.002 + 0.00015 + 0.00006 + 0.000002 + 0.18 * (0.00006 + 0.000002) + 0.0006
     assert round_trip_cost("equity", "multi_day", costs=table) == pytest.approx(delivery)
+    # ₹20 per order is 0.04% of the ₹50,000 reference trade, above the 0.03% cap, so the cap applies
     intraday = 0.0006 + 0.00025 + 0.00003 + 0.00006 + 0.000002 + 0.18 * (0.0006 + 0.00006 + 0.000002) + 0.0006
     assert round_trip_cost("equity", "intraday", costs=table) == pytest.approx(intraday)
     big = cost_breakdown("future", "intraday", notional_inr=1_000_000, costs=table)
     assert big["brokerage"] == pytest.approx(2 * 20 / 1_000_000)
     assert big["transaction_tax"] == pytest.approx(0.0001)
     assert big["gst"] == pytest.approx(0.18 * (big["brokerage"] + big["exchange_txn"] + big["sebi_fee"]))
+    assert big["dp_charge"] == 0.0
+    without = {k: v for k, v in table.items() if k != "reference_notional_inr"}
+    assert cost_breakdown("equity", "intraday", costs=without)["brokerage"] == pytest.approx(2 * 20 / 100_000)
+
+
+def test_delivery_brokerage_and_dp_follow_the_table():
+    table = {
+        "brokerage": {
+            "fyers": {
+                "per_order_inr": 20.0,
+                "pct_cap": 0.0003,
+                "delivery_free": False,
+                "delivery_pct_cap": 0.003,
+                "dp_per_sell_inr": 12.5,
+            }
+        },
+        "segments": {"equity_delivery": {"stt": {"buy": 0.001, "sell": 0.001}}},
+        "gst_rate": 0.18,
+        "mapping": {"equity": {"multi_day": "equity_delivery"}},
+    }
+    small = cost_breakdown("equity", "multi_day", notional_inr=5_000, costs=table)
+    assert small["brokerage"] == pytest.approx(2 * 0.003)  # ₹15 = 0.3% of ₹5,000 is below ₹20
+    assert small["dp_charge"] == pytest.approx(12.5 / 5_000)
+    assert small["gst"] == pytest.approx(0.18 * (small["brokerage"] + small["dp_charge"]))
+    table["brokerage"]["fyers"]["delivery_free"] = True
+    free = cost_breakdown("equity", "multi_day", notional_inr=5_000, costs=table)
+    assert free["brokerage"] == 0.0 and free["dp_charge"] == pytest.approx(12.5 / 5_000)
+
+
+def test_one_lakh_delivery_round_trip_at_fyers():
+    # ₹1 lakh delivery buy + sell: ₹40 brokerage, ₹12.5 DP, 0.1% + 0.1% STT, 0.00297% txn per side,
+    # 0.015% stamp, ₹10/crore SEBI per side, 18% GST on brokerage + DP + txn + SEBI, 0.03% slippage per side
+    c = cost_breakdown("equity", "multi_day", notional_inr=100_000)
+    assert c["brokerage"] == pytest.approx(40 / 100_000)
+    assert c["dp_charge"] == pytest.approx(12.5 / 100_000)
+    assert c["transaction_tax"] == pytest.approx(0.002)
+    assert c["exchange_txn"] == pytest.approx(2 * 0.0000297)
+    assert c["stamp_duty"] == pytest.approx(0.00015)
+    assert c["gst"] == pytest.approx(0.18 * (0.0004 + 0.000125 + 0.0000594 + 0.000002))
+    total = round_trip_cost("equity", "multi_day", notional_inr=100_000)
+    assert total == pytest.approx(0.003441952)
+    assert total - c["slippage"] == pytest.approx(0.002841952)
 
 
 def test_real_cost_table_is_sane():
     delivery = round_trip_cost("equity", "multi_day")
+    assert delivery == pytest.approx(round_trip_cost("equity", "multi_day", notional_inr=100_000))
     assert 0.002 < delivery < 0.005
     assert round_trip_cost("equity", "intraday") < delivery
     assert round_trip_cost("index", "multi_day") > 0
@@ -253,6 +310,7 @@ def test_real_cost_table_is_sane():
 
 
 def test_overnight_equity_shorts_are_costed_as_stock_futures():
+    assert load_costs_config()["mapping"]["equity"]["multi_day_short"] == "futures"
     assert segment_for("equity", "multi_day", "short") == "futures"
     assert segment_for("equity", "multi_day", "long") == "equity_delivery"
     assert segment_for("equity", "intraday", "short") == "equity_intraday"
@@ -260,3 +318,8 @@ def test_overnight_equity_shorts_are_costed_as_stock_futures():
     short = cost_breakdown("equity", "multi_day", side="short")
     futures_stt = load_costs_config()["segments"]["futures"]["stt"]["sell"]
     assert short["transaction_tax"] == pytest.approx(futures_stt)
+    assert short["dp_charge"] == 0.0
+    table = {"mapping": {"equity": {"multi_day": "equity_delivery", "multi_day_short": "options"}}}
+    assert segment_for("equity", "multi_day", "short", costs=table) == "options"
+    del table["mapping"]["equity"]["multi_day_short"]
+    assert segment_for("equity", "multi_day", "short", costs=table) == "equity_delivery"

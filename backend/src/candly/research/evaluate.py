@@ -7,6 +7,10 @@ bars matched to its target times; void when one never appeared), against the bas
 
 The period is the validation span [train_end, holdout) by default. The holdout can only be replayed with
 `allow_holdout=True`, which only an official go/no-go run may pass.
+
+abstain.require_validated_bucket gates calls on the scorecard's validation statistics, which come from
+the validation span itself, so a validation replay runs without that gate (gating on them would keep
+only the buckets that did well in the very period being scored). A holdout replay keeps it.
 """
 
 from __future__ import annotations
@@ -62,9 +66,13 @@ class Evaluation:
     records: pd.DataFrame = field(default_factory=pd.DataFrame, repr=False)
 
 
-def _forecast(method: str, instrument_id: str, tf: str, hist: pd.DataFrame, card, now) -> Forecast | None:
+def _forecast(
+    method: str, instrument_id: str, tf: str, hist: pd.DataFrame, card, now, bucket_gate: bool
+) -> Forecast | None:
     if method == METHOD:
-        return make_forecast(instrument_id, tf, hist, card, now=now, check_stale=False)
+        return make_forecast(
+            instrument_id, tf, hist, card, now=now, check_stale=False, bucket_gate=bucket_gate
+        )
     baselines = baseline_forecasts(instrument_id, tf, hist, now=now)
     return next((fc for fc in baselines if fc.method == method), None)
 
@@ -117,6 +125,7 @@ def _replay(
     method: str,
     start: pd.Timestamp,
     end: pd.Timestamp | None,
+    bucket_gate: bool = True,
 ) -> tuple[list[dict], int]:
     """Graded records for every reference bar in [start, end), and how many reference bars gave no
     forecast the job would record."""
@@ -128,7 +137,7 @@ def _replay(
     records, skipped = [], 0
     for i in np.flatnonzero(in_period.to_numpy()):
         now = cal.bar_close_time(exchange, ts.iloc[i], tf) + pd.Timedelta(seconds=1)
-        fc = _forecast(method, instrument_id, tf, df.iloc[: i + 1], card, now)
+        fc = _forecast(method, instrument_id, tf, df.iloc[: i + 1], card, now, bucket_gate)
         if fc is None or (fc.abstain and (fc.abstain_reason or "").startswith(NOT_RECORDED)):
             skipped += 1
             continue
@@ -201,7 +210,9 @@ def evaluate_forecasts(
         df = load_research_candles(instrument_id, tf, allow_holdout=period == "holdout", load=load)
         if df.empty:
             continue
-        records, skipped = _replay(instrument_id, tf, df, card, method, start, end)
+        records, skipped = _replay(
+            instrument_id, tf, df, card, method, start, end, bucket_gate=period == "holdout"
+        )
         rows.extend(records)
         not_recorded += skipped
     records = pd.DataFrame(rows)

@@ -39,6 +39,14 @@ analog:
 abstain:
   min_analogs: 30
   min_edge: 0.03             # |p_up - base_rate| below this -> abstain
+  # Added 2026-09-23 after the first acceptance run (before any real scorecard):
+  require_validated_bucket: true   # directional calls only from buckets whose validation hit rate beats their base rate
+  fallback_stop_atr: 1.0           # no pattern invalidation -> stop this many ATR beyond the reference close
+  intraday_within_session: true    # intraday calls whose horizon crosses the session close abstain
+  require_edge_over_costs: true    # abstain when the expected move doesn't clear the round-trip cost
+
+scorecard:
+  context_buckets: [trend, vol_regime, expiry]   # expiry = on an expiry day or not (instruments with F&O)
 
 confidence:                  # labels shown on forecasts
   high: {ci_excludes_base: true, min_edge_multiple: 2}

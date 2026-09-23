@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import date, timedelta
 from typing import Literal
 
 import numpy as np
@@ -128,19 +129,43 @@ def nearest_level(close: pd.Series, levels: pd.DataFrame, atr: pd.Series, max_at
     return pd.Series(np.where(ok, names, None), index=close.index, dtype=object)
 
 
+def _day_source(df: pd.DataFrame, tf: str, exchange: str) -> tuple[pd.Series | None, pd.Timestamp]:
+    """(high/low/close of the session the day levels come from, that session's first bar time).
+
+    On 1D that is the last bar. Intraday it is the last session once it has closed, else the one before
+    it; with no earlier session there is no source and the time is the last bar's."""
+    sessions, key = _session_hlc(df, tf)
+    last_ts = df["ts"].iloc[-1]
+    if not is_intraday(tf):
+        return sessions.iloc[-1], last_ts
+    cal = get_calendar()
+    _, close = cal.session_times(exchange, cal.local_date(last_ts))
+    pos = len(sessions) - 1 if cal.bar_close_time(exchange, last_ts, tf) >= close else len(sessions) - 2
+    if pos < 0:
+        return None, last_ts
+    day = sessions.index[pos]
+    return sessions.iloc[pos], df["ts"][(key == day).to_numpy()].iloc[0]
+
+
+def levels_as_of(df: pd.DataFrame, tf: str, exchange: str) -> pd.Timestamp | None:
+    """Open time of the bar (1D) or session (intraday) that key_levels' day levels come from."""
+    return None if df.empty else _day_source(df, tf, exchange)[1]
+
+
+def previous_trading_day(exchange: str, d: date) -> date:
+    cal = get_calendar()
+    d -= timedelta(days=1)
+    while not cal.is_trading_day(exchange, d):
+        d -= timedelta(days=1)
+    return d
+
+
 def key_levels(df: pd.DataFrame, tf: str, exchange: str, config: dict | None = None) -> list[Level]:
     """Levels relevant for the bar after the last closed bar of `df`."""
     if df.empty:
         return []
     ctx = (config or load_pattern_config())["context"]
-    sessions, _ = _session_hlc(df, tf)
-    last_ts = df["ts"].iloc[-1]
-    session_done = True
-    if is_intraday(tf):
-        cal = get_calendar()
-        _, close = cal.session_times(exchange, cal.local_date(last_ts))
-        session_done = cal.bar_close_time(exchange, last_ts, tf) >= close
-    source = sessions.iloc[-1] if session_done else (sessions.iloc[-2] if len(sessions) > 1 else None)
+    source, _ = _day_source(df, tf, exchange)
     values: list[tuple[str, float]] = []
     if source is not None:
         h, lo, c = (pd.Series([source[x]]) for x in ("high", "low", "close"))

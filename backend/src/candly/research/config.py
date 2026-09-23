@@ -16,6 +16,7 @@ from candly.core.settings import get_settings
 from candly.core.timeframes import is_intraday, validate_tf
 
 HASHED_CONFIGS = ("research.yaml", "patterns.yaml", "costs.yaml")
+CONTEXT_BUCKETS = ("trend", "vol_regime", "expiry")
 
 
 @dataclass(frozen=True)
@@ -64,6 +65,11 @@ class ResearchConfig:
     analog_effective_n: str
     min_analogs: int
     min_edge: float
+    require_validated_bucket: bool
+    fallback_stop_atr: float
+    intraday_within_session: bool
+    require_edge_over_costs: bool
+    context_buckets: tuple[str, ...]
     confidence: dict[str, ConfidenceRule]
     forecast_steps: int
     bands: tuple[float, ...]
@@ -138,6 +144,12 @@ def _research_cached(path: str, mtime: float) -> ResearchConfig:
     }
     if not set(rules) <= {"high", "medium"}:
         raise ValueError(f"research.yaml confidence labels must be high/medium, got {sorted(rules)}")
+    buckets = tuple(str(b) for b in raw["scorecard"]["context_buckets"])
+    unknown = sorted(set(buckets) - set(CONTEXT_BUCKETS))
+    if unknown:
+        raise ValueError(
+            f"research.yaml scorecard.context_buckets {unknown} are not implemented; use {CONTEXT_BUCKETS}"
+        )
     return ResearchConfig(
         holdout_start=_date(raw["holdout"]["start"]),
         train_end=train_end,
@@ -161,6 +173,11 @@ def _research_cached(path: str, mtime: float) -> ResearchConfig:
         analog_effective_n=_choice(str(analog["effective_n"]), ("n_over_steps", "n"), "analog.effective_n"),
         min_analogs=int(abstain["min_analogs"]),
         min_edge=float(abstain["min_edge"]),
+        require_validated_bucket=bool(abstain["require_validated_bucket"]),
+        fallback_stop_atr=float(abstain["fallback_stop_atr"]),
+        intraday_within_session=bool(abstain["intraday_within_session"]),
+        require_edge_over_costs=bool(abstain["require_edge_over_costs"]),
+        context_buckets=buckets,
         confidence={k: rules[k] for k in ("high", "medium") if k in rules},
         forecast_steps=int(fc["steps"]),
         bands=tuple(float(b) for b in fc["bands"]),

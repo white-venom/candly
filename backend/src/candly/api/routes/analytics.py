@@ -9,11 +9,13 @@ import pandas as pd
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
+from candly.core.calendar import get_calendar
 from candly.core.instruments import Instrument, UnknownInstrument, get_instrument, load_watchlist
 from candly.core.schema import CANDLE_COLUMNS
 from candly.core.timeframes import validate_tf
-from candly.features.context import compute_context
-from candly.features.levels import Level, key_levels
+from candly.features.context import compute_context, has_meaningful_volume
+from candly.features.expiry import expiry_on
+from candly.features.levels import Level, key_levels, levels_as_of, previous_trading_day
 from candly.forecast import Forecast, make_forecast
 from candly.forecast.timing import to_unix
 from candly.indicators import CATALOG_BY_NAME, INDICATOR_CATALOG, compute_indicators, resolve_names
@@ -47,6 +49,13 @@ def _get_forming(instrument_id: str, tf: str) -> pd.Series | None:
         return get_forming(instrument_id, tf)
     except Exception:
         return None
+
+
+def _series_last(instrument_id: str, tf: str) -> pd.Timestamp | None:
+    """Open time of the newest stored bar (cached per file by the store)."""
+    from candly.data.store import series_stats
+
+    return series_stats(instrument_id, tf)["last"]
 
 
 def _now() -> pd.Timestamp:
@@ -93,6 +102,8 @@ class PatternContext(BaseModel):
     rel_volume: float | None
     near_level: str | None
     rsi14: float | None
+    expiry_day: bool | None
+    days_to_expiry: int | None
 
 
 class PatternSignal(BaseModel):
@@ -114,6 +125,15 @@ class LevelsResponse(BaseModel):
     instrument: str
     tf: str
     levels: list[Level]
+    as_of: int  # open time of the bar (1D) or session (intraday) the day levels come from
+    stale: bool  # another timeframe's store has a newer session than this series
+
+
+class ExpiryInfoOut(BaseModel):
+    next: str  # YYYY-MM-DD, IST
+    kind: Literal["weekly", "monthly", "contract"]
+    days_to_expiry: int
+    is_expiry_day: bool
 
 
 class TopSignal(BaseModel):
@@ -132,11 +152,13 @@ class ScannerRow(BaseModel):
     p_up: float | None
     base_rate: float | None
     abstain: bool
+    abstain_reason: str | None
     score: float
     direction: Direction
     top_signal: TopSignal | None
     rel_volume: float | None
     trend: Literal["up", "down", "sideways"] | None
+    expiry: ExpiryInfoOut | None
 
 
 class ScorecardRow(BaseModel):
@@ -181,6 +203,29 @@ def _num(x) -> float | None:
 
 def _str(x) -> str | None:
     return x if isinstance(x, str) else None
+
+
+def _bool(x) -> bool | None:
+    if x is None or (isinstance(x, float) and math.isnan(x)):
+        return None
+    return bool(x)
+
+
+def _int(x) -> int | None:
+    value = _num(x)
+    return None if value is None else int(value)
+
+
+def _expiry_out(instrument_id: str, now: pd.Timestamp) -> ExpiryInfoOut | None:
+    info = expiry_on(instrument_id, get_calendar().local_date(now))
+    if info is None:
+        return None
+    return ExpiryInfoOut(
+        next=info.next_expiry.isoformat(),
+        kind=info.kind,
+        days_to_expiry=int(info.days_to_expiry),
+        is_expiry_day=bool(info.is_expiry_day),
+    )
 
 
 def _tf(tf: str) -> str:
@@ -246,6 +291,8 @@ def indicators(instrument: str, tf: str, names: str | None = None, limit: int = 
         raise HTTPException(400, str(exc)) from None
     df = _candles(instrument, tf)
     values = compute_indicators(df, tf, wanted).iloc[-limit:]
+    if "rel_volume" in wanted and not has_meaningful_volume(instrument):
+        values = values.assign(rel_volume=float("nan"))
     times = [to_unix(t) for t in df["ts"].iloc[-limit:]]
     series = []
     for name in wanted:
@@ -256,7 +303,15 @@ def indicators(instrument: str, tf: str, names: str | None = None, limit: int = 
 
 
 @router.get("/patterns", response_model=list[PatternSignal])
-def patterns(instrument: str, tf: str, limit: int = 200) -> list[PatternSignal]:
+def patterns(
+    instrument: str,
+    tf: str,
+    limit: int = 200,
+    directional_only: bool = False,
+    certified_only: bool = False,
+) -> list[PatternSignal]:
+    """Newest first. `directional_only` drops neutral patterns; `certified_only` keeps signals whose
+    scorecard stats are certified (none without a scorecard). `limit` applies after filtering."""
     tf = _tf(tf)
     inst = _instrument(instrument)
     limit = _limit(limit, 5000)
@@ -264,12 +319,16 @@ def patterns(instrument: str, tf: str, limit: int = 200) -> list[PatternSignal]:
     frame = _with_forming(df, _get_forming(instrument, tf))
     forming_bar = frame.iloc[-1] if len(frame) > len(df) else None
     found = detect_patterns(df, tf, forming_bar=forming_bar)
-    if found.empty:
-        return []
-    found = found.iloc[::-1].head(limit)
-    ctx = compute_context(frame, tf, inst.exchange)
-    pos = pd.Index(frame["ts"]).get_indexer(found["ts"])
+    if directional_only:
+        found = found[found["direction"] != "neutral"]
     card = load_scorecard(tf)
+    if found.empty or (certified_only and card is None):
+        return []
+    found = found.iloc[::-1]
+    if not certified_only:
+        found = found.head(limit)
+    ctx = compute_context(frame, tf, inst.exchange, instrument_id=instrument)
+    pos = pd.Index(frame["ts"]).get_indexer(found["ts"])
     cfg = load_research_config()
     horizon = _stats_horizon()
     out = []
@@ -277,6 +336,8 @@ def patterns(instrument: str, tf: str, limit: int = 200) -> list[PatternSignal]:
         c = ctx.iloc[p]
         trend = _str(c["trend"])
         stats = card.stats_for(row["pattern"], instrument, trend, horizon, cfg.min_samples) if card else None
+        if certified_only and not (stats is not None and stats.certified):
+            continue
         time = to_unix(row["ts"])
         out.append(
             PatternSignal(
@@ -297,11 +358,40 @@ def patterns(instrument: str, tf: str, limit: int = 200) -> list[PatternSignal]:
                     rel_volume=_num(c["rel_volume"]),
                     near_level=_str(c["near_level"]),
                     rsi14=_num(c["rsi14"]),
+                    expiry_day=_bool(c["expiry_day"]),
+                    days_to_expiry=_int(c["days_to_expiry"]),
                 ),
                 stats=stats,
             )
         )
+        if len(out) == limit:
+            break
     return out
+
+
+def _levels_stale(inst: Instrument, tf: str, df: pd.DataFrame, now: pd.Timestamp) -> bool:
+    """True when another timeframe's store holds a newer IST session than this series' last bar.
+
+    A store's newest session only counts once this timeframe could have closed a bar in it (a daily
+    bar closes at the session close); until then it stands for the trading day before it."""
+    cal = get_calendar()
+    used = cal.local_date(df["ts"].iloc[-1])
+    for other in inst.timeframes:
+        if other == tf:
+            continue
+        try:
+            last = _series_last(inst.id, other)
+        except ImportError:
+            return False
+        if last is None:
+            continue
+        day = cal.local_date(pd.Timestamp(last))
+        session_open, _ = cal.session_times(inst.exchange, day)
+        if now < cal.bar_close_time(inst.exchange, session_open, tf):
+            day = previous_trading_day(inst.exchange, day)
+        if day > used:
+            return True
+    return False
 
 
 @router.get("/levels", response_model=LevelsResponse)
@@ -309,7 +399,13 @@ def levels(instrument: str, tf: str) -> LevelsResponse:
     tf = _tf(tf)
     inst = _instrument(instrument)
     df = _candles(instrument, tf)
-    return LevelsResponse(instrument=instrument, tf=tf, levels=key_levels(df, tf, inst.exchange))
+    return LevelsResponse(
+        instrument=instrument,
+        tf=tf,
+        levels=key_levels(df, tf, inst.exchange),
+        as_of=to_unix(levels_as_of(df, tf, inst.exchange)),
+        stale=_levels_stale(inst, tf, df, _now()),
+    )
 
 
 @router.get("/forecast", response_model=Forecast)
@@ -326,19 +422,58 @@ def forecast(instrument: str, tf: str, steps: int | None = None) -> Forecast:
 
 
 def _top_signal(fc: Forecast, forming: pd.DataFrame, card, instrument: str) -> TopSignal | None:
+    """The directional signal to show: certified before not, confirmed before forming. Neutral patterns
+    are never picked."""
     cfg = load_research_config()
     horizon = _stats_horizon()
     trend = fc.context.trend if fc.context else None
     candidates = [(p, "confirmed") for p in (fc.context.patterns if fc.context else [])]
     candidates += [(p, "forming") for p in forming["pattern"]]
-    best = None
+    best, best_rank = None, None
     for pattern, state in candidates:
+        if PATTERN_INFO[pattern].direction == "neutral":
+            continue
         stats = card.stats_for(pattern, instrument, trend, horizon, cfg.min_samples) if card else None
         certified = bool(stats and stats.certified)
-        signal = TopSignal(label=PATTERN_INFO[pattern].label, state=state, certified=certified)
-        if best is None or (certified and not best.certified):
-            best = signal
+        rank = (certified, state == "confirmed")
+        if best_rank is None or rank > best_rank:
+            best = TopSignal(label=PATTERN_INFO[pattern].label, state=state, certified=certified)
+            best_rank = rank
     return best
+
+
+def _iso(unix: int) -> str:
+    return pd.Timestamp(unix, unit="s", tz="UTC").isoformat()
+
+
+def _session_key(exchange: str, now: pd.Timestamp) -> tuple:
+    cal = get_calendar()
+    return cal.session_times(exchange, cal.local_date(now))
+
+
+def _mark_stale(rows: list[ScannerRow], now: pd.Timestamp) -> list[ScannerRow]:
+    """Rank every row as of the latest session its peers (instruments on the same session hours) have
+    reached: a row whose last closed bar is older abstains as stale."""
+    latest: dict[tuple, int] = {}
+    keys = [_session_key(r.instrument.split(":", 1)[0], now) for r in rows]
+    for key, row in zip(keys, rows, strict=True):
+        latest[key] = max(latest.get(key, row.time), row.time)
+    out = []
+    for key, row in zip(keys, rows, strict=True):
+        newest = latest[key]
+        if row.time < newest and not (row.abstain_reason or "").startswith("stale data"):
+            row = row.model_copy(
+                update={
+                    "abstain": True,
+                    "abstain_reason": (
+                        f"stale data: last closed bar {_iso(row.time)}, other instruments have {_iso(newest)}"
+                    ),
+                    "score": 0.0,
+                    "direction": "neutral",
+                }
+            )
+        out.append(row)
+    return out
 
 
 @router.get("/scanner", response_model=list[ScannerRow])
@@ -348,7 +483,7 @@ def scanner(tf: str = "1D") -> list[ScannerRow]:
     now = _now()
     rows = []
     for inst in load_watchlist():
-        if tf not in inst.timeframes:
+        if tf not in inst.timeframes or not inst.tradable:
             continue
         try:
             df = _load_candles(inst.id, tf)
@@ -383,6 +518,7 @@ def scanner(tf: str = "1D") -> list[ScannerRow]:
                 p_up=fc.p_up,
                 base_rate=fc.base_rate,
                 abstain=fc.abstain,
+                abstain_reason=fc.abstain_reason,
                 score=abs(edge) if (edge is not None and not fc.abstain) else 0.0,
                 direction="neutral"
                 if fc.abstain or edge is None or edge == 0
@@ -390,9 +526,10 @@ def scanner(tf: str = "1D") -> list[ScannerRow]:
                 top_signal=_top_signal(fc, forming, card, inst.id),
                 rel_volume=fc.context.rel_volume if fc.context else None,
                 trend=fc.context.trend if fc.context else None,
+                expiry=_expiry_out(inst.id, now),
             )
         )
-    return sorted(rows, key=lambda r: r.score, reverse=True)
+    return sorted(_mark_stale(rows, now), key=lambda r: r.score, reverse=True)
 
 
 @router.get("/scorecard", response_model=ScorecardResponse)

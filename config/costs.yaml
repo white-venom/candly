@@ -3,6 +3,9 @@
 # Entries with `verify: true` are from memory. Confirm them before trusting cost-sensitive results.
 as_of: 2026-09-23
 
+# Flat per-order and DP charges depend on trade size; research uses this notional unless a size is given.
+reference_notional_inr: 100000
+
 brokerage:
   # Fyers: intraday/F&O Rs 20 or 0.03% per executed order (whichever lower); delivery Rs 20 or 0.3%
   # (checked by the acceptance test run 2026-09-23). DP charge applies per scrip per sell day on delivery.

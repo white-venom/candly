@@ -1,4 +1,4 @@
-"""Per-bar market context: trend, volatility regime, relative volume, session phase, nearby level."""
+"""Per-bar market context: trend, volatility regime, relative volume, session phase, nearby level, expiry."""
 
 from __future__ import annotations
 
@@ -6,7 +6,9 @@ import numpy as np
 import pandas as pd
 
 from candly.core.calendar import IST, get_calendar
+from candly.core.instruments import UnknownInstrument, get_instrument
 from candly.core.timeframes import is_intraday
+from candly.features.expiry import expiry_features
 from candly.features.levels import level_frame, nearest_level
 from candly.indicators import compute_indicators
 from candly.indicators.functions import ema
@@ -22,7 +24,19 @@ CONTEXT_COLUMNS = [
     "near_level",
     "rsi14",
     "atr14",
+    "expiry_day",
+    "days_to_expiry",
 ]
+
+
+def has_meaningful_volume(instrument_id: str | None) -> bool:
+    """Index volume (Yahoo/NSE) is not exchange turnover, so volume features are left out for indices."""
+    if instrument_id is None:
+        return True
+    try:
+        return get_instrument(instrument_id).kind != "index"
+    except UnknownInstrument:
+        return True
 
 
 def trend_labels(
@@ -84,8 +98,18 @@ def session_phases(ts: pd.Series, exchange: str) -> pd.Series:
     return pd.Series([phase[tuple(k)] for k in keys.to_numpy()], index=ts.index, dtype=object)
 
 
-def compute_context(df: pd.DataFrame, tf: str, exchange: str, config: dict | None = None) -> pd.DataFrame:
-    """Context for each bar, using bars up to and including that bar only."""
+def compute_context(
+    df: pd.DataFrame,
+    tf: str,
+    exchange: str,
+    config: dict | None = None,
+    *,
+    instrument_id: str | None = None,
+) -> pd.DataFrame:
+    """Context for each bar, using bars up to and including that bar only.
+
+    With `instrument_id`, rel_volume is NaN for indices and the expiry columns are filled; without it
+    they are None/NaN."""
     cfg = config or load_pattern_config()
     ctx = cfg["context"]
     ind = compute_indicators(df, tf, ["atr14", "adx14", "rsi14", "rel_volume"])
@@ -98,6 +122,8 @@ def compute_context(df: pd.DataFrame, tf: str, exchange: str, config: dict | Non
         slot=time_of_day_slot(df["ts"]) if is_intraday(tf) else None,
     )
     levels = level_frame(df, tf, exchange, cfg)
+    rel_volume = ind["rel_volume"] if has_meaningful_volume(instrument_id) else ind["rel_volume"] * np.nan
+    expiry = expiry_features(instrument_id, df["ts"])
     out = pd.DataFrame(
         {
             "trend": trend_labels(
@@ -111,7 +137,7 @@ def compute_context(df: pd.DataFrame, tf: str, exchange: str, config: dict | Non
             "trend_strength": ind["adx14"],
             "vol_regime": regime,
             "vol_pct": pct,
-            "rel_volume": ind["rel_volume"],
+            "rel_volume": rel_volume,
             "session_phase": (
                 session_phases(df["ts"], exchange)
                 if is_intraday(tf) and len(df)
@@ -120,6 +146,8 @@ def compute_context(df: pd.DataFrame, tf: str, exchange: str, config: dict | Non
             "near_level": nearest_level(df["close"], levels, ind["atr14"], float(ctx["near_level_atr"])),
             "rsi14": ind["rsi14"],
             "atr14": ind["atr14"],
+            "expiry_day": expiry["expiry_day"],
+            "days_to_expiry": expiry["days_to_expiry"],
         },
         index=df.index,
     )

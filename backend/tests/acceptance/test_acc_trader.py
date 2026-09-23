@@ -47,10 +47,6 @@ def test_pattern_stops_are_on_the_right_side_and_not_absurdly_wide(tf):
     assert (sig["stop_atr"] > MAX_STOP_ATR).mean() <= 0.05
 
 
-@pytest.mark.xfail(
-    reason="report F3: inverted hammer / hanging man put ~2/3 of stops within 0.3 ATR of the close",
-    strict=False,
-)
 @pytest.mark.parametrize("tf", ["1D", "1h"])
 def test_pattern_stops_sit_outside_normal_noise(tf):
     ids = stored_ids(tf, kinds=("equity", "index"))
@@ -85,9 +81,6 @@ def _synthetic(prefix: str, last: tuple[float, float, float, float]) -> pd.DataF
     )
 
 
-@pytest.mark.xfail(
-    reason="report F3: stop = pattern extreme ± 0.1 ATR, which is 0.1 ATR from this close", strict=True
-)
 @pytest.mark.parametrize(
     ("pattern", "prefix", "bar"),
     [
@@ -132,9 +125,6 @@ def test_ghost_candle_ranges_and_bands_look_like_real_candles():
         assert widths == sorted(widths), f"{inst}: band should widen with the horizon"
 
 
-@pytest.mark.xfail(
-    reason="report F9: ghost candles are medians of O/H/L/C taken separately, so all are dojis", strict=False
-)
 def test_ghost_candle_bodies_look_like_real_candles():
     fcs = [(i, df, fc) for i, df, fc in _forecasts() if fc.ghost_candles]
     if not fcs:
@@ -144,9 +134,6 @@ def test_ghost_candle_bodies_look_like_real_candles():
         assert np.mean(bodies) >= 0.15, f"{inst}: mean ghost body {np.mean(bodies):.2f} ATR"
 
 
-@pytest.mark.xfail(
-    reason="report F4: a directional call can come with invalidation=None (no stop)", strict=False
-)
 def test_every_directional_call_has_a_stop():
     calls = [(i, fc) for i, _, fc in _forecasts(limit=13) if not fc.abstain]
     if not calls:

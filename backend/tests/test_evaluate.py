@@ -1,6 +1,10 @@
+import dataclasses
+
 import pandas as pd
 import pytest
 
+from candly.forecast import analog
+from candly.research import evaluate
 from candly.research.config import load_research_config
 from candly.research.evaluate import evaluate_forecasts
 from candly.research.synthetic import plant_marubozu_edge, synthetic_candles
@@ -36,12 +40,41 @@ def test_planted_edge_has_positive_skill(tmp_data_dir, no_keys):
     assert ev.gates["brier_skill"]
 
 
-def test_random_data_has_no_skill(tmp_data_dir, no_keys):
+def test_random_data_has_no_skill(tmp_data_dir, no_keys, monkeypatch):
     df = synthetic_candles("1D", START, END, seed=410)
+    gated = evaluate_forecasts("1D", instruments=[ID], load=loader(df))
+    # the probabilities themselves are under test, so let calls through the cost hurdle
+    free = dataclasses.replace(load_research_config(), require_edge_over_costs=False)
+    monkeypatch.setattr(analog, "load_research_config", lambda: free)
     ev = evaluate_forecasts("1D", instruments=[ID], load=loader(df))
     assert ev.n_scored > 10 and ev.n_abstained > ev.n_forecasts / 2
     assert abs(ev.skill) < 0.1
     assert not ev.gates["brier_skill"] or not ev.gates["ece"]
+    assert gated.n_scored < ev.n_scored and gated.n_forecasts == ev.n_forecasts
+    costly = gated.records["abstain_reason"].fillna("").str.startswith("edge below costs")
+    assert costly.any()
+
+
+def test_validation_replays_do_not_gate_on_validation_statistics(tmp_data_dir, no_keys, monkeypatch):
+    df = synthetic_candles("1D", START, END, seed=200, plain=True)
+    df = plant_marubozu_edge(df, every=6, p_follow=0.85, seed=20, follow_bars=3, bearish_share=0.5)
+    seen = []
+    real = analog.make_forecast
+
+    def spy(*args, **kwargs):
+        seen.append(kwargs["bucket_gate"])
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(evaluate, "make_forecast", spy)
+    ev = evaluate_forecasts("1D", instruments=[ID], load=loader(df))
+    assert seen and not any(seen)
+    reasons = ev.records["abstain_reason"].fillna("")
+    assert not reasons.str.startswith("unvalidated bucket").any()
+
+    seen.clear()
+    late = synthetic_candles("1D", "2024-06-01", "2025-11-28", seed=7)  # synthetic: no real holdout data
+    evaluate_forecasts("1D", allow_holdout=True, period="holdout", instruments=[ID], load=loader(late))
+    assert seen and all(seen)
 
 
 def test_base_rate_baseline_scores_exactly_zero_skill_and_voids_missing_bars(tmp_data_dir, no_keys):
