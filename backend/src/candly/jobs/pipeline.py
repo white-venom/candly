@@ -4,7 +4,10 @@ import logging
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
+from apscheduler.triggers.interval import IntervalTrigger
 
+from candly import llm
+from candly.alerts.jobs import register_alert_jobs, run_alert_checks
 from candly.core.calendar import IST
 from candly.core.instruments import load_watchlist
 from candly.data import clock
@@ -14,6 +17,7 @@ from candly.jobs.scheduler import INTRADAY_TFS, exchanges_with_closed_bar, inges
 log = logging.getLogger(__name__)
 
 SCORECARD_TFS = ("1D", "1h", "15m", "5m")
+EXPLAINED_TFS = ("1D", "1h")  # 5m/15m would burn the daily explanation cap
 
 
 def _ids(tf: str, exchanges: tuple[str, ...]) -> list[str]:
@@ -27,6 +31,11 @@ def _grade() -> None:
         log.exception("grading failed")
 
 
+def _explain(tf: str) -> None:
+    if tf in EXPLAINED_TFS:
+        llm.explain_recent_calls(limit=10, tf=tf)
+
+
 def intraday_pipeline() -> None:
     exchanges = exchanges_with_closed_bar(clock.utc_now())
     if not exchanges:
@@ -34,13 +43,21 @@ def intraday_pipeline() -> None:
     for tf in INTRADAY_TFS:
         ingest_incremental(tf, exchanges)
         run_forecast_cycle(tf, _ids(tf, exchanges))
+        _explain(tf)
     _grade()
+    run_alert_checks()
 
 
 def daily_pipeline(exchanges: tuple[str, ...]) -> None:
     ingest_incremental("1D", exchanges)
     run_forecast_cycle("1D", _ids("1D", exchanges))
+    _explain("1D")
     _grade()
+    run_alert_checks()
+
+
+def tag_news() -> None:
+    llm.tag_pending_news()
 
 
 def nightly_scorecards() -> None:
@@ -76,3 +93,6 @@ def register_pipeline_jobs(scheduler: BackgroundScheduler) -> None:
     scheduler.add_job(
         nightly_scorecards, CronTrigger(hour=2, minute=0, timezone=IST), id="nightly_scorecards"
     )
+    # Runs between news polls; a no-op until ANTHROPIC_API_KEY is set.
+    scheduler.add_job(tag_news, IntervalTrigger(minutes=5, start_date=None, timezone=IST), id="tag_news")
+    register_alert_jobs(scheduler)

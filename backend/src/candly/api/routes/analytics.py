@@ -418,9 +418,14 @@ def forecast(instrument: str, tf: str, steps: int | None = None) -> Forecast:
         raise HTTPException(400, "steps must be between 1 and 10")
     df = _candles(instrument, tf)
     try:
-        return make_forecast(instrument, tf, df, load_scorecard(tf), steps, now=_now())
+        fc = make_forecast(instrument, tf, df, load_scorecard(tf), steps, now=_now())
     except ValueError as exc:
         raise HTTPException(503, str(exc)) from None
+    if not fc.abstain:
+        from candly.llm import get_explanation
+
+        fc.explanation = get_explanation(fc.instrument, fc.tf, fc.ref_time, fc.method)
+    return fc
 
 
 def _top_signal(fc: Forecast, forming: pd.DataFrame, card, instrument: str) -> TopSignal | None:

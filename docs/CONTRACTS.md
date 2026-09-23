@@ -402,6 +402,23 @@ type SyncStatus = { status: "idle" | "running" | "done" | "error"; step: string 
 // Health gains: sync?: SyncStatus
 ```
 
+**Claude (llm) and alerts**
+- `candly.llm`
+  - `tag_pending_news()`: every 5 min, Haiku 4.5. It tags recent news with instruments, event type, sentiment, magnitude and a summary.
+  - `explain_recent_calls(limit, tf)`: after 1D/1h forecast cycles, Opus 5.
+  - `get_explanation(...)`: fills `Forecast.explanation` for non-abstaining forecasts, reading the cache only.
+  - `write_brief(kind, facts)`.
+  - Every function is a no-op without `ANTHROPIC_API_KEY`. Every call is logged with its cost to `data/db/llm.sqlite`, capped by `config/llm.yaml` `daily_budget_usd`. Text containing a number that isn't in the supplied facts is discarded.
+- `candly.alerts`
+  - `run_alert_checks()`: after every pipeline run. Covers new calls, stop hits, expiry today, and data paused/resumed.
+  - Pre-market brief at 08:45 IST and post-market review at 16:15 IST, on trading days.
+  - Everything is a no-op without Telegram keys. Deduplicated in `data/db/alerts.sqlite`. Settings live in `config/alerts.yaml`.
+
+```ts
+// POST /api/alerts/test   (JSON) -> { sent: boolean; detail: string }      415 if not JSON
+// GET  /api/alerts/preview?kind=pre_market|post_market -> { kind: string; text: string }
+```
+
 **Signals and calls**
 - `ScannerRow` excludes instruments with `tradable=false` (e.g. INDIAVIX).
 - A directional call (`abstain=false`) always has a non-null `invalidation` at least `patterns.min_stop_atr` ATR from the reference close. Otherwise the forecast abstains.

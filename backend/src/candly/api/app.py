@@ -7,7 +7,7 @@ from fastapi.responses import JSONResponse
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from candly import __version__
-from candly.api.routes import analytics, platform
+from candly.api.routes import alerts, analytics, platform
 from candly.core.log import setup_logging
 from candly.core.settings import get_settings
 
@@ -43,6 +43,7 @@ def create_app() -> FastAPI:
     app.add_exception_handler(RequestValidationError, _validation_error)
     app.include_router(platform.router, prefix="/api")
     app.include_router(analytics.router, prefix="/api")
+    app.include_router(alerts.router, prefix="/api")
     return app
 
 

@@ -25,6 +25,7 @@ dependencies = [
   "yfinance>=0.2.54",
   "lightgbm>=4.5",
   "scikit-learn>=1.5",
+  "anthropic>=1.8,<2",
 ]
 
 [project.optional-dependencies]

@@ -1,0 +1,43 @@
+# Claude API settings (PLAN.md §8). Claude explains and tags; it never produces probabilities or prices.
+# Everything here is off without ANTHROPIC_API_KEY in .env, whatever the flags say.
+
+enabled: true                  # master switch
+features:                      # per-job switches, so each one's value can be measured
+  news_tagging: true
+  explanations: true
+  briefs: true
+
+models:
+  news_tagging: claude-haiku-4-5   # bulk work on the smaller model, as requested
+  explanations: claude-opus-5
+  briefs: claude-opus-5
+
+# USD per million tokens, from the claude-api skill's model table (cached 2026-06-24).
+# claude-opus-4-8 is where the server-side refusal fallback can route an Opus 5 request.
+prices_usd_per_mtok:
+  claude-haiku-4-5: {input: 1.00, output: 5.00}
+  claude-opus-5: {input: 5.00, output: 25.00}
+  claude-opus-4-8: {input: 5.00, output: 25.00}
+cache_write_multiplier: 1.25   # 5-minute cache writes
+cache_read_multiplier: 0.10
+
+daily_budget_usd: 3.0          # all Claude spend per IST day; calls stop once it is reached
+max_explanations_per_day: 40   # answered explanation calls per IST day (cache hits and API errors don't count)
+
+batch_size: 20                 # headlines per tagging call
+tag_max_age_hours: 24          # only tag news fetched this recently: tags are live-only, never a backfill
+tag_max_attempts: 3            # give up on a headline after this many calls without a valid tag
+
+max_tokens:
+  news_tagging: 4096
+  explanations: 4000           # Opus 5 thinks by default; max_tokens caps thinking plus text
+  briefs: 6000
+effort:                        # output_config.effort for the Opus jobs (Haiku 4.5 rejects effort)
+  explanations: medium
+  briefs: medium
+refusal_fallbacks:             # if Opus 5 declines on policy grounds, the API retries on its default fallback
+  explanations: default
+  briefs: default
+
+max_retries: 3                 # SDK retries on 408/409/429/5xx and connection errors
+timeout_seconds: 120

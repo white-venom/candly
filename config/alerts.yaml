@@ -1,0 +1,27 @@
+# Telegram alerts and briefs (PLAN.md §13). Nothing is sent unless TELEGRAM_BOT_TOKEN and
+# TELEGRAM_CHAT_ID are set in .env. All times are IST. Quote times: YAML reads 23:45 as a number.
+
+enabled: true
+
+timeframes: [1D, 1h]         # forecasts on these timeframes raise new-call and stop-hit alerts
+min_confidence: medium       # low | medium | high: the weakest call confidence that is alerted
+
+quiet_hours:                 # event alerts wait until quiet hours end; the pre-market brief ignores them
+  start: "23:45"
+  end: "08:30"
+
+max_per_hour: 12             # event alerts in any rolling hour; extra ones wait for the next check
+stop_watch_bars: 3           # a sent call's stop is watched for this many bars after its reference bar
+
+types:
+  new_call: true
+  stop_hit: true
+  expiry_today: true
+  data_paused: true
+  pre_market_brief: true
+  post_market_review: true
+
+briefs:
+  pre_market: "08:45"
+  post_market: "16:15"
+  calendar: NSE              # briefs go out only on this exchange's trading days
