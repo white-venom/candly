@@ -16,7 +16,7 @@ import {
 } from "lightweight-charts";
 import type { Candle, Forecast, Level, PatternSignal } from "../api/types";
 import type { Theme } from "../lib/theme";
-import { chartTimeFormatter, istTickMarkFormatter } from "../lib/time";
+import { chartTimeFormatter, istTickMarkFormatter } from "./timeFormat";
 import { isIntraday } from "../lib/timeframes";
 import { chartTheme, type ChartTheme } from "./chartTheme";
 import {

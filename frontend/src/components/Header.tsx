@@ -1,6 +1,7 @@
 import clsx from "clsx";
 import { Link, NavLink, useMatch, useNavigate } from "react-router";
 import { useHealth, useInstruments } from "../api/hooks";
+import type { Health } from "../api/types";
 import { chartPath, readLastSelection } from "../lib/routes";
 import { defaultTimeframe, sortTimeframes } from "../lib/timeframes";
 import { FyersConnect } from "./FyersConnect";
@@ -105,23 +106,43 @@ function NavTabs() {
   );
 }
 
-export function Header() {
-  const health = useHealth();
+/** Every page is showing old data until ingest resumes, so this sits under the header, not in a tooltip. */
+function IngestBanner({ health }: { health: Health }) {
   return (
-    <header className="border-b border-line bg-surface">
-      <div className="mx-auto flex max-w-[1600px] flex-wrap items-center gap-3 px-4 pt-2">
-        <Link to="/" className="flex items-center gap-2 text-base font-semibold text-ink no-underline">
-          <Logo />
-          candly
-        </Link>
-        <ChartSelectors />
-        <div className="ml-auto flex flex-wrap items-center gap-2">
-          <StatusPill health={health} />
-          <FyersConnect health={health.data} />
-          <ThemeToggle />
+    <div className="border-b-2 border-danger bg-surface">
+      <div className="mx-auto flex max-w-[1600px] flex-wrap items-center gap-x-3 gap-y-2 px-4 py-2 text-sm">
+        <p role="alert" className="text-ink">
+          <span className="font-semibold text-danger">Data updates paused:</span> {health.ingest?.reason ?? "ingest is blocked"}
+        </p>
+        <div className="ml-auto">
+          <FyersConnect health={health} />
         </div>
       </div>
-      <NavTabs />
-    </header>
+    </div>
+  );
+}
+
+export function Header() {
+  const health = useHealth();
+  const blocked = health.data?.ingest?.status === "blocked" ? health.data : null;
+  return (
+    <>
+      <header className="border-b border-line bg-surface">
+        <div className="mx-auto flex max-w-[1600px] flex-wrap items-center gap-3 px-4 pt-2">
+          <Link to="/" className="flex items-center gap-2 text-base font-semibold text-ink no-underline">
+            <Logo />
+            candly
+          </Link>
+          <ChartSelectors />
+          <div className="ml-auto flex flex-wrap items-center gap-2">
+            <StatusPill health={health} />
+            {!blocked && <FyersConnect health={health.data} />}
+            <ThemeToggle />
+          </div>
+        </div>
+        <NavTabs />
+      </header>
+      {blocked && <IngestBanner health={blocked} />}
+    </>
   );
 }

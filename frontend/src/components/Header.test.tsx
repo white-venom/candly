@@ -18,6 +18,32 @@ describe("header", () => {
     expect(screen.getByRole("button", { name: /Switch to (light|dark) theme/ })).toBeTruthy();
   });
 
+  it("shows a stall banner with the reason and the Fyers login when ingest is blocked", async () => {
+    const reason = "Fyers not connected — log in to resume data updates";
+    mockApi({ "/api/health": { ...health, ingest: { status: "blocked", reason } }, "/api/instruments": instruments });
+    renderWithProviders(<Header />, { route: "/scanner" });
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toBe(`Data updates paused: ${reason}`);
+    const connect = screen.getAllByRole("button", { name: "Connect Fyers" });
+    expect(connect).toHaveLength(1);
+    expect(screen.getByRole("banner").contains(connect[0])).toBe(false);
+  });
+
+  it("shows no banner when ingest is ok or the backend doesn't report it", async () => {
+    mockApi({ "/api/health": health, "/api/instruments": instruments });
+    const { unmount } = renderWithProviders(<Header />, { route: "/scanner" });
+    await screen.findByRole("status", { name: "System status" });
+    expect(screen.queryByRole("alert")).toBeNull();
+    unmount();
+
+    const { ingest: _ingest, ...older } = health;
+    mockApi({ "/api/health": older, "/api/instruments": instruments });
+    renderWithProviders(<Header />, { route: "/scanner" });
+    await screen.findByRole("status", { name: "System status" });
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.getByRole("banner").contains(screen.getByRole("button", { name: "Connect Fyers" }))).toBe(true);
+  });
+
   it("says the backend is offline when health can't be reached", async () => {
     mockApi({ "/api/health": unreachable, "/api/instruments": never });
     renderWithProviders(<Header />);

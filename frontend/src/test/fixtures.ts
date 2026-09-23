@@ -26,6 +26,7 @@ export const health: Health = {
     { exchange: "BSE", open: true, phase: "regular" },
     { exchange: "MCX", open: false, phase: "closed" },
   ],
+  ingest: { status: "ok", reason: null },
 };
 
 export const instruments: Instrument[] = [
@@ -66,7 +67,7 @@ export const candles: CandlesResponse = {
 export const forecast: Forecast = {
   instrument: "NSE:RELIANCE",
   tf: "1D",
-  method: "analog-v1",
+  method: "analog_v1",
   made_at: T0 + 6 * 3600,
   ref_time: T0,
   ref_close: 103,
@@ -157,6 +158,17 @@ export function scannerRow(overrides: Partial<ScannerRow>): ScannerRow {
   };
 }
 
+type CalibrationBin = AccuracyResponse["calibration"][number];
+
+/** The backend's 10 bins; any bin not filled in is empty (n = 0, nulls), as the API sends it. */
+export function calibrationBins(filled: Record<number, Pick<CalibrationBin, "mean_pred" | "observed" | "n">>): CalibrationBin[] {
+  return Array.from({ length: 10 }, (_, i) => ({
+    bin_low: i / 10,
+    bin_high: (i + 1) / 10,
+    ...(filled[i] ?? { mean_pred: null, observed: null, n: 0 }),
+  }));
+}
+
 export const accuracy: AccuracyResponse = {
   summary: {
     n_forecasts: 40,
@@ -171,10 +183,7 @@ export const accuracy: AccuracyResponse = {
     mean_match_score: 61.2,
     mean_close_err_atr: 0.72,
   },
-  calibration: [
-    { bin_low: 0.45, bin_high: 0.5, mean_pred: 0.48, observed: 0.46, n: 10 },
-    { bin_low: 0.5, bin_high: 0.55, mean_pred: 0.53, observed: 0.55, n: 14 },
-  ],
+  calibration: calibrationBins({ 4: { mean_pred: 0.48, observed: 0.46, n: 10 }, 5: { mean_pred: 0.53, observed: 0.55, n: 14 } }),
   rolling: [
     { time: T0 - DAY, hit_rate: 0.53, brier: 0.247, match_score: 60 },
     { time: T0, hit_rate: 0.54, brier: 0.246, match_score: 61 },
@@ -186,7 +195,7 @@ export const ledgerEntry: LedgerEntry = {
   id: 1,
   instrument: "NSE:RELIANCE",
   tf: "1D",
-  method: "analog-v1",
+  method: "analog_v1",
   made_at: T0,
   ref_time: T0,
   ref_close: 103,

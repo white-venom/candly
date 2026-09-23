@@ -1,3 +1,4 @@
+import type { UseQueryResult } from "@tanstack/react-query";
 import clsx from "clsx";
 import type { ReactNode } from "react";
 import { useSearchParams } from "react-router";
@@ -14,6 +15,20 @@ import { formatDateTimeIST, nowUnix } from "../lib/time";
 import { TIMEFRAMES } from "../lib/timeframes";
 
 const DAY_OPTIONS = [7, 30, 90, 180, 365];
+
+const ALL_METHODS = "all";
+const DEFAULT_METHOD = "analog_v1";
+const METHODS = [
+  { value: "analog_v1", label: "analog_v1 (model)" },
+  { value: "baseline_base_rate", label: "Baseline: base rate" },
+  { value: "baseline_persistence", label: "Baseline: persistence" },
+  { value: "baseline_random_walk", label: "Baseline: random-walk bands" },
+  { value: ALL_METHODS, label: "All methods (ledger only)" },
+];
+
+function readMethod(value: string | null): string {
+  return METHODS.find((m) => m.value === value)?.value ?? DEFAULT_METHOD;
+}
 
 function Tile({ label, value, sub }: { label: string; value: ReactNode; sub?: ReactNode }) {
   return (
@@ -159,8 +174,56 @@ function LedgerTable({ entries }: { entries: LedgerEntry[] }) {
   );
 }
 
-function Ledger({ instrument, tf, days }: { instrument: string | null; tf: string | null; days: number }) {
-  const ledger = useLedger({ instrument, tf, limit: 100 });
+function Summary({ query }: { query: UseQueryResult<AccuracyResponse> }) {
+  return (
+    <QueryView
+      query={query}
+      isEmpty={(a) => a.summary.n_forecasts === 0}
+      empty="No forecasts in this window yet — the ledger fills as bars close."
+      loadingLabel="Loading accuracy…"
+    >
+      {(a) => (
+        <div className={clsx("flex flex-col gap-3", query.isPlaceholderData && "opacity-60")}>
+          <Tiles s={a.summary} />
+          <div className="grid gap-3 lg:grid-cols-2">
+            <Card title="Calibration">
+              <CalibrationChart bins={a.calibration} />
+            </Card>
+            <Card title="Rolling (last 30 graded forecasts)">
+              <div className="grid gap-3">
+                <MiniLineChart
+                  title="Hit rate"
+                  points={a.rolling.map((r) => ({ time: r.time, value: r.hit_rate }))}
+                  format={(v) => fmtProb(v, 0)}
+                  reference={{ value: 0.5, label: "50%" }}
+                />
+                <MiniLineChart
+                  title="Brier score (lower is better)"
+                  points={a.rolling.map((r) => ({ time: r.time, value: r.brier }))}
+                  format={(v) => fmtNum(v, 3)}
+                  reference={a.summary.brier_baseline !== null ? { value: a.summary.brier_baseline, label: "window baseline" } : undefined}
+                />
+                <MiniLineChart
+                  title="Match score"
+                  points={a.rolling.map((r) => ({ time: r.time, value: r.match_score }))}
+                  format={(v) => fmtNum(v, 0)}
+                />
+              </div>
+            </Card>
+          </div>
+          <Card title="By group">
+            <ByGroup rows={a.by_group} />
+          </Card>
+        </div>
+      )}
+    </QueryView>
+  );
+}
+
+type LedgerProps ={ instrument: string | null; tf: string | null; method: string | null; days: number };
+
+function Ledger({ instrument, tf, method, days }: LedgerProps) {
+  const ledger = useLedger({ instrument, tf, method, limit: 100 });
   const since = nowUnix() - days * 86400;
   return (
     <QueryView query={ledger} isEmpty={(rows) => rows.length === 0} empty="No forecasts in the ledger yet.">
@@ -181,8 +244,10 @@ export function AccuracyPage() {
   const instrument = params.get("instrument") || null;
   const tf = params.get("tf") || null;
   const days = Number(params.get("days")) || 90;
+  const method = readMethod(params.get("method"));
+  const oneMethod = method === ALL_METHODS ? null : method;
   const instruments = useInstruments();
-  const accuracy = useAccuracy(instrument, tf, days);
+  const accuracy = useAccuracy(instrument, tf, days, oneMethod);
 
   const update = (key: string, value: string) => {
     const next = new URLSearchParams(params);
@@ -214,52 +279,30 @@ export function AccuracyPage() {
             </option>
           ))}
         </SelectField>
+        <SelectField
+          label="Method"
+          value={method}
+          onChange={(e) => update("method", e.target.value === DEFAULT_METHOD ? "" : e.target.value)}
+        >
+          {METHODS.map((m) => (
+            <option key={m.value} value={m.value}>
+              {m.label}
+            </option>
+          ))}
+        </SelectField>
       </div>
 
-      <QueryView
-        query={accuracy}
-        isEmpty={(a) => a.summary.n_forecasts === 0}
-        empty="No forecasts in this window yet — the ledger fills as bars close."
-        loadingLabel="Loading accuracy…"
-      >
-        {(a) => (
-          <div className={clsx("flex flex-col gap-3", accuracy.isPlaceholderData && "opacity-60")}>
-            <Tiles s={a.summary} />
-            <div className="grid gap-3 lg:grid-cols-2">
-              <Card title="Calibration">
-                <CalibrationChart bins={a.calibration} />
-              </Card>
-              <Card title="Rolling (last 30 graded forecasts)">
-                <div className="grid gap-3">
-                  <MiniLineChart
-                    title="Hit rate"
-                    points={a.rolling.map((r) => ({ time: r.time, value: r.hit_rate }))}
-                    format={(v) => fmtProb(v, 0)}
-                    reference={{ value: 0.5, label: "50%" }}
-                  />
-                  <MiniLineChart
-                    title="Brier score (lower is better)"
-                    points={a.rolling.map((r) => ({ time: r.time, value: r.brier }))}
-                    format={(v) => fmtNum(v, 3)}
-                    reference={a.summary.brier_baseline !== null ? { value: a.summary.brier_baseline, label: "window baseline" } : undefined}
-                  />
-                  <MiniLineChart
-                    title="Match score"
-                    points={a.rolling.map((r) => ({ time: r.time, value: r.match_score }))}
-                    format={(v) => fmtNum(v, 0)}
-                  />
-                </div>
-              </Card>
-            </div>
-            <Card title="By group">
-              <ByGroup rows={a.by_group} />
-            </Card>
-          </div>
-        )}
-      </QueryView>
+      {oneMethod === null ? (
+        <EmptyState>
+          Accuracy is scored one method at a time, so the baselines never blur the model’s numbers. Pick a method to see its
+          summary; the ledger below lists every method.
+        </EmptyState>
+      ) : (
+        <Summary query={accuracy} />
+      )}
 
       <Card title="Ledger — predicted vs actual candles">
-        <Ledger instrument={instrument} tf={tf} days={days} />
+        <Ledger instrument={instrument} tf={tf} method={oneMethod} days={days} />
       </Card>
     </div>
   );

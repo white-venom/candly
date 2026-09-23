@@ -14,6 +14,8 @@ export type Health = {
   data_source: "fyers" | "yahoo";
   keys: { fyers: boolean; fyers_connected: boolean; kotak_neo: boolean; anthropic: boolean; telegram: boolean };
   markets: { exchange: "NSE" | "BSE" | "MCX"; open: boolean; phase: string }[];
+  // Older backends omit it; treat that as "ok".
+  ingest?: { status: "ok" | "blocked"; reason: string | null };
 };
 
 // GET /api/instruments -> Instrument[]
@@ -117,7 +119,7 @@ export type ScorecardResponse = {
   rows: ScorecardRow[];
 };
 
-// GET /api/ledger?instrument=&tf=&status=&limit=100 -> LedgerEntry[], newest first
+// GET /api/ledger?instrument=&tf=&status=&method=&limit=100 -> LedgerEntry[], newest first (all methods unless `method` is given)
 export type StepGrade = {
   step: number; close_err_pct: number; close_err_atr: number; high_err_atr: number; low_err_atr: number;
   range_iou: number; body_iou: number; color_match: boolean; in_band_80: boolean;
@@ -132,14 +134,15 @@ export type LedgerEntry = {
   grade: { direction_hit: boolean | null; brier: number | null; match_score: number; steps: StepGrade[] } | null;
 };
 
-// GET /api/accuracy?instrument=&tf=&days=90
+// GET /api/accuracy?instrument=&tf=&days=90&method=analog_v1
 export type AccuracyResponse = {
   summary: {
     n_forecasts: number; n_graded: number; n_abstained: number;
     direction_hit_rate: number | null; brier: number | null; brier_baseline: number | null; skill: number | null;
     ece: number | null; band_coverage_80: number | null; mean_match_score: number | null; mean_close_err_atr: number | null;
   };
-  calibration: { bin_low: number; bin_high: number; mean_pred: number; observed: number; n: number }[];
+  // Always 10 bins; empty ones have n = 0 and null mean_pred / observed.
+  calibration: { bin_low: number; bin_high: number; mean_pred: number | null; observed: number | null; n: number }[];
   rolling: { time: number; hit_rate: number | null; brier: number | null; match_score: number | null }[];
   by_group: { group_by: "instrument" | "tf" | "pattern" | "session_phase" | "vol_regime"; key: string; n: number; hit_rate: number | null; brier: number | null }[];
 };

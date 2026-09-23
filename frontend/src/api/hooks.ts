@@ -142,21 +142,30 @@ export function useScorecard({ tf, instrument, pattern, certifiedOnly }: Scoreca
   });
 }
 
-export type LedgerFilters = { instrument: string | null; tf: string | null; status?: LedgerEntry["status"] | null; limit?: number };
+export type LedgerFilters = {
+  instrument: string | null;
+  tf: string | null;
+  /** null lists every method. */
+  method: string | null;
+  status?: LedgerEntry["status"] | null;
+  limit?: number;
+};
 
-export function useLedger({ instrument, tf, status = null, limit = 100 }: LedgerFilters) {
+export function useLedger({ instrument, tf, method, status = null, limit = 100 }: LedgerFilters) {
   return useQuery({
-    queryKey: ["ledger", instrument, tf, status, limit],
-    queryFn: ({ signal }) => apiGet<LedgerEntry[]>("/ledger", { instrument, tf, status, limit }, signal),
+    queryKey: ["ledger", instrument, tf, method, status, limit],
+    queryFn: ({ signal }) => apiGet<LedgerEntry[]>("/ledger", { instrument, tf, method, status, limit }, signal),
     placeholderData: keepPreviousData,
     refetchInterval: MINUTE,
   });
 }
 
-export function useAccuracy(instrument: string | null, tf: string | null, days: number) {
+/** Accuracy is only meaningful for one method at a time; a null method skips the request. */
+export function useAccuracy(instrument: string | null, tf: string | null, days: number, method: string | null) {
   return useQuery({
-    queryKey: ["accuracy", instrument, tf, days],
-    queryFn: ({ signal }) => apiGet<AccuracyResponse>("/accuracy", { instrument, tf, days }, signal),
+    queryKey: ["accuracy", instrument, tf, days, method],
+    queryFn: ({ signal }) => apiGet<AccuracyResponse>("/accuracy", { instrument, tf, days, method }, signal),
+    enabled: method !== null,
     placeholderData: keepPreviousData,
     refetchInterval: 5 * MINUTE,
   });

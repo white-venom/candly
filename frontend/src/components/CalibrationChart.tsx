@@ -3,30 +3,41 @@ import type { AccuracyResponse } from "../api/types";
 import { fmtInt, fmtProb } from "../lib/format";
 
 type Bin = AccuracyResponse["calibration"][number];
+type Point = Bin & { mean_pred: number; observed: number };
 
 const W = 320;
 const H = 300;
 const M = { l: 44, r: 12, t: 12, b: 40 };
 
-function domainOf(bins: Bin[]): [number, number] {
-  const values = bins.flatMap((b) => [b.bin_low, b.bin_high, b.observed, b.mean_pred]);
-  const lo = Math.max(0, Math.floor(Math.min(...values) * 10) / 10);
-  const hi = Math.min(1, Math.ceil(Math.max(...values) * 10) / 10);
-  return hi - lo < 0.1 ? [Math.max(0, lo - 0.1), Math.min(1, hi + 0.1)] : [lo, hi];
+/** Empty bins carry nulls; plotting them as 0 would invent a badly calibrated corner. */
+function isPoint(b: Bin): b is Point {
+  return b.n > 0 && b.mean_pred !== null && b.observed !== null;
+}
+
+/** Tenths that cover every plotted value, at least one tenth wide. */
+function domainOf(points: Point[]): [number, number] {
+  const values = points.flatMap((p) => [p.mean_pred, p.observed]);
+  let lo = Math.max(0, Math.floor(Math.min(...values) * 10));
+  let hi = Math.min(10, Math.ceil(Math.max(...values) * 10));
+  if (hi === lo) {
+    lo = Math.max(0, lo - 1);
+    hi = Math.min(10, hi + 1);
+  }
+  return [lo / 10, hi / 10];
 }
 
 /** Predicted p(up) against observed frequency. Points on the dashed diagonal are perfectly calibrated. */
 export function CalibrationChart({ bins }: { bins: Bin[] }) {
   const titleId = useId();
-  if (bins.length === 0) return <p className="text-ink-muted">No calibration bins yet.</p>;
+  const points = bins.filter(isPoint).sort((a, b) => a.mean_pred - b.mean_pred);
+  if (points.length === 0) return <p className="text-ink-muted">No graded forecasts yet</p>;
 
-  const [lo, hi] = domainOf(bins);
+  const [lo, hi] = domainOf(points);
   const x = (v: number) => M.l + ((v - lo) / (hi - lo)) * (W - M.l - M.r);
   const y = (v: number) => H - M.b - ((v - lo) / (hi - lo)) * (H - M.t - M.b);
-  const ticks = Array.from({ length: Math.round((hi - lo) / 0.1) + 1 }, (_, i) => Math.round((lo + i * 0.1) * 10) / 10);
-  const maxN = Math.max(...bins.map((b) => b.n), 1);
+  const ticks = Array.from({ length: Math.round((hi - lo) * 10) + 1 }, (_, i) => Math.round(lo * 10 + i) / 10);
+  const maxN = Math.max(...points.map((p) => p.n));
   const radius = (n: number) => 3 + 5 * Math.sqrt(n / maxN);
-  const sorted = [...bins].sort((a, b) => a.mean_pred - b.mean_pred);
 
   return (
     <figure className="flex flex-col gap-2">
@@ -48,12 +59,12 @@ export function CalibrationChart({ bins }: { bins: Bin[] }) {
         <line x1={M.l} x2={M.l} y1={M.t} y2={H - M.b} className="stroke-line-strong" />
         <line x1={x(lo)} y1={y(lo)} x2={x(hi)} y2={y(hi)} strokeDasharray="4 3" className="stroke-ink-faint" />
         <polyline
-          points={sorted.map((b) => `${x(b.mean_pred)},${y(b.observed)}`).join(" ")}
+          points={points.map((b) => `${x(b.mean_pred)},${y(b.observed)}`).join(" ")}
           fill="none"
           strokeWidth={2}
           className="stroke-accent"
         />
-        {sorted.map((b) => (
+        {points.map((b) => (
           <circle key={`${b.bin_low}-${b.bin_high}`} cx={x(b.mean_pred)} cy={y(b.observed)} r={radius(b.n)} strokeWidth={2} className="fill-accent stroke-surface">
             <title>
               {`Bin ${fmtProb(b.bin_low, 0)}–${fmtProb(b.bin_high, 0)}: predicted ${fmtProb(b.mean_pred)}, observed ${fmtProb(b.observed)}, n=${fmtInt(b.n)}`}
@@ -82,7 +93,7 @@ export function CalibrationChart({ bins }: { bins: Bin[] }) {
             </tr>
           </thead>
           <tbody className="text-ink">
-            {sorted.map((b) => (
+            {points.map((b) => (
               <tr key={`${b.bin_low}-${b.bin_high}`}>
                 <td>
                   {fmtProb(b.bin_low, 0)}–{fmtProb(b.bin_high, 0)}
