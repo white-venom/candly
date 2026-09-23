@@ -38,7 +38,9 @@ def fetch_candles(
         earliest = now - LOOKBACK[tf]
         start = earliest if start is None else max(clock.to_utc(start), earliest)
     raw = _download(symbol, INTERVALS[tf], start, end)
-    return to_candles(raw, instrument.exchange, tf, now, include_forming=include_forming, kind=instrument.kind)
+    return to_candles(
+        raw, instrument.exchange, tf, now, include_forming=include_forming, kind=instrument.kind
+    )
 
 
 def _download(

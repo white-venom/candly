@@ -1,4 +1,8 @@
-"""The prediction ledger: write-once forecasts in SQLite (WAL), graded as their target bars close."""
+"""The prediction ledger: write-once forecasts in SQLite (WAL), graded as their target bars close.
+
+Time: `record` checks lateness against the real clock, `candly.data.clock.utc_now()`, never a time the
+caller passes in. Tests freeze that clock with `monkeypatch.setattr(candly.data.clock, "utc_now", ...)`.
+"""
 
 from __future__ import annotations
 
@@ -14,11 +18,12 @@ import pandas as pd
 from candly.core.calendar import get_calendar
 from candly.core.instruments import exchange_of
 from candly.core.settings import get_settings
+from candly.data import clock
 from candly.forecast.models import Candle, Forecast, ForecastContext
-from candly.forecast.timing import future_bar_times, to_unix
+from candly.forecast.timing import to_unix
 from candly.indicators.functions import atr as atr_fn
 from candly.ledger.accuracy import accuracy_from_frame
-from candly.ledger.grading import grade
+from candly.ledger.grading import brier_baseline, grade, match_bars, target_times
 from candly.ledger.models import AccuracyResponse, Grade, LedgerEntry
 
 VOID_AFTER = timedelta(days=7)
@@ -57,6 +62,7 @@ CREATE TABLE IF NOT EXISTS outcomes (
     brier_baseline REAL,
     match_score REAL,
     atr REAL,
+    reason TEXT,
     updated_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS outcomes_by_status ON outcomes (status);
@@ -85,6 +91,9 @@ class Ledger:
         with self._connect() as con:
             con.execute("PRAGMA journal_mode=WAL")
             con.executescript(_SCHEMA)
+            columns = {r["name"] for r in con.execute("PRAGMA table_info(outcomes)")}
+            if "reason" not in columns:
+                con.execute("ALTER TABLE outcomes ADD COLUMN reason TEXT")
 
     @contextmanager
     def _connect(self) -> Iterator[sqlite3.Connection]:
@@ -97,13 +106,12 @@ class Ledger:
         finally:
             con.close()
 
-    def record(self, forecast: Forecast, now: pd.Timestamp | None = None) -> int:
-        """Store a forecast before its outcome exists. Rejects duplicates, and forecasts recorded
-        (at `now`, default the wall clock) after their first target bar has already closed."""
-        now = pd.Timestamp.now(tz="UTC") if now is None else pd.Timestamp(now).tz_convert("UTC")
+    def record(self, forecast: Forecast) -> int:
+        """Store a forecast before its outcome exists. Rejects duplicates, and forecasts whose first
+        target bar had already closed by the real clock or by the forecast's own made_at."""
+        now = clock.utc_now()
         exchange = exchange_of(forecast.instrument)
-        ref_ts = pd.Timestamp(forecast.ref_time, unit="s", tz="UTC")
-        first = future_bar_times(exchange, forecast.tf, ref_ts, 1)
+        first = target_times(forecast)[:1]
         if first:
             first_close = get_calendar().bar_close_time(exchange, first[0], forecast.tf)
             if max(now, pd.Timestamp(forecast.made_at, unit="s", tz="UTC")) >= first_close:
@@ -158,10 +166,11 @@ class Ledger:
     def grade_pending(
         self, load_candles: Callable[..., pd.DataFrame], now: pd.Timestamp | None = None
     ) -> int:
-        """Fill in actual candles for pending forecasts; grade those whose target bars have all
-        closed, void those whose data is still missing a week after it was due. Returns how many
-        forecasts were graded or voided."""
-        now = pd.Timestamp.now(tz="UTC") if now is None else pd.Timestamp(now).tz_convert("UTC")
+        """Fill in actual candles for pending forecasts, matched to their target bar times. A forecast
+        is graded once every target bar exists, and voided if one is still missing a week after the
+        last target bar was due. Returns how many forecasts this call graded or voided; a forecast
+        another grader finished first counts as 0, not as an error."""
+        now = clock.utc_now() if now is None else pd.Timestamp(now).tz_convert("UTC")
         pending = self._rows("WHERE o.status = 'pending'")
         cache: dict[tuple[str, str], pd.DataFrame | None] = {}
         finished = 0
@@ -177,55 +186,56 @@ class Ledger:
 
     def _grade_one(self, row: sqlite3.Row, candles: pd.DataFrame | None, now: pd.Timestamp) -> int:
         forecast = Forecast.model_validate_json(row["payload"])
-        ref_ts = pd.Timestamp(forecast.ref_time, unit="s", tz="UTC")
-        n_steps = max(forecast.horizon_bars, len(forecast.ghost_candles))
-        after = pd.DataFrame()
-        if candles is not None and not candles.empty:
-            after = candles[candles["ts"] > ref_ts].iloc[:n_steps]
-        actual = [
-            Candle(time=to_unix(r.ts), open=r.open, high=r.high, low=r.low, close=r.close, volume=r.volume)
-            for r in after.itertuples()
-        ]
+        times = target_times(forecast)
+        matched = match_bars(times, candles)
+        actual = [c for c in matched if c is not None]
         actual_json = json.dumps([c.model_dump() for c in actual])
         stamp = to_unix(now)
-        if len(actual) >= n_steps:
+        if times and len(actual) == len(times):
+            ref_ts = pd.Timestamp(forecast.ref_time, unit="s", tz="UTC")
             atr = self._atr(row, candles, ref_ts)
             if atr is None:
-                return self._set(row["id"], "void", actual_json, stamp)
+                return self._finish_void(row["id"], actual_json, stamp, "no ATR at the reference bar")
             g: Grade = grade(forecast, actual, atr)
-            y = int(actual[forecast.horizon_bars - 1].close > forecast.ref_close)
-            baseline = (forecast.base_rate - y) ** 2 if forecast.base_rate is not None else None
             with self._connect() as con:
-                con.execute(
+                cur = con.execute(
                     """UPDATE outcomes SET status = 'graded', actual = ?, grade = ?, direction_hit = ?,
                        brier = ?, brier_baseline = ?, match_score = ?, atr = ?, updated_at = ?
-                       WHERE forecast_id = ?""",
+                       WHERE forecast_id = ? AND status = 'pending'""",
                     (
                         actual_json,
                         g.model_dump_json(),
                         None if g.direction_hit is None else int(g.direction_hit),
                         g.brier,
-                        baseline,
+                        brier_baseline(forecast, actual),
                         g.match_score,
                         atr,
                         stamp,
                         row["id"],
                     ),
                 )
-            return 1
-        if now > self._deadline(forecast, ref_ts, n_steps):
-            return self._set(row["id"], "void", actual_json, stamp)
+                return cur.rowcount
+        if now > self._deadline(forecast, times):
+            missing = ", ".join(t.isoformat() for t, c in zip(times, matched, strict=True) if c is None)
+            reason = f"no bar at {missing or 'any target time'}"
+            return self._finish_void(row["id"], actual_json, stamp, reason)
         if actual_json != row["actual"]:
-            self._set(row["id"], "pending", actual_json, stamp)
+            with self._connect() as con:
+                con.execute(
+                    """UPDATE outcomes SET actual = ?, updated_at = ?
+                       WHERE forecast_id = ? AND status = 'pending'""",
+                    (actual_json, stamp, row["id"]),
+                )
         return 0
 
-    def _set(self, forecast_id: int, status: str, actual_json: str, stamp: int) -> int:
+    def _finish_void(self, forecast_id: int, actual_json: str, stamp: int, reason: str) -> int:
         with self._connect() as con:
-            con.execute(
-                "UPDATE outcomes SET status = ?, actual = ?, updated_at = ? WHERE forecast_id = ?",
-                (status, actual_json, stamp, forecast_id),
+            cur = con.execute(
+                """UPDATE outcomes SET status = 'void', actual = ?, reason = ?, updated_at = ?
+                   WHERE forecast_id = ? AND status = 'pending'""",
+                (actual_json, reason, stamp, forecast_id),
             )
-        return int(status != "pending")
+            return cur.rowcount
 
     @staticmethod
     def _atr(row: sqlite3.Row, candles: pd.DataFrame, ref_ts: pd.Timestamp) -> float | None:
@@ -240,11 +250,15 @@ class Ledger:
         return value if value > 0 else None
 
     @staticmethod
-    def _deadline(forecast: Forecast, ref_ts: pd.Timestamp, n_steps: int) -> pd.Timestamp:
+    def _deadline(forecast: Forecast, times: list[pd.Timestamp]) -> pd.Timestamp:
         exchange = exchange_of(forecast.instrument)
-        times = future_bar_times(exchange, forecast.tf, ref_ts, n_steps)
-        last = times[-1] if times else ref_ts
+        last = times[-1] if times else pd.Timestamp(forecast.ref_time, unit="s", tz="UTC")
         return get_calendar().bar_close_time(exchange, last, forecast.tf) + VOID_AFTER
+
+    def void_reason(self, forecast_id: int) -> str | None:
+        with self._connect() as con:
+            row = con.execute("SELECT reason FROM outcomes WHERE forecast_id = ?", (forecast_id,)).fetchone()
+        return row["reason"] if row else None
 
     def entries(
         self,
@@ -320,6 +334,6 @@ class Ledger:
         method: str | None = "analog_v1",
         now: pd.Timestamp | None = None,
     ) -> AccuracyResponse:
-        now = pd.Timestamp.now(tz="UTC") if now is None else pd.Timestamp(now).tz_convert("UTC")
+        now = clock.utc_now() if now is None else pd.Timestamp(now).tz_convert("UTC")
         since = to_unix(now - pd.Timedelta(days=days))
         return accuracy_from_frame(self.frame(instrument, tf, method, since))

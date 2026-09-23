@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 from candly.api.routes import analytics
 from candly.core.calendar import get_calendar
 from candly.core.schema import empty_candles
+from candly.data import clock
 from candly.forecast.jobs import run_forecast_cycle
 from candly.indicators import INDICATOR_CATALOG
 from candly.indicators.functions import atr as atr_fn
@@ -192,7 +193,9 @@ def test_scorecard_route(client):
     assert client.get("/api/scorecard", params={"tf": "1D"}).status_code == 503
     build_scorecard("1D", ["NSE:RELIANCE", "NSE:TCS"], load=load)
     body = client.get("/api/scorecard", params={"tf": "1D"}).json()
-    assert body["meta"]["n_tests"] == len(body["rows"]) > 0
+    assert body["meta"]["n_rows"] == len(body["rows"]) > body["meta"]["n_tests"] > 0
+    tested = [r for r in body["rows"] if r["q_value"] is not None]
+    assert len(tested) == body["meta"]["n_tests"]
     assert set(body["rows"][0]) == {
         "pattern",
         "label",
@@ -223,7 +226,8 @@ def test_scorecard_route(client):
     assert any(s["stats"] is not None for s in sigs)
 
 
-def test_ledger_and_accuracy_routes(client):
+def test_ledger_and_accuracy_routes(client, monkeypatch):
+    monkeypatch.setattr(clock, "utc_now", lambda: NOW)
     assert client.get("/api/ledger").json() == []
     empty = client.get("/api/accuracy").json()
     assert empty["summary"]["n_forecasts"] == 0 and len(empty["calibration"]) == 10

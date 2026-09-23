@@ -109,7 +109,7 @@ export type ScorecardRow = {
   instrument: string;
   context: string;
   horizon_bars: number; n: number; hits: number; hit_rate: number; base_rate: number;
-  ci_low: number; ci_high: number; p_value: number; q_value: number; posterior: number;
+  ci_low: number; ci_high: number; p_value: number; q_value: number | null; posterior: number;
   expectancy_after_cost_pct: number | null;
   validation_n: number; validation_hit_rate: number | null;
   certified: boolean;

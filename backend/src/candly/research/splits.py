@@ -1,4 +1,9 @@
-"""Walk-forward folds: expanding train window, fixed-length test windows, all before the holdout."""
+"""Fixed train/validation split and the walk-forward windows (PLAN.md §12).
+
+Discovery (headline statistics) uses bars before the fixed `train_end[tf]` minus the purge + embargo gap.
+Validation is the walk-forward test windows that tile [train_end, holdout). The dates come from
+research.yaml, so a deeper backfill can't move them.
+"""
 
 from __future__ import annotations
 
@@ -20,17 +25,16 @@ class Fold:
     test: np.ndarray
 
 
-def fold_boundaries(start: pd.Timestamp, cfg: ResearchConfig) -> list[tuple[pd.Timestamp, pd.Timestamp]]:
-    """[(test_start, test_end)] in UTC. The first test window opens `min_train_years` after the IST
-    date of `start`; windows are `test_window_months` long and the last one stops at the holdout."""
+def fold_boundaries(tf: str, cfg: ResearchConfig) -> list[tuple[pd.Timestamp, pd.Timestamp]]:
+    """[(test_start, test_end)] in UTC: `test_window_months`-long windows from train_end[tf] (midnight
+    IST) to the holdout; the last one stops at the holdout."""
     holdout = cfg.holdout_start_utc
-    anchor = start.tz_convert(IST).normalize()
-    t = anchor + pd.DateOffset(years=cfg.min_train_years)
+    t = cfg.train_end_utc(tf).tz_convert(IST)
     out = []
     while t.tz_convert("UTC") < holdout:
-        end = min((t + pd.DateOffset(months=cfg.test_window_months)).tz_convert("UTC"), holdout)
-        out.append((t.tz_convert("UTC"), end))
-        t = t + pd.DateOffset(months=cfg.test_window_months)
+        nxt = t + pd.DateOffset(months=cfg.test_window_months)
+        out.append((t.tz_convert("UTC"), min(nxt.tz_convert("UTC"), holdout)))
+        t = nxt
     return out
 
 
@@ -45,14 +49,19 @@ def train_positions(ts: pd.Series, before: pd.Timestamp, cfg: ResearchConfig) ->
     return idx[: max(0, len(idx) - gap_bars(cfg))]
 
 
-def walk_forward_folds(ts: pd.Series, cfg: ResearchConfig, start: pd.Timestamp | None = None) -> list[Fold]:
-    """Positional folds over one bar series (`ts` sorted ascending). Bars on/after the holdout never
-    appear in any fold. `start` anchors the calendar (defaults to the first bar)."""
-    if ts.empty:
-        return []
-    bounds = fold_boundaries(start if start is not None else ts.iloc[0], cfg)
+def split_labels(ts: pd.Series, tf: str, cfg: ResearchConfig) -> np.ndarray:
+    """"train" (before train_end, minus the gap), "validation" ([train_end, holdout)) or "gap"."""
+    out = np.full(len(ts), "gap", dtype=object)
+    out[train_positions(ts, cfg.train_end_utc(tf), cfg)] = "train"
+    out[((ts >= cfg.train_end_utc(tf)) & (ts < cfg.holdout_start_utc)).to_numpy()] = "validation"
+    return out
+
+
+def walk_forward_folds(ts: pd.Series, tf: str, cfg: ResearchConfig) -> list[Fold]:
+    """Positional folds over one bar series (`ts` sorted ascending): expanding train window, test
+    windows from `fold_boundaries`. Bars on/after the holdout never appear in any fold."""
     folds = []
-    for i, (lo, hi) in enumerate(bounds):
+    for i, (lo, hi) in enumerate(fold_boundaries(tf, cfg)):
         test = np.flatnonzero(((ts >= lo) & (ts < hi)).to_numpy())
         train = train_positions(ts, lo, cfg)
         if len(test) and len(train):

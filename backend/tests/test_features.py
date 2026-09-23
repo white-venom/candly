@@ -6,7 +6,7 @@ import pandas as pd
 import pytest
 
 from candly.core.calendar import IST, get_calendar
-from candly.features.context import CONTEXT_COLUMNS, bars_per_session, compute_context, session_phases
+from candly.features.context import CONTEXT_COLUMNS, compute_context, session_phases
 from candly.features.levels import LEVEL_KINDS, key_levels, level_frame, swing_points
 from candly.patterns import load_pattern_config
 from candly.research.causality import check_causal
@@ -63,10 +63,21 @@ def test_vol_regime_from_trailing_atr_percentile():
     assert set(ctx_calm["vol_regime"].dropna()) <= {"low", "normal", "high"}
 
 
-def test_bars_per_session():
-    assert bars_per_session("NSE", "1D") == 1
-    assert bars_per_session("NSE", "5m") == 75
-    assert bars_per_session("NSE", "1h") == 7
+def test_intraday_vol_regime_ranks_within_the_time_of_day():
+    df = synthetic_candles("15m", "2024-01-01", "2024-03-29", seed=8, vol=0.003)
+    local = df["ts"].dt.tz_convert(IST)
+    opening = ((local.dt.hour == 9) & (local.dt.minute == 15)).to_numpy()
+    spread = (df["high"] - df["low"]).to_numpy()
+    wide = df.copy()
+    wide.loc[opening, "high"] += 4.0 * spread[opening]
+    wide.loc[opening, "low"] -= 4.0 * spread[opening]
+    regime = compute_context(wide, "15m", "NSE", small_vol_window_config())["vol_regime"]
+    labelled = regime.notna().to_numpy()
+    high_at_open = (regime[opening & labelled] == "high").mean()
+    high_later = (regime[~opening & labelled] == "high").mean()
+    # ranking against every recent bar put ~70% of opening bars in "high" on this data
+    assert 0.2 < high_at_open < 0.5 and 0.2 < high_later < 0.5
+    assert abs(high_at_open - high_later) < 0.1
 
 
 def test_session_phases_match_calendar():

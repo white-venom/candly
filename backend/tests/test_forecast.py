@@ -7,11 +7,13 @@ import pytest
 from candly.core.calendar import IST, get_calendar
 from candly.features.context import compute_context
 from candly.forecast import baseline_forecasts, make_forecast
+from candly.forecast.analog import confidence_label
 from candly.forecast.timing import future_bar_times, last_expected_closed_bar
 from candly.patterns import detect_patterns
 from candly.research.config import load_research_config
 from candly.research.labels import path_columns
 from candly.research.scorecard import Scorecard, ScorecardMeta
+from candly.research.stats import beta_interval, beta_posterior
 from candly.research.synthetic import plant_marubozu_edge, synthetic_candles
 
 FORECAST_KEYS = {
@@ -82,6 +84,35 @@ def test_analogs_only_use_outcomes_closed_by_the_reference_bar(random_daily):
     same = (ctx["trend"] == fc.context.trend).to_numpy() & (ctx["atr14"] > 0).to_numpy()
     assert fc.n_analogs == int(same[: ref - steps + 1].sum())
     assert fc.n_analogs < int(same[:ref].sum())
+
+
+def test_posterior_uses_the_effective_number_of_analogs(random_daily):
+    cfg = load_research_config()
+    steps = 3
+    now = just_after_close(random_daily)
+    fc = make_forecast("NSE:RELIANCE", "1D", random_daily, None, steps=steps, now=now)
+    ctx = compute_context(random_daily, "1D", "NSE")
+    ref = len(random_daily) - 1
+    same = (ctx["trend"] == fc.context.trend).to_numpy() & (ctx["atr14"] > 0).to_numpy()
+    idx = np.flatnonzero(same[: ref - steps + 1])
+    closes = random_daily["close"].to_numpy()
+    hits, n = int((closes[idx + steps] > closes[idx]).sum()), len(idx)
+    assert fc.n_analogs == n
+    k = cfg.prior_strength
+    assert fc.p_up == pytest.approx(float(beta_posterior(hits / steps, n / steps, fc.base_rate, k)))
+    lo, hi = beta_interval(hits / steps, n / steps, fc.base_rate, k, cfg.ci_level)
+    assert fc.p_up_ci == pytest.approx((float(lo), float(hi)))
+    naive_lo, naive_hi = beta_interval(hits, n, fc.base_rate, k, cfg.ci_level)
+    assert hi - lo > naive_hi - naive_lo
+
+
+def test_confidence_labels_follow_the_config():
+    cfg = load_research_config()
+    edge = cfg.confidence["high"].min_edge_multiple * cfg.min_edge
+    assert confidence_label(0.56, 0.70, 0.5, edge + 0.01, cfg) == "high"
+    assert confidence_label(0.51, 0.60, 0.5, edge - 0.01, cfg) == "medium"
+    assert confidence_label(0.45, 0.70, 0.5, edge + 0.01, cfg) == "low"
+    assert confidence_label(0.30, 0.44, 0.5, -(edge + 0.01), cfg) == "high"
 
 
 def test_abstains_with_too_few_analogs():
@@ -204,6 +235,9 @@ def test_pooled_analogs_are_a_fallback_and_respect_time():
             {**rows[0], "ts": ref_ts - pd.Timedelta(days=3), "end_ts": ref_ts + pd.Timedelta(days=5 + k)}
         )
     rows.append({**rows[0], "instrument": "NSE:RELIANCE"})
+    for k in range(30):
+        other_exchange = "BSE:SENSEX" if k % 2 else "MCX:GOLD"
+        rows.append({**rows[0], "instrument": other_exchange, "ts": ref_ts - pd.Timedelta(days=500 + k)})
     card = library_card(rows, steps)
     pooled = make_forecast("NSE:RELIANCE", "1D", df, card, steps=1, now=just_after_close(df))
     assert pooled.n_analogs == 40

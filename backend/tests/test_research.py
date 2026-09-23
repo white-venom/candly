@@ -4,17 +4,20 @@ import pytest
 from scipy import stats as sps
 
 from candly.core.calendar import IST
-from candly.research.config import load_research_config
-from candly.research.costs import cost_breakdown, round_trip_cost
+from candly.research.config import load_costs_config, load_research_config
+from candly.research.costs import cost_breakdown, round_trip_cost, segment_for
 from candly.research.data import load_research_candles
 from candly.research.labels import forward_end_ts, forward_labels, forward_paths
-from candly.research.splits import fold_boundaries, gap_bars, walk_forward_folds
+from candly.research.splits import fold_boundaries, gap_bars, split_labels, walk_forward_folds
 from candly.research.stats import (
     benjamini_hochberg,
     beta_interval,
     beta_posterior,
-    binomial_pvalue,
+    cluster_robust_z,
+    expected_calibration_error,
+    overlap_cluster_ids,
     wilson_interval,
+    z_pvalue,
 )
 from candly.research.synthetic import synthetic_candles
 
@@ -79,15 +82,34 @@ def test_holdout_lock():
     assert len(unlocked) == len(full) and seen["end"] is None
 
 
+def test_config_parses_every_section():
+    cfg = load_research_config()
+    assert cfg.train_end_for("1D") == cfg.train_end["1D"] and cfg.train_end["1D"] < cfg.holdout_start
+    assert {cfg.train_end_for(tf) for tf in ("5m", "15m", "1h")} == {cfg.train_end["intraday"]}
+    assert cfg.train_end_utc("1D").tz_convert(IST).hour == 0
+    assert cfg.test == "cluster_robust" and cfg.bh_family == "min_samples"
+    assert cfg.bucket_null == "bucket_base_rate" and cfg.min_clusters > 0
+    assert (cfg.analog_bucket, cfg.analog_no_pattern, cfg.analog_effective_n) == (
+        "trend",
+        "bucket_only",
+        "n_over_steps",
+    )
+    assert list(cfg.confidence) == ["high", "medium"]
+    assert cfg.confidence["high"].min_edge_multiple > cfg.confidence["medium"].min_edge_multiple
+    gng = cfg.go_no_go_1
+    assert gng.slice.tf == "1D" and gng.slice.exchange == "NSE" and "NSE:INDIAVIX" in gng.slice.exclude
+    assert gng.ece_bins > 1 and gng.ece_binning == "quantile"
+
+
 def test_walk_forward_folds_respect_protocol():
     cfg = load_research_config()
     df = synthetic_candles("1D", "2015-01-01", "2026-06-30", seed=2)
     df = df[df["ts"] < cfg.holdout_start_utc].reset_index(drop=True)
-    bounds = fold_boundaries(df["ts"].iloc[0], cfg)
-    assert bounds[0][0].tz_convert(IST).date().isoformat() == "2018-01-01"
+    bounds = fold_boundaries("1D", cfg)
+    assert bounds[0][0] == cfg.train_end_utc("1D")
     assert bounds[-1][1] == cfg.holdout_start_utc
     assert all(a[1] == b[0] for a, b in zip(bounds, bounds[1:], strict=False))
-    folds = walk_forward_folds(df["ts"], cfg)
+    folds = walk_forward_folds(df["ts"], "1D", cfg)
     assert len(folds) == len(bounds)
     for fold in folds:
         ts = df["ts"]
@@ -99,18 +121,68 @@ def test_walk_forward_folds_respect_protocol():
     assert len(folds[1].train) > len(folds[0].train)
     assert gap_bars(cfg) == cfg.purge_bars + cfg.embargo_bars >= max(cfg.horizons)
 
+    deeper = synthetic_candles("1D", "2008-01-01", "2025-09-30", seed=3)
+    assert [(f.test_start, f.test_end) for f in walk_forward_folds(deeper["ts"], "1D", cfg)] == bounds
+
+
+def test_split_labels_use_the_fixed_train_end():
+    cfg = load_research_config()
+    df = synthetic_candles("1D", "2017-01-01", "2025-09-30", seed=4)
+    split = split_labels(df["ts"], "1D", cfg)
+    train_end = cfg.train_end_utc("1D")
+    before = (df["ts"] < train_end).to_numpy()
+    assert (split[before][: before.sum() - gap_bars(cfg)] == "train").all()
+    assert (split[before][-gap_bars(cfg) :] == "gap").all()
+    assert (split[~before] == "validation").all()
+    late = synthetic_candles("15m", "2022-12-20", "2023-01-10", seed=5)
+    late_split = split_labels(late["ts"], "15m", cfg)
+    assert (late_split[(late["ts"] >= cfg.train_end_utc("15m")).to_numpy()] == "validation").all()
+
+
+def test_overlap_clusters_known_answer():
+    start = np.array([0, 1, 2, 10, 11, 20, 0, 4])
+    end = np.array([3, 4, 5, 11, 12, 21, 5, 6])
+    group = np.array([0, 0, 0, 0, 0, 0, 1, 1])
+    ids = overlap_cluster_ids(group, start, end)
+    # (0,3], (1,4], (2,5] chain; (10,11] and (11,12] only touch; group 1 is separate
+    assert ids[0] == ids[1] == ids[2]
+    assert len({ids[0], ids[3], ids[4], ids[5], ids[6]}) == 5
+    assert ids[6] == ids[7]
+    assert len(set(ids)) == 5
+
+
+def test_cluster_robust_z_is_not_fooled_by_duplicates():
+    rng = np.random.default_rng(0)
+    resid = (rng.uniform(size=200) < 0.6).astype(float) - 0.5
+    cluster = np.arange(200)
+    z, n = cluster_robust_z(resid, cluster)
+    assert n == 200 and z == pytest.approx(resid.sum() / np.sqrt((resid**2).sum()))
+    z2, n2 = cluster_robust_z(np.r_[resid, resid], np.r_[cluster, cluster])
+    assert n2 == 200 and z2 == pytest.approx(z)
+    naive, _ = cluster_robust_z(np.r_[resid, resid], np.arange(400))
+    assert naive == pytest.approx(z * np.sqrt(2))
+    assert z_pvalue([z], [False])[0] == pytest.approx(sps.norm.sf(z))
+    assert z_pvalue([-z], [True])[0] == pytest.approx(2 * sps.norm.sf(abs(z)))
+    assert z_pvalue([np.nan], [False])[0] == 1.0
+
+
+def test_quantile_ece_known_value():
+    p = np.array([0.1, 0.2, 0.3, 0.4, 0.6, 0.7, 0.8, 0.9])
+    y = np.array([0, 0, 1, 0, 1, 1, 0, 1])
+    # four equal-count bins: (0.1, 0.2), (0.3, 0.4), (0.6, 0.7), (0.8, 0.9)
+    expected = 0.25 * (abs(0.15 - 0) + abs(0.35 - 0.5) + abs(0.65 - 1) + abs(0.85 - 0.5))
+    assert expected_calibration_error(p, y, 4, "quantile") == pytest.approx(expected)
+    assert expected_calibration_error(p, y, 2, "uniform") == pytest.approx(
+        0.5 * abs(0.25 - 0.25) + 0.5 * abs(0.75 - 0.75)
+    )
+    assert expected_calibration_error([], [], 10) is None
+
 
 def test_wilson_interval_known_value():
     lo, hi = wilson_interval(8, 10, 0.95)
     assert (float(lo), float(hi)) == pytest.approx((0.4902, 0.9433), abs=1e-4)
     lo0, hi0 = wilson_interval(0, 20, 0.95)
     assert float(lo0) == 0.0 and float(hi0) == pytest.approx(0.1611, abs=1e-4)
-
-
-def test_binomial_test_against_base_rate():
-    assert binomial_pvalue(60, 100, 0.5) == pytest.approx(sps.binomtest(60, 100, 0.5).pvalue)
-    assert binomial_pvalue(52, 100, 0.52) == pytest.approx(1.0)
-    assert binomial_pvalue(0, 0, 0.5) == 1.0
 
 
 def test_benjamini_hochberg_hand_computed():
@@ -178,3 +250,13 @@ def test_real_cost_table_is_sane():
     assert round_trip_cost("equity", "intraday") < delivery
     assert round_trip_cost("index", "multi_day") > 0
     assert round_trip_cost("future", "intraday") > 0
+
+
+def test_overnight_equity_shorts_are_costed_as_stock_futures():
+    assert segment_for("equity", "multi_day", "short") == "futures"
+    assert segment_for("equity", "multi_day", "long") == "equity_delivery"
+    assert segment_for("equity", "intraday", "short") == "equity_intraday"
+    assert segment_for("index", "multi_day", "short") == "futures"
+    short = cost_breakdown("equity", "multi_day", side="short")
+    futures_stt = load_costs_config()["segments"]["futures"]["stt"]["sell"]
+    assert short["transaction_tax"] == pytest.approx(futures_stt)

@@ -2,6 +2,7 @@ import pandas as pd
 
 from candly.core.calendar import get_calendar
 from candly.core.schema import empty_candles
+from candly.data import clock
 from candly.forecast.jobs import grade_pending_job, rebuild_scorecard, run_forecast_cycle
 from candly.ledger import Ledger
 from candly.research.synthetic import synthetic_candles
@@ -23,7 +24,8 @@ def loader(until: pd.Timestamp):
     return load
 
 
-def test_cycle_records_then_grades(tmp_path, tmp_data_dir, no_keys):
+def test_cycle_records_then_grades(tmp_path, tmp_data_dir, no_keys, monkeypatch):
+    monkeypatch.setattr(clock, "utc_now", lambda: NOW)
     book = Ledger(tmp_path / "ledger.sqlite")
     counts = run_forecast_cycle("1D", list(FULL), load=loader(CUT), ledger=book, now=NOW)
     assert counts["recorded"] == 8 and counts["errors"] == 0
@@ -40,6 +42,13 @@ def test_cycle_records_then_grades(tmp_path, tmp_data_dir, no_keys):
     analog = book.entries(instrument="NSE:RELIANCE", method="analog_v1")[0]
     assert len(analog.actual) == analog.horizon_bars
     assert analog.actual[0].time > analog.ref_time
+
+
+def test_a_backdated_cycle_cannot_record(tmp_path, tmp_data_dir, no_keys):
+    # `now` in the past makes timely-looking forecasts, but the ledger checks the real clock
+    book = Ledger(tmp_path / "ledger.sqlite")
+    counts = run_forecast_cycle("1D", list(FULL), load=loader(CUT), ledger=book, now=NOW)
+    assert counts["late"] == 8 and counts["recorded"] == 0 and book.entries() == []
 
 
 def test_stale_forecasts_are_not_recorded(tmp_path, tmp_data_dir, no_keys):

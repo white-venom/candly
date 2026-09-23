@@ -9,6 +9,7 @@ import pandas as pd
 
 from candly.core.instruments import load_watchlist
 from candly.core.timeframes import validate_tf
+from candly.data import clock
 from candly.forecast.analog import make_forecast
 from candly.forecast.baselines import baseline_forecasts
 from candly.ledger import DuplicateForecast, LateForecast, Ledger
@@ -38,9 +39,12 @@ def run_forecast_cycle(
     now: pd.Timestamp | None = None,
     include_baselines: bool = True,
 ) -> dict[str, int]:
-    """Forecast the last closed bar of every instrument and write each forecast to the ledger."""
+    """Forecast the last closed bar of every instrument and write each forecast to the ledger.
+
+    `now` only sets what the forecasts treat as the present; the ledger rejects any forecast that is
+    already late by the real clock."""
     validate_tf(tf)
-    now = pd.Timestamp.now(tz="UTC") if now is None else pd.Timestamp(now).tz_convert("UTC")
+    now = clock.utc_now() if now is None else pd.Timestamp(now).tz_convert("UTC")
     ids = (
         list(instruments)
         if instruments is not None
@@ -68,7 +72,7 @@ def run_forecast_cycle(
                 batch += baseline_forecasts(instrument_id, tf, candles, forecast.horizon_bars, now=now)
             for fc in batch:
                 try:
-                    ledger.record(fc, now=now)
+                    ledger.record(fc)
                     counts["recorded"] += 1
                 except DuplicateForecast:
                     counts["duplicates"] += 1

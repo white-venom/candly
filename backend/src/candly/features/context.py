@@ -2,14 +2,11 @@
 
 from __future__ import annotations
 
-import math
-from datetime import date
-
 import numpy as np
 import pandas as pd
 
 from candly.core.calendar import IST, get_calendar
-from candly.core.timeframes import is_intraday, tf_delta
+from candly.core.timeframes import is_intraday
 from candly.features.levels import level_frame, nearest_level
 from candly.indicators import compute_indicators
 from candly.indicators.functions import ema
@@ -26,14 +23,6 @@ CONTEXT_COLUMNS = [
     "rsi14",
     "atr14",
 ]
-_REFERENCE_DAY = date(2025, 1, 6)
-
-
-def bars_per_session(exchange: str, tf: str) -> int:
-    if not is_intraday(tf):
-        return 1
-    start, close = get_calendar().session_times(exchange, _REFERENCE_DAY)
-    return math.ceil((close - start) / tf_delta(tf))
 
 
 def trend_labels(
@@ -48,10 +37,25 @@ def trend_labels(
     return pd.Series(labels, index=close.index, dtype=object)
 
 
+def time_of_day_slot(ts: pd.Series) -> pd.Series:
+    local = ts.dt.tz_convert(IST)
+    return local.dt.hour * 60 + local.dt.minute
+
+
 def vol_regime(
-    atr: pd.Series, window: int, min_periods: int, cuts: list[float]
+    atr: pd.Series, window: int, min_periods: int, cuts: list[float], slot: pd.Series | None = None
 ) -> tuple[pd.Series, pd.Series]:
-    pct = atr.rolling(window, min_periods=min_periods).rank(pct=True)
+    """Percentile of ATR within its trailing `window`, then low / normal / high.
+
+    With `slot`, each bar is ranked only against earlier bars in the same slot (the same time of day),
+    so the naturally wide opening bars don't read as a high-volatility regime every morning.
+    """
+    if slot is None:
+        pct = atr.rolling(window, min_periods=min_periods).rank(pct=True)
+    else:
+        pct = atr.groupby(slot.to_numpy()).transform(
+            lambda s: s.rolling(window, min_periods=min_periods).rank(pct=True)
+        )
     labels = np.select([pct <= cuts[0], pct > cuts[1]], ["low", "high"], "normal").astype(object)
     labels[pct.isna().to_numpy()] = None
     return pd.Series(labels, index=atr.index, dtype=object), pct
@@ -85,9 +89,13 @@ def compute_context(df: pd.DataFrame, tf: str, exchange: str, config: dict | Non
     cfg = config or load_pattern_config()
     ctx = cfg["context"]
     ind = compute_indicators(df, tf, ["atr14", "adx14", "rsi14", "rel_volume"])
-    window = int(ctx["vol_window_days"]) * bars_per_session(exchange, tf)
+    window = int(ctx["vol_window_days"])
     regime, pct = vol_regime(
-        ind["atr14"], window, max(1, int(window * float(ctx["vol_min_fraction"]))), ctx["vol_regime_cuts"]
+        ind["atr14"],
+        window,
+        max(1, int(window * float(ctx["vol_min_fraction"]))),
+        ctx["vol_regime_cuts"],
+        slot=time_of_day_slot(df["ts"]) if is_intraday(tf) else None,
     )
     levels = level_frame(df, tf, exchange, cfg)
     out = pd.DataFrame(

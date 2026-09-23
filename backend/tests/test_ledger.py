@@ -3,7 +3,8 @@ import sqlite3
 import pandas as pd
 import pytest
 
-from candly.core.calendar import get_calendar
+from candly.core.calendar import IST, get_calendar
+from candly.data import clock
 from candly.forecast.models import Band, Candle, Forecast, ForecastContext
 from candly.ledger import DuplicateForecast, LateForecast, Ledger
 from candly.ledger.grading import interval_iou, match_score
@@ -73,9 +74,9 @@ def make(
     )
 
 
-def loader_until(k_last: int):
+def loader_until(k_last: int, candles: pd.DataFrame = CANDLES):
     def load(instrument_id, tf, start=None, end=None):
-        return CANDLES.iloc[: k_last + 1]
+        return candles[candles["ts"] <= CANDLES["ts"].iloc[k_last]].reset_index(drop=True)
 
     return load
 
@@ -85,14 +86,28 @@ def ledger(tmp_path):
     return Ledger(tmp_path / "db" / "ledger.sqlite")
 
 
-def test_record_is_write_once(ledger):
+@pytest.fixture
+def record_at(monkeypatch, ledger):
+    """Record a forecast with the ledger's real clock frozen at `when` (the test-only override)."""
+
+    def record(fc: Forecast, when: pd.Timestamp) -> int:
+        monkeypatch.setattr(clock, "utc_now", lambda: pd.Timestamp(when))
+        return ledger.record(fc)
+
+    return record
+
+
+def just_after(k: int) -> pd.Timestamp:
+    return close_of(k) + pd.Timedelta(minutes=1)
+
+
+def test_record_is_write_once(ledger, record_at):
     fc = make(50)
-    now = close_of(50) + pd.Timedelta(minutes=1)
-    fid = ledger.record(fc, now=now)
+    fid = record_at(fc, just_after(50))
     assert fid == 1
     with pytest.raises(DuplicateForecast):
-        ledger.record(fc, now=now)
-    assert ledger.record(make(50, method="baseline_base_rate"), now=now) == 2
+        record_at(fc, just_after(50))
+    assert record_at(make(50, method="baseline_base_rate"), just_after(50)) == 2
     with sqlite3.connect(ledger.path) as con:
         assert con.execute("PRAGMA journal_mode").fetchone()[0] == "wal"
         with pytest.raises(sqlite3.DatabaseError, match="write-once"):
@@ -103,14 +118,21 @@ def test_record_is_write_once(ledger):
     assert stored.model_dump() == fc.model_dump()
 
 
-def test_late_forecasts_are_rejected(ledger):
+def test_late_forecasts_are_rejected(ledger, record_at):
     with pytest.raises(LateForecast):
-        ledger.record(make(50), now=close_of(51) + pd.Timedelta(minutes=1))
+        record_at(make(50), just_after(51))
 
 
-def test_grading_waits_for_all_steps_then_grades(ledger):
+def test_lateness_uses_the_real_clock(ledger):
+    # a 2024 forecast whose made_at looks timely is still late by the real clock
+    with pytest.raises(LateForecast):
+        ledger.record(make(50))
+    assert ledger.entries() == []
+
+
+def test_grading_waits_for_all_steps_then_grades(ledger, record_at):
     fc = make(60, p_up=0.6, base=0.5)
-    fid = ledger.record(fc, now=close_of(60) + pd.Timedelta(minutes=1))
+    fid = record_at(fc, just_after(60))
     assert ledger.grade_pending(loader_until(61), now=close_of(61)) == 0
     entry = ledger.entries()[0]
     assert entry.status == "pending" and len(entry.actual) == 1 and entry.grade is None
@@ -132,9 +154,9 @@ def test_grading_waits_for_all_steps_then_grades(ledger):
         con.execute("UPDATE outcomes SET status = 'pending' WHERE forecast_id = ?", (fid,))
 
 
-def test_step_grades_known_answer(ledger):
+def test_step_grades_known_answer(ledger, record_at):
     fc = make(80, perfect=False, steps=1)
-    ledger.record(fc, now=close_of(80) + pd.Timedelta(minutes=1))
+    record_at(fc, just_after(80))
     ledger.grade_pending(loader_until(90), now=close_of(90))
     step = ledger.entries()[0].grade.steps[0]
     act = CANDLES.iloc[81]
@@ -145,19 +167,60 @@ def test_step_grades_known_answer(ledger):
     assert step.color_match == (act["close"] > act["open"])
 
 
-def test_abstained_forecast_has_no_direction_hit(ledger):
-    ledger.record(make(100, p_up=0.52, abstain=True), now=close_of(100) + pd.Timedelta(minutes=1))
+def test_abstained_forecast_has_no_direction_hit(ledger, record_at):
+    record_at(make(100, p_up=0.52, abstain=True), just_after(100))
     ledger.grade_pending(loader_until(110), now=close_of(110))
     g = ledger.entries()[0].grade
     assert g.direction_hit is None and g.brier is not None
 
 
-def test_missing_data_is_voided_after_a_week(ledger):
-    ledger.record(make(100), now=close_of(100) + pd.Timedelta(minutes=1))
+def test_missing_data_is_voided_after_a_week(ledger, record_at):
+    fid = record_at(make(100), just_after(100))
     assert ledger.grade_pending(loader_until(100), now=close_of(104)) == 0
     assert ledger.entries()[0].status == "pending"
     assert ledger.grade_pending(loader_until(100), now=close_of(103) + pd.Timedelta(days=8)) == 1
     assert ledger.entries(status="void")[0].status == "void"
+    assert ledger.void_reason(fid).startswith("no bar at ")
+
+
+def test_a_missing_target_bar_is_never_filled_by_a_later_bar(ledger, record_at):
+    # bar 92 never arrives (say a holiday the calendar didn't know); 93 and later do
+    gap = CANDLES.drop(index=92).reset_index(drop=True)
+    fid = record_at(make(90), just_after(90))
+    assert ledger.grade_pending(loader_until(95, gap), now=close_of(95)) == 0
+    entry = ledger.entries()[0]
+    assert entry.status == "pending" and entry.grade is None
+    assert [c.time for c in entry.actual] == [unix(CANDLES["ts"].iloc[91]), unix(CANDLES["ts"].iloc[93])]
+    assert ledger.grade_pending(loader_until(100, gap), now=close_of(93) + pd.Timedelta(days=8)) == 1
+    assert ledger.entries()[0].status == "void"
+    missing = CANDLES["ts"].iloc[92].isoformat()
+    assert ledger.void_reason(fid) == f"no bar at {missing}"
+
+
+def test_bars_outside_the_target_times_are_ignored(ledger, record_at):
+    friday = next(k for k in range(40, 50) if CANDLES["ts"].iloc[k].tz_convert(IST).weekday() == 4)
+    extra = CANDLES.iloc[[friday]].assign(ts=CANDLES["ts"].iloc[friday] + pd.Timedelta(days=1))
+    with_extra = pd.concat([CANDLES, extra]).sort_values("ts").reset_index(drop=True)
+    fc = make(friday - 1)
+    record_at(fc, just_after(friday - 1))
+    assert ledger.grade_pending(loader_until(friday + 5, with_extra), now=close_of(friday + 5)) == 1
+    entry = ledger.entries()[0]
+    assert [c.time for c in entry.actual] == [g.time for g in fc.ghost_candles]
+    assert entry.grade.match_score == pytest.approx(100.0)
+
+
+def test_concurrent_graders_do_not_collide(ledger, record_at):
+    graded_id = record_at(make(60), just_after(60))
+    voided_id = record_at(make(100), just_after(100))
+    stale = {r["id"]: r for r in ledger._rows("WHERE o.status = 'pending'")}
+    other = Ledger(ledger.path)
+    assert other.grade_pending(loader_until(70), now=close_of(70)) == 1
+    assert other.grade_pending(loader_until(100), now=close_of(103) + pd.Timedelta(days=8)) == 1
+    # the first grader still holds its pending snapshot; finishing either row again is a no-op
+    assert ledger._grade_one(stale[graded_id], loader_until(70)("NSE:RELIANCE", "1D"), close_of(70)) == 0
+    late = close_of(103) + pd.Timedelta(days=8)
+    assert ledger._grade_one(stale[voided_id], loader_until(100)("NSE:RELIANCE", "1D"), late) == 0
+    assert {e.id: e.status for e in ledger.entries()} == {graded_id: "graded", voided_id: "void"}
 
 
 def test_interval_iou_and_match_score():
@@ -168,13 +231,10 @@ def test_interval_iou_and_match_score():
     assert match_score([]) == 0.0
 
 
-def test_accuracy_known_values(ledger):
+def test_accuracy_known_values(ledger, record_at):
     cases = [(20, 0.7, False), (25, 0.7, False), (30, 0.3, False), (35, 0.52, True)]
     for k, p, abstain in cases:
-        ledger.record(
-            make(k, p_up=p, base=0.5, abstain=abstain, perfect=True),
-            now=close_of(k) + pd.Timedelta(minutes=1),
-        )
+        record_at(make(k, p_up=p, base=0.5, abstain=abstain, perfect=True), just_after(k))
     ledger.grade_pending(loader_until(60), now=close_of(60))
     closes = CANDLES["close"]
     ys = [float(closes.iloc[k + 3] > closes.iloc[k]) for k, _, _ in cases]

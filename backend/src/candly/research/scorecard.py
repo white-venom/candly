@@ -1,15 +1,22 @@
-"""Pattern scorecard (PLAN.md §6).
+"""Pattern scorecard (PLAN.md §6 and §12).
 
-Protocol (all data before the holdout):
-- Walk-forward boundaries are anchored on the earliest bar across the instruments. The first test
-  window opens `min_train_years` later (= train_end); test windows tile [train_end, holdout).
-- Headline statistics (n, hits, base_rate, CI, p, q, posterior, expectancy) use only train rows:
-  bars before train_end, minus the purge + embargo gap. Base rates come from the same train rows.
-- Validation statistics pool every walk-forward test window, so they are out-of-sample for the headline.
+Protocol (all data before the holdout; every setting from research.yaml):
+- Headline statistics use "train" bars: before the fixed train_end[tf], minus the purge + embargo gap.
+  Validation statistics pool the walk-forward test windows [train_end, holdout).
 - Hits are counted in the pattern's direction: up at h for bullish (and neutral) patterns, down at h for
-  bearish ones. base_rate is the matching unconditional rate on the same rows.
-- Pooled rows ("ALL") use an event-weighted base rate: sum(n_i * base_i) / sum(n_i).
-- Every row is one hypothesis test; Benjamini-Hochberg runs across all of them.
+  bearish ones.
+- Null (stats.bucket_null): each event is compared with the base rate of its own instrument x split x
+  context bucket, so a "trend=down" row is tested against how often any down-trend bar moved that way.
+  base_rate is the mean of the events' bases, which for pooled ("ALL") rows is the event-weighted mean.
+- Test (stats.test = cluster_robust): events whose outcome windows (t, t+h] overlap in time form one
+  cluster; for ALL rows, clusters span instruments. With r = hit - base,
+      z = sum_i r_i / sqrt(sum_c (sum_{i in c} r_i)^2)
+  p is one-sided (H1: hit rate above base) for bullish and bearish rows, whose direction is fixed by the
+  pattern definition before any data is seen and is the only direction that can be certified, and
+  two-sided for neutral rows, which have no direction.
+- Benjamini-Hochberg runs over the rows with n_clusters >= min_samples (stats.bh_family). Rows outside
+  that family get no q-value and can't be certified. The Wilson CI is for display only.
+- A build pools one exchange only, so ALL rows never mix NSE with BSE or MCX.
 """
 
 from __future__ import annotations
@@ -23,20 +30,26 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from candly.core.calendar import IST
-from candly.core.instruments import Instrument, get_instrument, load_watchlist
+from candly.core.instruments import Instrument, exchange_of, get_instrument, load_watchlist
 from candly.core.settings import get_settings
 from candly.core.timeframes import is_intraday, validate_tf
 from candly.features.context import compute_context
 from candly.patterns import PATTERN_INFO, detect_patterns
-from candly.research.config import ResearchConfig, load_research_config
+from candly.research.config import ResearchConfig, config_hashes, load_research_config
 from candly.research.costs import round_trip_cost
 from candly.research.data import CandleLoader, load_research_candles
 from candly.research.labels import forward_end_ts, forward_labels, forward_paths, path_columns
-from candly.research.splits import fold_boundaries, train_positions
-from candly.research.stats import benjamini_hochberg, beta_posterior, binomial_pvalue, wilson_interval
+from candly.research.splits import split_labels
+from candly.research.stats import (
+    benjamini_hochberg,
+    beta_posterior,
+    overlap_cluster_ids,
+    wilson_interval,
+    z_pvalue,
+)
 
 ROW_COLUMNS = [
     "pattern",
@@ -47,6 +60,7 @@ ROW_COLUMNS = [
     "horizon_bars",
     "n",
     "hits",
+    "n_clusters",
     "hit_rate",
     "base_rate",
     "ci_low",
@@ -62,6 +76,9 @@ ROW_COLUMNS = [
 ]
 CONTEXT_DIMENSIONS = ("trend", "vol_regime")
 ANALOG_COLUMNS = ["instrument", "ts", "end_ts", "pattern", "direction", "trend", "vol_regime", "atr", "close"]
+SPLITS = ("train", "validation")
+ROW_KEYS = ["pattern", "direction", "context", "instrument", "horizon_bars"]
+GROUP_KEYS = [*ROW_KEYS, "split"]
 
 
 class ScorecardMeta(BaseModel):
@@ -69,9 +86,12 @@ class ScorecardMeta(BaseModel):
     built_at: int | None
     train_end: str
     holdout_start: str
-    n_tests: int
+    n_tests: int  # rows in the Benjamini-Hochberg family (hypotheses tested)
     fdr_alpha: float
     horizons: list[int]
+    n_rows: int | None = None
+    instruments: list[str] = Field(default_factory=list)
+    config_sha256: dict[str, str] = Field(default_factory=dict)
 
 
 class ScoreStats(BaseModel):
@@ -144,7 +164,18 @@ def to_stats(row: pd.Series) -> ScoreStats:
 
 
 def default_instruments(tf: str) -> list[str]:
-    return [i.id for i in load_watchlist() if tf in i.timeframes and i.tradable]
+    """The go/no-go slice's universe (research.yaml go_no_go_1.slice: one exchange, its kinds, minus
+    the exclusions) for any timeframe."""
+    s = load_research_config().go_no_go_1.slice
+    return [
+        i.id
+        for i in load_watchlist()
+        if i.exchange == s.exchange
+        and i.kind in s.kinds
+        and i.id not in s.exclude
+        and i.tradable
+        and tf in i.timeframes
+    ]
 
 
 @dataclass
@@ -154,58 +185,74 @@ class _Prepared:
     analogs: pd.DataFrame
 
 
-def _prepare_instrument(
-    inst: Instrument, tf: str, df: pd.DataFrame, cfg: ResearchConfig, validation_start: pd.Timestamp | None
-) -> _Prepared:
+def _ns(ts: pd.Series) -> np.ndarray:
+    return ts.dt.tz_convert("UTC").dt.tz_localize(None).to_numpy().astype("datetime64[ns]").view("int64")
+
+
+def _with_context(frame: pd.DataFrame) -> pd.DataFrame:
+    """One copy of each row per context bucket it belongs to: "all", "trend=<v>", "vol_regime=<v>"."""
+    parts = [frame.assign(context="all")]
+    for dim in CONTEXT_DIMENSIONS:
+        sub = frame[frame[dim].notna()]
+        parts.append(sub.assign(context=dim + "=" + sub[dim].astype(str)))
+    return pd.concat(parts, ignore_index=True)
+
+
+def _base_rates(bars: pd.DataFrame, instrument: str, horizons: Iterable[int]) -> pd.DataFrame:
+    """P(up at h) and P(down at h) over every bar of an instrument, per split x context bucket."""
+    cols = [c for h in horizons for c in (f"up_{h}", f"down_{h}")]
+    frame = _with_context(bars.loc[bars["split"].isin(SPLITS), ["split", *CONTEXT_DIMENSIONS, *cols]])
+    means = frame.groupby(["split", "context"], observed=True)[cols].mean()
+    parts = [
+        means[[f"up_{h}", f"down_{h}"]]
+        .set_axis(["base_up", "base_down"], axis=1)
+        .reset_index()
+        .assign(horizon_bars=h)
+        for h in horizons
+    ]
+    return pd.concat(parts, ignore_index=True).assign(instrument=instrument)
+
+
+def _prepare_instrument(inst: Instrument, tf: str, df: pd.DataFrame, cfg: ResearchConfig) -> _Prepared:
     ts = df["ts"]
+    n = len(df)
     ctx = compute_context(df, tf, inst.exchange)
     atr = ctx["atr14"]
     labels = forward_labels(df, cfg.horizons)
-    split = np.full(len(df), "gap", dtype=object)
-    train_before = validation_start if validation_start is not None else cfg.holdout_start_utc
-    split[train_positions(ts, train_before, cfg)] = "train"
-    if validation_start is not None:
-        split[(ts >= validation_start).to_numpy()] = "validation"
+    start = _ns(ts)
 
-    cost_multi = round_trip_cost(inst.kind, "multi_day")
-    cost_intra = round_trip_cost(inst.kind, "intraday") if is_intraday(tf) else cost_multi
+    long_multi = round_trip_cost(inst.kind, "multi_day")
+    short_multi = round_trip_cost(inst.kind, "multi_day", side="short")
+    long_intra = round_trip_cost(inst.kind, "intraday") if is_intraday(tf) else long_multi
+    short_intra = round_trip_cost(inst.kind, "intraday", side="short") if is_intraday(tf) else short_multi
     day = ts.dt.tz_convert(IST).dt.date
-    bar_cols: dict[str, pd.Series | np.ndarray] = {"split": split}
-    base_rows = []
+    bar_cols: dict[str, np.ndarray] = {
+        "split": split_labels(ts, tf, cfg),
+        "trend": ctx["trend"].to_numpy(),
+        "vol_regime": ctx["vol_regime"].to_numpy(),
+        "start": start,
+    }
     for h in cfg.horizons:
-        same_day = (day.shift(-h) == day.shift(-1)).to_numpy() if is_intraday(tf) else np.zeros(len(df), bool)
-        cost = np.where(same_day, cost_intra, cost_multi)
+        # Daily bars are never "same day", so a daily h=1 trade (next open to that close, an intraday
+        # round trip) keeps the higher multi-day cost on purpose: the conservative choice.
+        same_day = (day.shift(-h) == day.shift(-1)).to_numpy() if is_intraday(tf) else np.zeros(n, bool)
+        trade = labels[f"trade_ret_{h}"].to_numpy()
+        end = np.full(n, np.iinfo(np.int64).max)
+        end[: max(0, n - h)] = start[h:]
         bar_cols[f"up_{h}"] = labels[f"up_{h}"].to_numpy()
         bar_cols[f"down_{h}"] = labels[f"down_{h}"].to_numpy()
-        bar_cols[f"net_long_{h}"] = labels[f"trade_ret_{h}"].to_numpy() - cost
-        bar_cols[f"net_short_{h}"] = -labels[f"trade_ret_{h}"].to_numpy() - cost
-        for s in ("train", "validation"):
-            mask = (split == s) & labels[f"up_{h}"].notna().to_numpy()
-            if mask.any():
-                base_rows.append(
-                    {
-                        "instrument": inst.id,
-                        "split": s,
-                        "horizon_bars": h,
-                        "base_up": float(labels[f"up_{h}"].to_numpy()[mask].mean()),
-                        "base_down": float(labels[f"down_{h}"].to_numpy()[mask].mean()),
-                    }
-                )
+        bar_cols[f"end_{h}"] = end
+        bar_cols[f"net_long_{h}"] = trade - np.where(same_day, long_intra, long_multi)
+        bar_cols[f"net_short_{h}"] = -trade - np.where(same_day, short_intra, short_multi)
     bars = pd.DataFrame(bar_cols, index=df.index)
+    base = _base_rates(bars, inst.id, cfg.horizons)
 
     pats = detect_patterns(df, tf)
     p_idx = pd.Index(ts).get_indexer(pats["ts"])
-    events = pd.DataFrame(
-        {
-            "instrument": inst.id,
-            "pattern": pats["pattern"].to_numpy(),
-            "direction": pats["direction"].to_numpy(),
-            "trend": ctx["trend"].to_numpy()[p_idx],
-            "vol_regime": ctx["vol_regime"].to_numpy()[p_idx],
-        }
-    )
-    for col in bars.columns:
-        events[col] = bars[col].to_numpy()[p_idx]
+    events = bars.iloc[p_idx].reset_index(drop=True)
+    events.insert(0, "direction", pats["direction"].to_numpy())
+    events.insert(0, "pattern", pats["pattern"].to_numpy())
+    events.insert(0, "instrument", inst.id)
 
     steps = cfg.max_path_bars
     paths = forward_paths(df, atr, steps)[p_idx].reshape(len(p_idx), steps * 4)
@@ -224,84 +271,118 @@ def _prepare_instrument(
     )
     analogs = pd.concat([analogs, pd.DataFrame(paths, columns=path_columns(steps))], axis=1)
     analogs = analogs[analogs["end_ts"].notna() & analogs["atr"].gt(0)]
-    return _Prepared(events, pd.DataFrame(base_rows), analogs)
+    return _Prepared(events, base, analogs)
 
 
-def _bucketed(events: pd.DataFrame) -> pd.DataFrame:
-    parts = [events.assign(context="all")]
-    for dim in CONTEXT_DIMENSIONS:
-        sub = events[events[dim].notna()]
-        parts.append(sub.assign(context=dim + "=" + sub[dim].astype(str)))
-    return pd.concat(parts, ignore_index=True)
-
-
-def _aggregate(bucketed: pd.DataFrame, base: pd.DataFrame, horizons: Iterable[int]) -> pd.DataFrame:
-    keys = ["pattern", "direction", "context", "instrument", "split"]
-    out = []
-    for h in horizons:
-        bearish = bucketed["direction"] == "bearish"
-        hit = np.where(bearish, bucketed[f"down_{h}"], bucketed[f"up_{h}"])
-        net = np.where(
-            bucketed["direction"] == "bullish",
-            bucketed[f"net_long_{h}"],
-            np.where(bearish, bucketed[f"net_short_{h}"], np.nan),
+def _event_outcomes(events: pd.DataFrame, base: pd.DataFrame, cfg: ResearchConfig) -> pd.DataFrame:
+    """One row per event x context bucket x horizon with its hit, net return, null base rate and window."""
+    bucketed = _with_context(events)
+    bullish = bucketed["direction"].eq("bullish").to_numpy()
+    bearish = bucketed["direction"].eq("bearish").to_numpy()
+    parts = []
+    for h in cfg.horizons:
+        parts.append(
+            pd.DataFrame(
+                {
+                    "pattern": bucketed["pattern"],
+                    "direction": bucketed["direction"],
+                    "context": bucketed["context"],
+                    "instrument": bucketed["instrument"],
+                    "split": bucketed["split"],
+                    "horizon_bars": h,
+                    "start": bucketed["start"],
+                    "end": bucketed[f"end_{h}"],
+                    "hit": np.where(bearish, bucketed[f"down_{h}"], bucketed[f"up_{h}"]),
+                    "net": np.where(
+                        bullish,
+                        bucketed[f"net_long_{h}"],
+                        np.where(bearish, bucketed[f"net_short_{h}"], np.nan),
+                    ),
+                }
+            )
         )
-        frame = bucketed[keys].assign(hit=hit, net=net)
-        frame = frame[frame["hit"].notna() & frame["split"].isin(["train", "validation"])]
-        agg = (
-            frame.groupby(keys, observed=True)
-            .agg(n=("hit", "size"), hits=("hit", "sum"), net_sum=("net", "sum"))
-            .reset_index()
-        )
-        b = base[base["horizon_bars"] == h]
-        agg = agg.merge(
-            b[["instrument", "split", "base_up", "base_down"]], on=["instrument", "split"], how="left"
-        )
-        agg["base_x_n"] = np.where(agg["direction"] == "bearish", agg["base_down"], agg["base_up"]) * agg["n"]
-        pooled = (
-            agg.groupby(["pattern", "direction", "context", "split"], observed=True)[
-                ["n", "hits", "net_sum", "base_x_n"]
-            ]
-            .sum()
-            .reset_index()
-            .assign(instrument="ALL")
-        )
-        both = pd.concat([agg.drop(columns=["base_up", "base_down"]), pooled], ignore_index=True)
-        both["horizon_bars"] = h
-        out.append(both)
-    return pd.concat(out, ignore_index=True) if out else pd.DataFrame()
-
-
-def _finalise(agg: pd.DataFrame, cfg: ResearchConfig) -> pd.DataFrame:
-    keys = ["pattern", "direction", "context", "instrument", "horizon_bars"]
-    train = agg[agg["split"] == "train"].drop(columns="split")
-    val = agg[agg["split"] == "validation"][[*keys, "n", "hits", "base_x_n"]].rename(
-        columns={"n": "validation_n", "hits": "validation_hits", "base_x_n": "validation_base_x_n"}
+    out = pd.concat(parts, ignore_index=True)
+    out = out[out["hit"].notna() & out["split"].isin(SPLITS)]
+    null_context = out["context"] if cfg.bucket_null == "bucket_base_rate" else "all"
+    out = out.assign(null_context=null_context).merge(
+        base.rename(columns={"context": "null_context"}),
+        on=["instrument", "split", "null_context", "horizon_bars"],
+        how="left",
     )
-    rows = train.merge(val, on=keys, how="left")
+    out["base"] = np.where(out["direction"] == "bearish", out["base_down"], out["base_up"])
+    out["resid"] = out["hit"] - out["base"]
+    return out.drop(columns=["null_context", "base_up", "base_down"])
+
+
+def _group_stats(frame: pd.DataFrame) -> pd.DataFrame:
+    """Counts, sums and the cluster-robust variance per row x split."""
+    groups = frame.groupby(GROUP_KEYS, sort=False, observed=True)
+    gid = groups.ngroup().to_numpy()
+    cid = overlap_cluster_ids(gid, frame["start"].to_numpy(), frame["end"].to_numpy())
+    cluster_sum = np.bincount(cid, weights=frame["resid"].to_numpy())
+    cluster_gid = np.empty(cluster_sum.size, dtype=np.int64)
+    cluster_gid[cid] = gid
+    n_groups = int(gid.max()) + 1
+    out = groups.agg(
+        n=("hit", "size"),
+        hits=("hit", "sum"),
+        net_sum=("net", "sum"),
+        base_sum=("base", "sum"),
+        resid_sum=("resid", "sum"),
+    ).reset_index()
+    out["n_clusters"] = np.bincount(cluster_gid, minlength=n_groups)
+    out["cluster_var"] = np.bincount(cluster_gid, weights=cluster_sum**2, minlength=n_groups)
+    return out
+
+
+def _aggregate(outcomes: pd.DataFrame) -> pd.DataFrame:
+    return pd.concat(
+        [_group_stats(outcomes), _group_stats(outcomes.assign(instrument="ALL"))], ignore_index=True
+    )
+
+
+def _finalise(agg: pd.DataFrame, cfg: ResearchConfig) -> tuple[pd.DataFrame, int]:
+    """Rows in ROW_COLUMNS order, plus the size of the Benjamini-Hochberg family."""
+    train = agg[agg["split"] == "train"].drop(columns="split")
+    val = agg[agg["split"] == "validation"][[*ROW_KEYS, "n", "hits", "base_sum"]].rename(
+        columns={"n": "validation_n", "hits": "validation_hits", "base_sum": "validation_base_sum"}
+    )
+    rows = train.merge(val, on=ROW_KEYS, how="left")
     rows = rows[rows["n"] > 0].reset_index(drop=True)
     if rows.empty:
-        return pd.DataFrame(columns=ROW_COLUMNS)
+        return pd.DataFrame(columns=ROW_COLUMNS), 0
     rows["validation_n"] = rows["validation_n"].fillna(0).astype("int64")
     rows["n"] = rows["n"].astype("int64")
     rows["hits"] = rows["hits"].astype("int64")
+    rows["n_clusters"] = rows["n_clusters"].astype("int64")
     rows["hit_rate"] = rows["hits"] / rows["n"]
-    rows["base_rate"] = rows["base_x_n"] / rows["n"]
+    rows["base_rate"] = rows["base_sum"] / rows["n"]
     rows["ci_low"], rows["ci_high"] = wilson_interval(rows["hits"], rows["n"], cfg.ci_level)
-    rows["p_value"] = [
-        binomial_pvalue(k, n, b) for k, n, b in zip(rows["hits"], rows["n"], rows["base_rate"], strict=True)
-    ]
-    rows["q_value"] = benjamini_hochberg(rows["p_value"].to_numpy())
-    rows["posterior"] = beta_posterior(rows["hits"], rows["n"], rows["base_rate"], cfg.prior_strength)
+
+    var = rows["cluster_var"].to_numpy()
+    with np.errstate(divide="ignore", invalid="ignore"):
+        z = np.where(var > 0, rows["resid_sum"].to_numpy() / np.sqrt(var), np.nan)
     directional = rows["direction"] != "neutral"
+    rows["p_value"] = z_pvalue(z, two_sided=~directional.to_numpy())
+    family = (
+        (rows["n_clusters"] >= cfg.min_samples).to_numpy()
+        if cfg.bh_family == "min_samples"
+        else np.ones(len(rows), bool)
+    )
+    q = np.full(len(rows), np.nan)
+    q[family] = benjamini_hochberg(rows["p_value"].to_numpy()[family])
+    rows["q_value"] = q
+
+    rows["posterior"] = beta_posterior(rows["hits"], rows["n"], rows["base_rate"], cfg.prior_strength)
     rows["expectancy_after_cost_pct"] = (100.0 * rows["net_sum"] / rows["n"]).where(directional)
     has_val = rows["validation_n"] > 0
     rows["validation_hit_rate"] = (rows["validation_hits"] / rows["validation_n"]).where(has_val)
-    rows["validation_base_rate"] = (rows["validation_base_x_n"] / rows["validation_n"]).where(has_val)
+    rows["validation_base_rate"] = (rows["validation_base_sum"] / rows["validation_n"]).where(has_val)
     rows["certified"] = (
         (
             directional
             & (rows["n"] >= cfg.min_samples)
+            & (rows["n_clusters"] >= cfg.min_clusters)
             & (rows["q_value"] < cfg.fdr_alpha)
             & (rows["expectancy_after_cost_pct"] > 0)
             & (rows["hit_rate"] > rows["base_rate"])
@@ -315,7 +396,7 @@ def _finalise(agg: pd.DataFrame, cfg: ResearchConfig) -> pd.DataFrame:
     order = {name: i for i, name in enumerate(PATTERN_INFO)}
     rows = rows.assign(_o=rows["pattern"].map(order), _all=rows["instrument"] != "ALL")
     rows = rows.sort_values(["_o", "_all", "instrument", "context", "horizon_bars"]).reset_index(drop=True)
-    return rows[ROW_COLUMNS]
+    return rows[ROW_COLUMNS], int(family.sum())
 
 
 def _paths(tf: str) -> tuple[Path, Path, Path]:
@@ -330,22 +411,24 @@ def build_scorecard(
     *,
     persist: bool = True,
 ) -> Scorecard:
-    """Build (and by default persist) the scorecard for one timeframe from pre-holdout data only."""
+    """Build (and by default persist) the scorecard for one timeframe from pre-holdout data only.
+
+    `instruments` defaults to the go/no-go slice's universe. All instruments must share one exchange.
+    """
     validate_tf(tf)
     cfg = load_research_config()
+    hashes = config_hashes()
     ids = list(instruments) if instruments is not None else default_instruments(tf)
+    exchanges = sorted({exchange_of(i) for i in ids})
+    if len(exchanges) > 1:
+        raise ValueError(f"ALL rows pool one exchange; build {exchanges} separately")
     frames = {}
     for instrument_id in ids:
         df = load_research_candles(instrument_id, tf, load=load)
         if not df.empty:
             frames[instrument_id] = df
-    start = min((df["ts"].iloc[0] for df in frames.values()), default=None)
-    bounds = fold_boundaries(start, cfg) if start is not None else []
-    validation_start = bounds[0][0] if bounds else None
 
-    prepared = [
-        _prepare_instrument(get_instrument(i), tf, df, cfg, validation_start) for i, df in frames.items()
-    ]
+    prepared = [_prepare_instrument(get_instrument(i), tf, df, cfg) for i, df in frames.items()]
     events = pd.concat([p.events for p in prepared], ignore_index=True) if prepared else pd.DataFrame()
     base = pd.concat([p.base for p in prepared], ignore_index=True) if prepared else pd.DataFrame()
     analogs = (
@@ -353,20 +436,23 @@ def build_scorecard(
         if prepared
         else pd.DataFrame(columns=ANALOG_COLUMNS)
     )
-    if events.empty or base.empty:
-        rows = pd.DataFrame(columns=ROW_COLUMNS)
-    else:
-        rows = _finalise(_aggregate(_bucketed(events), base, cfg.horizons), cfg)
+    rows, n_tests = pd.DataFrame(columns=ROW_COLUMNS), 0
+    if not (events.empty or base.empty):
+        outcomes = _event_outcomes(events, base, cfg)
+        if not outcomes.empty:
+            rows, n_tests = _finalise(_aggregate(outcomes), cfg)
 
-    train_end = validation_start.tz_convert(IST).date() if validation_start is not None else cfg.holdout_start
     meta = ScorecardMeta(
         tf=tf,
         built_at=int(datetime.now(UTC).timestamp()),
-        train_end=train_end.isoformat(),
+        train_end=cfg.train_end_for(tf).isoformat(),
         holdout_start=cfg.holdout_start.isoformat(),
-        n_tests=len(rows),
+        n_tests=n_tests,
         fdr_alpha=cfg.fdr_alpha,
         horizons=list(cfg.horizons),
+        n_rows=len(rows),
+        instruments=list(frames),
+        config_sha256=hashes,
     )
     card = Scorecard(meta, rows, analogs)
     if persist:

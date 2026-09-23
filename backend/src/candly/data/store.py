@@ -78,7 +78,9 @@ def series_lock(path: Path, timeout: float = LOCK_TIMEOUT) -> Iterator[None]:
                 break
             except OSError:
                 if time.monotonic() >= deadline:
-                    raise TimeoutError(f"{path.name} stayed locked by another writer for {timeout:.0f}s") from None
+                    raise TimeoutError(
+                        f"{path.name} stayed locked by another writer for {timeout:.0f}s"
+                    ) from None
                 _sleep(0.05)
         try:
             yield

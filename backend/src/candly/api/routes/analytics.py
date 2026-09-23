@@ -153,7 +153,7 @@ class ScorecardRow(BaseModel):
     ci_low: float
     ci_high: float
     p_value: float
-    q_value: float
+    q_value: float | None  # null: outside the Benjamini-Hochberg family (too few clusters to test)
     posterior: float
     expectancy_after_cost_pct: float | None
     validation_n: int
@@ -413,7 +413,7 @@ def scorecard(
     fields = list(ScorecardRow.model_fields)
     out = []
     for rec in rows[fields].to_dict("records"):
-        for key in ("expectancy_after_cost_pct", "validation_hit_rate"):
+        for key in ("q_value", "expectancy_after_cost_pct", "validation_hit_rate"):
             rec[key] = _num(rec[key])
         out.append(ScorecardRow(**rec))
     return ScorecardResponse(meta=card.meta, rows=out)

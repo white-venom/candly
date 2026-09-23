@@ -1,11 +1,54 @@
-"""Grading of one forecast against the candles that actually closed (CONTRACTS.md, grading definitions)."""
+"""Grading of one forecast against the candles that actually closed (CONTRACTS.md, grading definitions).
+
+Actual bars are matched to the forecast's predicted bar times, never by position: a predicted time with
+no bar (a holiday the calendar didn't know, a missing bar) leaves that step missing instead of grading a
+later bar in its place.
+"""
 
 from __future__ import annotations
 
 import math
 
+import pandas as pd
+
+from candly.core.instruments import exchange_of
 from candly.forecast.models import Candle, Forecast
+from candly.forecast.timing import future_bar_times
 from candly.ledger.models import Grade, StepGrade
+
+
+def target_times(forecast: Forecast) -> list[pd.Timestamp]:
+    """Open times of the bars the forecast is graded on: its ghost candles' times, or (for a forecast
+    without enough ghosts) the calendar's next bars after the reference bar."""
+    n = max(forecast.horizon_bars, len(forecast.ghost_candles))
+    if len(forecast.ghost_candles) >= n:
+        return [pd.Timestamp(c.time, unit="s", tz="UTC") for c in forecast.ghost_candles[:n]]
+    ref_ts = pd.Timestamp(forecast.ref_time, unit="s", tz="UTC")
+    return future_bar_times(exchange_of(forecast.instrument), forecast.tf, ref_ts, n)
+
+
+def match_bars(times: list[pd.Timestamp], candles: pd.DataFrame | None) -> list[Candle | None]:
+    """The candle that opened at each target time, or None where no bar has that time."""
+    if not times or candles is None or candles.empty:
+        return [None] * len(times)
+    pos = pd.Index(candles["ts"]).get_indexer(pd.DatetimeIndex(times).tz_convert("UTC"))
+    out: list[Candle | None] = []
+    for p in pos:
+        if p < 0:
+            out.append(None)
+            continue
+        r = candles.iloc[p]
+        out.append(
+            Candle(
+                time=int(r["ts"].timestamp()),
+                open=float(r["open"]),
+                high=float(r["high"]),
+                low=float(r["low"]),
+                close=float(r["close"]),
+                volume=float(r["volume"]),
+            )
+        )
+    return out
 
 
 def interval_iou(a: tuple[float, float], b: tuple[float, float]) -> float:
@@ -50,8 +93,15 @@ def outcome_up(forecast: Forecast, actual: list[Candle]) -> int:
     return int(actual[forecast.horizon_bars - 1].close > forecast.ref_close)
 
 
+def brier_baseline(forecast: Forecast, actual: list[Candle]) -> float | None:
+    """(base_rate - y)^2: the score of always predicting the base rate."""
+    if forecast.base_rate is None:
+        return None
+    return (forecast.base_rate - outcome_up(forecast, actual)) ** 2
+
+
 def grade(forecast: Forecast, actual: list[Candle], atr: float) -> Grade:
-    """`actual` holds at least `horizon_bars` closed bars after the reference bar, in order."""
+    """`actual` holds the bars at the forecast's target times (at least `horizon_bars`), in order."""
     if not (atr > 0 and math.isfinite(atr)):
         raise ValueError("grading needs a positive ATR at the reference bar")
     steps = [

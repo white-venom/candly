@@ -96,7 +96,8 @@ class FyersAuthError(FyersError):
         """Fyers says the token or PIN itself is bad, so retrying the same refresh can't succeed.
         A wrong PIN counts: retrying it every few minutes could get the account locked."""
         text = str(self)
-        return self.code in AUTH_ERROR_CODES or bool(_REJECTED_WHAT.search(text) and _REJECTED_HOW.search(text))
+        explicit = bool(_REJECTED_WHAT.search(text) and _REJECTED_HOW.search(text))
+        return self.code in AUTH_ERROR_CODES or explicit
 
 
 # --- rate limiting ---------------------------------------------------------------------------
@@ -209,7 +210,9 @@ if DPAPI:
     _kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
     _BLOB_P = ctypes.POINTER(_Blob)
     for _fn in (_crypt32.CryptProtectData, _crypt32.CryptUnprotectData):
-        _fn.argtypes = [_BLOB_P, ctypes.c_void_p, _BLOB_P, ctypes.c_void_p, ctypes.c_void_p, wintypes.DWORD, _BLOB_P]
+        _fn.argtypes = [
+            _BLOB_P, ctypes.c_void_p, _BLOB_P, ctypes.c_void_p, ctypes.c_void_p, wintypes.DWORD, _BLOB_P
+        ]
         _fn.restype = wintypes.BOOL
     _kernel32.LocalFree.argtypes = [ctypes.c_void_p]
     _kernel32.LocalFree.restype = ctypes.c_void_p
@@ -226,7 +229,10 @@ if DPAPI:
         blob_out = _Blob()
         call = _crypt32.CryptProtectData if protect else _crypt32.CryptUnprotectData
         flags = _CRYPTPROTECT_UI_FORBIDDEN
-        if not call(ctypes.byref(blob_in), None, ctypes.byref(entropy), None, None, flags, ctypes.byref(blob_out)):
+        ok = call(
+            ctypes.byref(blob_in), None, ctypes.byref(entropy), None, None, flags, ctypes.byref(blob_out)
+        )
+        if not ok:
             raise ctypes.WinError(ctypes.get_last_error())
         try:
             return ctypes.string_at(blob_out.pbData, blob_out.cbData)

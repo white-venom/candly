@@ -1,11 +1,17 @@
-# Validation protocol, pre-registered 2026-09-23.
-# Changing these after seeing results is overfitting. Record any change in PLAN.md with a reason.
+# Validation protocol, pre-registered 2026-09-23 (revised the same day after the quant audit,
+# before any real scorecard was built). Changing these after seeing results is overfitting.
+# Record any change in PLAN.md with a reason.
 
 holdout:
   start: 2025-10-01          # data on/after this date is LOCKED; only an official go/no-go run may read it
 
+# Discovery (headline stats) uses bars before train_end; validation is the walk-forward test windows
+# from train_end up to the holdout. Fixed dates, so a deeper backfill can't silently move them.
+train_end:
+  1D: 2019-01-01             # ~14y train (stocks since 2005), ~6.75y validation incl. 2020 crash, 2022 bear
+  intraday: 2023-01-01       # Fyers minute data starts 2017-07; ~5.5y train, ~2.75y validation
+
 walk_forward:
-  min_train_years: 3
   test_window_months: 6
   purge_bars: 10             # gap between train end and test start (>= longest horizon)
   embargo_bars: 10
@@ -14,20 +20,38 @@ horizons_bars: [1, 3, 5]
 
 stats:
   min_samples: 30
-  fdr_alpha: 0.10            # Benjamini-Hochberg across ALL tests run
+  fdr_alpha: 0.10            # Benjamini-Hochberg
+  bh_family: min_samples     # BH over rows with n_clusters >= min_samples; report both counts
   ci_level: 0.95
   prior_strength: 20         # Beta-binomial pseudo-observations centred on the base rate
+  # Cluster-robust test: events whose [t, t+h] windows overlap in calendar time form one cluster
+  # (across instruments for pooled ALL rows). z = sum(hit - base) / sqrt(sum_c (sum_{i in c} (hit - base))^2)
+  test: cluster_robust
+  min_clusters: 30           # certification needs at least this many independent clusters
+  bucket_null: bucket_base_rate   # a context bucket is compared with the base rate of that same bucket
+
+analog:
+  bucket: trend              # analogs share the reference bar's trend bucket (vol regime not used)
+  patterns: union_of_active  # union of patterns active on the reference bar
+  no_pattern: bucket_only    # with no active pattern, use the trend bucket unconditionally
+  effective_n: n_over_steps  # overlapping outcome paths: effective n = n / steps for posterior and CI
 
 abstain:
   min_analogs: 30
   min_edge: 0.03             # |p_up - base_rate| below this -> abstain
+
+confidence:                  # labels shown on forecasts
+  high: {ci_excludes_base: true, min_edge_multiple: 2}
+  medium: {ci_excludes_base: true}
 
 forecast:
   steps: 3
   bands: [0.1, 0.5, 0.9]
 
 go_no_go_1:
-  slice: {tf: 1D, exchange: NSE}
+  slice: {tf: 1D, exchange: NSE, kinds: [equity, index], exclude: [NSE:INDIAVIX]}
   require_certified_buckets: 1
   require_brier_skill_above: 0.0
   require_ece_below: 0.03
+  ece_bins: 10
+  ece_binning: quantile      # equal-count bins; p_up sits in a narrow range, equal-width bins say little

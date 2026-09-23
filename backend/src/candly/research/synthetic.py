@@ -29,11 +29,14 @@ def synthetic_candles(
     gap: float = 0.1,
     plain: bool = False,
     volume: float = 1e5,
+    drift: float | np.ndarray = 0.0,
 ) -> pd.DataFrame:
     """Random candles on the exchange's bar grid.
 
     `vol` is the typical bar range as a fraction of price. `plain=True` keeps every bar's body at
     30-60 % of its range with both wicks present, so single-bar patterns never occur by chance.
+    `drift` shifts each bar's opening gap by that many bar ranges (a scalar, or one value per bar for
+    regimes); it moves prices without changing any bar's shape.
     """
     ts = bar_times(tf, start, end, exchange)
     n = len(ts)
@@ -50,7 +53,7 @@ def synthetic_candles(
         body_frac = rng.uniform(0.0, 1.0, n)
         upper_share = rng.uniform(0.0, 1.0, n)
     sign = np.where(rng.uniform(size=n) < p_up, 1.0, -1.0)
-    gaps = rng.normal(0.0, gap, n) * bar_range
+    gaps = (rng.normal(0.0, gap, n) + drift) * bar_range
     gaps[0] = 0.0
     body = sign * body_frac * bar_range
     log_close = np.log(price) + np.cumsum(gaps + body)
@@ -73,25 +76,33 @@ def synthetic_candles(
 
 
 def plant_marubozu_edge(
-    df: pd.DataFrame, every: int = 25, p_follow: float = 0.85, seed: int = 0, first: int = 60
+    df: pd.DataFrame,
+    every: int = 25,
+    p_follow: float = 0.85,
+    seed: int = 0,
+    first: int = 60,
+    follow_bars: int = 1,
+    bearish_share: float = 0.0,
 ) -> pd.DataFrame:
-    """Known-answer signal: a bullish marubozu every `every` bars, followed by an up bar with
-    probability `p_follow` (else a smaller down bar). Later bars are rescaled to stay continuous."""
+    """Known-answer signal: a marubozu every `every` bars, then `follow_bars` bars that each move one
+    typical range its way with probability `p_follow` (else half a range against it). Marubozus are
+    bullish, or bearish with probability `bearish_share`. Later bars are rescaled to stay continuous."""
     rng = np.random.default_rng(seed)
     o, h, lo, c = (df[x].to_numpy(dtype=float).copy() for x in ("open", "high", "low", "close"))
-    for t in range(first, len(df), every):
+    n = len(df)
+    for t in range(first, n, every):
+        sign = -1.0 if bearish_share > 0 and rng.uniform() < bearish_share else 1.0
         typical = h[t - 1] - lo[t - 1]
         body = 1.5 * typical
-        o[t], c[t] = c[t - 1], c[t - 1] + body
-        h[t], lo[t] = c[t] + 0.02 * body, o[t] - 0.02 * body
-        if t + 1 >= len(df):
-            continue
-        move = typical if rng.uniform() < p_follow else -0.5 * typical
-        old_close = c[t + 1]
-        o[t + 1], c[t + 1] = c[t], c[t] + move
-        wick = abs(move) * 0.6
-        h[t + 1], lo[t + 1] = max(o[t + 1], c[t + 1]) + wick, min(o[t + 1], c[t + 1]) - wick
-        ratio = c[t + 1] / old_close
-        for arr in (o, h, lo, c):
-            arr[t + 2 :] *= ratio
+        o[t], c[t] = c[t - 1], c[t - 1] + sign * body
+        h[t], lo[t] = max(o[t], c[t]) + 0.02 * body, min(o[t], c[t]) - 0.02 * body
+        for j in range(t + 1, min(t + 1 + follow_bars, n)):
+            move = sign * (typical if rng.uniform() < p_follow else -0.5 * typical)
+            old_close = c[j]
+            o[j], c[j] = c[j - 1], c[j - 1] + move
+            wick = abs(move) * 0.6
+            h[j], lo[j] = max(o[j], c[j]) + wick, min(o[j], c[j]) - wick
+            ratio = c[j] / old_close
+            for arr in (o, h, lo, c):
+                arr[j + 1 :] *= ratio
     return validate_candles(df.assign(open=o, high=h, low=lo, close=c))

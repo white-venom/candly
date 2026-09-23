@@ -7,6 +7,17 @@ from typing import Literal
 from candly.research.config import load_costs_config
 
 Holding = Literal["intraday", "multi_day"]
+Side = Literal["long", "short"]
+
+# Cash equity can't be held short overnight in India, so a multi-day equity short is a stock-futures trade.
+SHORT_OVERNIGHT_SEGMENT = "futures"
+
+
+def segment_for(kind: str, holding: Holding, side: Side = "long", costs: dict | None = None) -> str:
+    segment = (costs or load_costs_config())["mapping"][kind][holding]
+    if side == "short" and segment == "equity_delivery":
+        return SHORT_OVERNIGHT_SEGMENT
+    return segment
 
 
 def _rate(entry: dict | float | None, side: str) -> float:
@@ -23,6 +34,7 @@ def cost_breakdown(
     broker: str = "fyers",
     notional_inr: float | None = None,
     costs: dict | None = None,
+    side: Side = "long",
 ) -> dict[str, float]:
     """Components of one buy plus one sell, each as a fraction of notional.
 
@@ -31,7 +43,7 @@ def cost_breakdown(
     GST applies to brokerage + exchange transaction charges + SEBI fee. Slippage is charged on both sides.
     """
     cfg = costs or load_costs_config()
-    segment_name = cfg["mapping"][kind][holding]
+    segment_name = segment_for(kind, holding, side, cfg)
     seg = cfg["segments"][segment_name]
     broker_cfg = cfg["brokerage"][broker]
 
@@ -75,5 +87,6 @@ def round_trip_cost(
     broker: str = "fyers",
     notional_inr: float | None = None,
     costs: dict | None = None,
+    side: Side = "long",
 ) -> float:
-    return float(sum(cost_breakdown(kind, holding, broker, notional_inr, costs).values()))
+    return float(sum(cost_breakdown(kind, holding, broker, notional_inr, costs, side).values()))

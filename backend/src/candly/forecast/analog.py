@@ -1,10 +1,14 @@
 """analog_v1: p(up), ghost candles and bands from past bars that looked like the reference bar.
 
-An analog is a past closed bar j with the same active pattern (any of them) and the same trend bucket
-as the reference bar, whose whole outcome path (bars j+1 .. j+steps) had closed by the reference bar.
-Same-instrument analogs come first; other instruments' analogs from the scorecard's library are added
-only when the instrument alone has fewer than `abstain.min_analogs`. With no pattern on the reference
-bar, every past bar in the same trend bucket is an analog.
+An analog is a past closed bar j with the same active pattern (any of them; analog.patterns) and the
+same trend bucket (analog.bucket) as the reference bar, whose whole outcome path (bars j+1 .. j+steps)
+had closed by the reference bar. Same-instrument analogs come first; analogs of other instruments on the
+same exchange, from the scorecard's library, are added only when the instrument alone has fewer than
+`abstain.min_analogs`. With no pattern on the reference bar, every past bar in the same trend bucket is
+an analog (analog.no_pattern).
+
+Consecutive analogs' outcome paths overlap, so the posterior and its CI use an effective sample of
+n / steps analogs (analog.effective_n); the abstain rule still counts all n analogs.
 """
 
 from __future__ import annotations
@@ -14,6 +18,7 @@ import pandas as pd
 
 from candly.core.instruments import exchange_of
 from candly.core.schema import validate_candles
+from candly.core.timeframes import is_intraday
 from candly.features.context import compute_context
 from candly.forecast.models import Band, Candle, Driver, Forecast, ForecastContext
 from candly.forecast.timing import drop_unclosed, future_bar_times, last_expected_closed_bar, to_unix
@@ -24,7 +29,6 @@ from candly.research.scorecard import Scorecard
 from candly.research.stats import beta_interval, beta_posterior
 
 METHOD = "analog_v1"
-ANALOG_CONTEXT = "trend"
 
 
 def _pct(x: float) -> str:
@@ -37,11 +41,22 @@ def _direction(p_up: float | None, base: float | None) -> str:
     return "bullish" if p_up > base else "bearish"
 
 
+def confidence_label(lo: float, hi: float, base: float, edge: float, cfg: ResearchConfig) -> str:
+    """The first rule in research.yaml `confidence` (high, then medium) that the forecast meets, else low."""
+    excludes_base = lo > base or hi < base
+    for label, rule in cfg.confidence.items():
+        big_enough = abs(edge) >= rule.min_edge_multiple * cfg.min_edge
+        if big_enough and (excludes_base or not rule.ci_excludes_base):
+            return label
+    return "low"
+
+
 def _pooled_paths(
     scorecard: Scorecard | None,
     instrument_id: str,
     patterns: list[str],
-    trend: str,
+    bucket: str,
+    value: str,
     ref_ts: pd.Timestamp,
     steps: int,
 ) -> np.ndarray:
@@ -51,10 +66,13 @@ def _pooled_paths(
     cols = path_columns(steps)
     if any(c not in lib.columns for c in cols):
         return np.empty((0, steps, 4))
+    exchange = exchange_of(instrument_id)
+    same_exchange = lib["instrument"].map(lambda i: exchange_of(i) == exchange).astype(bool)
     sel = lib[
         (lib["instrument"] != instrument_id)
+        & same_exchange
         & lib["pattern"].isin(patterns)
-        & (lib["trend"] == trend)
+        & (lib[bucket] == value)
         & (pd.to_datetime(lib["end_ts"], utc=True) <= ref_ts)
     ].drop_duplicates(["instrument", "ts"])
     paths = sel[cols].to_numpy(dtype=float).reshape(len(sel), steps, 4)
@@ -69,7 +87,11 @@ def make_forecast(
     steps: int | None = None,
     *,
     now: pd.Timestamp | None = None,
+    check_stale: bool = True,
 ) -> Forecast:
+    """Forecast from the last bar closed by `now`. `check_stale=False` skips the calendar's stale-data
+    abstention; only a historical replay (research.evaluate) should pass it, because the calendar has no
+    pre-2026 holidays."""
     cfg = load_research_config()
     steps = int(steps or cfg.forecast_steps)
     now = pd.Timestamp.now(tz="UTC") if now is None else pd.Timestamp(now).tz_convert("UTC")
@@ -77,13 +99,16 @@ def make_forecast(
     df = drop_unclosed(validate_candles(candles), exchange, tf, now)
     if df.empty:
         raise ValueError(f"no closed candles for {instrument_id} {tf}")
-    return _AnalogRun(instrument_id, tf, exchange, df, scorecard, steps, now, cfg).run()
+    return _AnalogRun(instrument_id, tf, exchange, df, scorecard, steps, now, cfg, check_stale).run()
 
 
 class _AnalogRun:
-    def __init__(self, instrument_id, tf, exchange, df, scorecard, steps, now, cfg: ResearchConfig):
+    def __init__(
+        self, instrument_id, tf, exchange, df, scorecard, steps, now, cfg: ResearchConfig, check_stale=True
+    ):
         self.instrument_id, self.tf, self.exchange = instrument_id, tf, exchange
         self.df, self.scorecard, self.steps, self.now, self.cfg = df, scorecard, steps, now, cfg
+        self.check_stale = check_stale
         self.ref = len(df) - 1
         self.ref_ts = df["ts"].iloc[-1]
         self.ref_close = float(df["close"].iloc[-1])
@@ -93,6 +118,8 @@ class _AnalogRun:
         last = self.ctx.iloc[-1]
         self.atr = float(last["atr14"]) if pd.notna(last["atr14"]) else None
         self.trend = last["trend"] if isinstance(last["trend"], str) else None
+        bucket = last[cfg.analog_bucket]
+        self.bucket = bucket if isinstance(bucket, str) else None
         up = forward_labels(df, [steps])[f"up_{steps}"].dropna()
         self.base = float(up.mean()) if len(up) else None
         self.context = ForecastContext(
@@ -134,9 +161,8 @@ class _AnalogRun:
     def _instrument_paths(self) -> np.ndarray:
         n = len(self.df)
         atr = self.ctx["atr14"].to_numpy()
-        eligible = (
-            (np.arange(n) + self.steps <= self.ref) & (atr > 0) & (self.ctx["trend"] == self.trend).to_numpy()
-        )
+        same_bucket = (self.ctx[self.cfg.analog_bucket] == self.bucket).to_numpy()
+        eligible = (np.arange(n) + self.steps <= self.ref) & (atr > 0) & same_bucket
         if not self.active.empty:
             names = set(self.active["pattern"])
             hist = self.patterns[self.patterns["pattern"].isin(names)]
@@ -147,12 +173,14 @@ class _AnalogRun:
 
     def run(self) -> Forecast:
         cfg = self.cfg
-        if self.atr is None or self.atr <= 0 or self.trend is None or self.base is None:
+        if self.atr is None or self.atr <= 0 or self.bucket is None or self.base is None:
             return self._forecast(
-                abstain_reason=f"not enough history: {len(self.df)} bars, need ATR, trend and a base rate",
+                abstain_reason=(
+                    f"not enough history: {len(self.df)} bars, need ATR, {cfg.analog_bucket} and a base rate"
+                ),
                 drivers=self._context_drivers(),
             )
-        expected = last_expected_closed_bar(self.exchange, self.tf, self.now)
+        expected = last_expected_closed_bar(self.exchange, self.tf, self.now) if self.check_stale else None
         if expected is not None and self.ref_ts < expected:
             return self._forecast(
                 abstain_reason=(
@@ -168,7 +196,8 @@ class _AnalogRun:
                 self.scorecard,
                 self.instrument_id,
                 list(self.active["pattern"]),
-                self.trend,
+                cfg.analog_bucket,
+                self.bucket,
                 self.ref_ts,
                 self.steps,
             )
@@ -178,14 +207,17 @@ class _AnalogRun:
         n = len(paths)
         drivers = self._pattern_drivers() + self._context_drivers()
         if n == 0:
-            return self._forecast(abstain_reason="no analogs in this pattern/trend bucket", drivers=drivers)
+            return self._forecast(
+                abstain_reason=f"no analogs in this pattern/{cfg.analog_bucket} bucket", drivers=drivers
+            )
 
         hits = int((paths[:, -1, 3] > 0).sum())
         k = cfg.prior_strength
-        p_up = float(beta_posterior(hits, n, self.base, k))
-        lo, hi = beta_interval(hits, n, self.base, k, cfg.ci_level)
+        scale = self.steps if cfg.analog_effective_n == "n_over_steps" else 1
+        p_up = float(beta_posterior(hits / scale, n / scale, self.base, k))
+        lo, hi = beta_interval(hits / scale, n / scale, self.base, k, cfg.ci_level)
         edge = p_up - self.base
-        bucket = f"trend={self.trend}" + (
+        bucket = f"{cfg.analog_bucket}={self.bucket}" + (
             f", pattern in {{{', '.join(self.active['pattern'])}}}" if not self.active.empty else ", any bar"
         )
         drivers.insert(
@@ -194,8 +226,8 @@ class _AnalogRun:
                 name="Analogs",
                 effect=_direction(p_up, self.base),
                 detail=(
-                    f"{n} {source} analogs ({bucket}): {hits} closed higher after {self.steps} bars; "
-                    f"posterior {_pct(p_up)} vs base rate {_pct(self.base)}"
+                    f"{n} {source} analogs ({bucket}; effective n {n / scale:.0f}): {hits} closed higher "
+                    f"after {self.steps} bars; posterior {_pct(p_up)} vs base rate {_pct(self.base)}"
                 ),
             ),
         )
@@ -220,14 +252,11 @@ class _AnalogRun:
                 abstain_reason=f"edge below minimum: |p_up - base_rate| = {abs(edge):.3f} < {cfg.min_edge}",
                 **fields,
             )
-        excludes_base = lo > self.base or hi < self.base
-        confidence = (
-            "high"
-            if excludes_base and abs(edge) >= 2 * cfg.min_edge
-            else ("medium" if excludes_base else "low")
-        )
         return self._forecast(
-            abstain=False, confidence=confidence, invalidation=self._invalidation(edge), **fields
+            abstain=False,
+            confidence=confidence_label(float(lo), float(hi), self.base, edge, cfg),
+            invalidation=self._invalidation(edge),
+            **fields,
         )
 
     def _ghosts(self, paths: np.ndarray) -> tuple[list[Candle], list[Band]]:
@@ -277,7 +306,7 @@ class _AnalogRun:
                     effect="neutral",
                     detail=(
                         "No pattern on the reference bar; "
-                        "analogs are all past bars in the same trend bucket."
+                        f"analogs are all past bars in the same {self.cfg.analog_bucket} bucket."
                     ),
                 )
             )
@@ -296,19 +325,21 @@ class _AnalogRun:
                     detail=f"{self.trend}" + (f" (ADX {adx:.0f})" if pd.notna(adx) else ""),
                 )
             )
+        context_cfg = load_pattern_config()["context"]
         if isinstance(last["vol_regime"], str):
+            slot = " at this time of day" if is_intraday(self.tf) else ""
             out.append(
                 Driver(
                     name="Volatility regime",
                     effect="neutral",
                     detail=(
                         f"{last['vol_regime']} (ATR at the {100 * last['vol_pct']:.0f}th percentile "
-                        "of the trailing year)"
+                        f"of the last {context_cfg['vol_window_days']} sessions{slot})"
                     ),
                 )
             )
         if isinstance(last["near_level"], str):
-            within = load_pattern_config()["context"]["near_level_atr"]
+            within = context_cfg["near_level_atr"]
             out.append(
                 Driver(
                     name="Near level",

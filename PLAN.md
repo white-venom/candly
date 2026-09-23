@@ -188,6 +188,13 @@ Results are broken down by instrument, timeframe, pattern, session phase and vol
 ## 12. Validation protocol (non-negotiable)
 
 - **Final holdout:** everything from **2025-10-01** onwards is locked. It is used once per go/no-go decision and never for tuning.
+- **Fixed train/validation split** (revised 2026-09-23 after the quant audit, before any real run):
+  - Headline statistics use bars before a fixed `train_end`: 2019-01-01 for daily, 2023-01-01 for intraday.
+  - Validation is the walk-forward windows from `train_end` up to the holdout.
+  - The dates are fixed so that a deeper backfill can't quietly move the split.
+- **Cluster-robust significance:** overlapping horizons, clustered patterns and correlated instruments on the same day inflate naive p-values, which the audit measured at about 1.2–1.6× on pooled rows.
+  - Events whose outcome windows overlap in time count as one cluster, and certification needs ≥ 30 clusters.
+  - Context buckets are compared with their own bucket's base rate, not the unconditional one.
 - **Walk-forward** on data before the holdout: expanding training window and 6-month test windows, with a purge and embargo of 10 bars between train and test so overlapping labels can't leak.
 - **Lookahead audit:** every feature has a truncation test. Deleting or changing future candles must not change any past feature value. The quant-auditor agent reviews every change to features, labels or backtests.
 - **Costs** from `config/costs.yaml`: brokerage, STT/CTT, exchange charges, SEBI fee, stamp duty, GST, plus slippage. F&O STT rose on 2026-04-01: futures 0.05%, options 0.15% of premium.
@@ -245,6 +252,7 @@ Defined in `.claude/agents/`:
 | frontend-engineer | React dashboard |
 | quant-auditor (read-only) | Lookahead, leakage, overfitting, cost realism, statistical claims |
 | reviewer (read-only) | Bugs, security, contract drift, test gaps |
+| trader-tester | Acceptance testing as a 20+ year Indian-markets trader and backend engineer: data truth, pattern and level sanity, costs, calendar realism, usefulness, API/job failure modes |
 
 The main Claude session is the lead. It owns this plan, the contracts and the `core` package; it splits the work, integrates it, and runs the final checks.
 

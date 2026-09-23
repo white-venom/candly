@@ -232,13 +232,23 @@ type ScorecardRow = {
   instrument: string;                           // an instrument id, or "ALL" (pooled)
   context: string;                              // "all" or a bucket such as "trend=down"
   horizon_bars: number; n: number; hits: number; hit_rate: number; base_rate: number;
-  ci_low: number; ci_high: number; p_value: number; q_value: number; posterior: number;
+  ci_low: number; ci_high: number;             // Wilson interval, display only
+  p_value: number;                             // cluster-robust, one-sided in the pattern's direction (two-sided for neutral)
+  q_value: number | null;                      // BH q; null when the row is outside the BH family (n_clusters < min_samples)
+  posterior: number;
   expectancy_after_cost_pct: number | null;
   validation_n: number; validation_hit_rate: number | null;
-  certified: boolean;
+  certified: boolean;                          // also requires n_clusters >= stats.min_clusters
 };
 type ScorecardResponse = {
-  meta: { tf: string; built_at: number | null; train_end: string; holdout_start: string; n_tests: number; fdr_alpha: number; horizons: number[] };
+  meta: {
+    tf: string; built_at: number | null; train_end: string; holdout_start: string;
+    n_tests: number;                           // BH family size
+    n_rows: number;                            // all emitted rows
+    instruments: string[];                     // one exchange per build
+    fdr_alpha: number; horizons: number[];
+    config_sha256: Record<string, string>;     // research / patterns / costs YAML hashes used for the build
+  };
   rows: ScorecardRow[];
 };
 
@@ -295,6 +305,12 @@ These were agreed while building and override anything above.
   - `expected_move_pct` is signed.
   - `ScannerRow.score` is a probability difference (0–1).
 - **Errors:** every validation error returns 400 with `{detail}`, including FastAPI's own type errors.
+- **Research APIs** (after the quant audit):
+  - `build_scorecard` defaults to the `go_no_go_1` slice universe and accepts one exchange per build.
+  - `make_forecast(..., check_stale=True)`: replays pass `check_stale=False`.
+  - `Ledger.record(forecast)` takes no `now`; the late check uses the real clock.
+  - `research.evaluate.evaluate_forecasts(tf, method="analog_v1", allow_holdout=False, *, period="validation")` returns Brier, baseline Brier, skill, quantile ECE, hit rate, band coverage, abstention/void counts and gate results. `period="holdout"` requires `allow_holdout=True`.
+  - Scorecard rows carry an internal `n_clusters` (Parquet only, not in the API yet).
 - **News:** the Python `NewsItem` is a pydantic model (`news/models.py`). A backtest must filter on `fetched_at` (as-of time), never on `published_at`.
 
 ### Grading definitions
@@ -307,3 +323,4 @@ These are used by the ledger and the Accuracy page.
 - `in_band_80`: `p10 ≤ actual close ≤ p90`.
 - `match_score` (display only, never used as a model input): `100 × mean over steps of (0.4·range_iou + 0.3·max(0, 1 − close_err_atr) + 0.3·color_match)`.
 - Abstained forecasts are graded but excluded from hit rate, Brier and calibration. They are counted in `n_abstained`.
+- **Bars are matched by time, never by position.** A step whose predicted bar time never appears as a bar keeps the forecast `pending`. It becomes `void` at last target close + 7 days, and the reason is stored internally. Grading only ever updates rows that are still pending.

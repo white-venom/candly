@@ -78,7 +78,10 @@ def clean_candles(df: pd.DataFrame, tf: str, exchange: str, kind: str | None = N
     if kind is not None and not out.empty:
         fake = fake_bar_mask(out, exchange, kind)
         if fake.any():
-            log.info("%s %s: dropped %d fake bars (flat zero-volume or on a holiday)", exchange, tf, int(fake.sum()))
+            log.info(
+                "%s %s: dropped %d fake bars (flat zero-volume or on a holiday)",
+                exchange, tf, int(fake.sum()),
+            )
             out = out[~fake]
 
     body_high = out[["open", "close"]].max(axis=1)
