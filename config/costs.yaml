@@ -1,0 +1,47 @@
+# Indian trading costs for backtests and expectancy. Rates are fractions of turnover unless noted.
+# Verified 2026-09-23: F&O STT (Union Budget 2026, effective 2026-04-01).
+# Entries with `verify: true` are from memory. Confirm them before trusting cost-sensitive results.
+as_of: 2026-09-23
+
+brokerage:
+  fyers: {per_order_inr: 20.0, pct_cap: 0.0003, delivery_free: true, verify: true}
+  kotak_neo: {per_order_inr: 20.0, verify: true}
+
+segments:
+  equity_intraday:
+    stt: {sell: 0.00025, verify: true}
+    exchange_txn: {both: 0.0000297, verify: true}
+    stamp_duty: {buy: 0.00003, verify: true}
+  equity_delivery:
+    stt: {buy: 0.001, sell: 0.001, verify: true}
+    exchange_txn: {both: 0.0000297, verify: true}
+    stamp_duty: {buy: 0.00015, verify: true}
+  futures:
+    stt: {sell: 0.0005}                  # verified: 0.02% -> 0.05% from 2026-04-01
+    exchange_txn: {both: 0.0000173, verify: true}
+    stamp_duty: {buy: 0.00002, verify: true}
+  options:                               # rates apply to premium turnover
+    stt: {sell: 0.0015}                  # verified: 0.1% -> 0.15% from 2026-04-01
+    stt_on_exercise: 0.0015              # verified: 0.125% -> 0.15%
+    exchange_txn: {both: 0.0003503, verify: true}
+    stamp_duty: {buy: 0.00003, verify: true}
+  mcx_futures:                           # non-agri commodities
+    ctt: {sell: 0.0001, verify: true}
+    exchange_txn: {both: 0.000021, verify: true}
+    stamp_duty: {buy: 0.00002, verify: true}
+
+sebi_fee: 0.000001                       # Rs 10 per crore, both sides
+gst_rate: 0.18                           # on brokerage + exchange txn + SEBI fee
+
+# Slippage per side as a fraction of price. Conservative defaults; tune from paper-trading fills.
+slippage:
+  index: 0.0002
+  equity: 0.0003
+  future: 0.0003
+  default: 0.0005
+
+# Which cost segment a backtest trade uses.
+mapping:
+  equity: {intraday: equity_intraday, multi_day: equity_delivery}
+  index: {intraday: futures, multi_day: futures}   # indices aren't tradable; index futures are the proxy
+  future: {intraday: mcx_futures, multi_day: mcx_futures}

@@ -1,0 +1,108 @@
+# Instruments candly follows. Ids are EXCHANGE:SYMBOL (see docs/CONTRACTS.md).
+# sources.fyers  : Fyers API v3 symbol (formats to verify once keys arrive).
+#                  "@FRONT" = resolve the current front-month future from the Fyers symbol master.
+# sources.yahoo  : dev-only fallback symbol (null = not available on Yahoo).
+# aliases        : lowercase names used to map news headlines to instruments.
+
+defaults:
+  timeframes: [5m, 15m, 1h, 1D]
+
+instruments:
+  # --- NSE indices
+  - id: NSE:NIFTY50
+    name: Nifty 50
+    kind: index
+    sources: {fyers: "NSE:NIFTY50-INDEX", yahoo: "^NSEI"}
+    aliases: ["nifty", "nifty 50", "nifty50"]
+  - id: NSE:BANKNIFTY
+    name: Nifty Bank
+    kind: index
+    sources: {fyers: "NSE:NIFTYBANK-INDEX", yahoo: "^NSEBANK"}
+    aliases: ["bank nifty", "banknifty", "nifty bank"]
+  - id: NSE:INDIAVIX
+    name: India VIX
+    kind: index
+    tradable: false
+    sources: {fyers: "NSE:INDIAVIX-INDEX", yahoo: "^INDIAVIX"}
+    aliases: ["india vix", "volatility index"]
+
+  # --- NSE stocks
+  - id: NSE:RELIANCE
+    name: Reliance Industries
+    kind: equity
+    sources: {fyers: "NSE:RELIANCE-EQ", yahoo: "RELIANCE.NS"}
+    aliases: ["reliance", "reliance industries", "ril"]
+  - id: NSE:HDFCBANK
+    name: HDFC Bank
+    kind: equity
+    sources: {fyers: "NSE:HDFCBANK-EQ", yahoo: "HDFCBANK.NS"}
+    aliases: ["hdfc bank"]
+  - id: NSE:ICICIBANK
+    name: ICICI Bank
+    kind: equity
+    sources: {fyers: "NSE:ICICIBANK-EQ", yahoo: "ICICIBANK.NS"}
+    aliases: ["icici bank"]
+  - id: NSE:INFY
+    name: Infosys
+    kind: equity
+    sources: {fyers: "NSE:INFY-EQ", yahoo: "INFY.NS"}
+    aliases: ["infosys", "infy"]
+  - id: NSE:TCS
+    name: Tata Consultancy Services
+    kind: equity
+    sources: {fyers: "NSE:TCS-EQ", yahoo: "TCS.NS"}
+    aliases: ["tcs", "tata consultancy"]
+  - id: NSE:SBIN
+    name: State Bank of India
+    kind: equity
+    sources: {fyers: "NSE:SBIN-EQ", yahoo: "SBIN.NS"}
+    aliases: ["sbi", "state bank of india"]
+  - id: NSE:BHARTIARTL
+    name: Bharti Airtel
+    kind: equity
+    sources: {fyers: "NSE:BHARTIARTL-EQ", yahoo: "BHARTIARTL.NS"}
+    aliases: ["bharti airtel", "airtel"]
+  - id: NSE:ITC
+    name: ITC
+    kind: equity
+    sources: {fyers: "NSE:ITC-EQ", yahoo: "ITC.NS"}
+    aliases: ["itc"]
+  - id: NSE:LT
+    name: Larsen & Toubro
+    kind: equity
+    sources: {fyers: "NSE:LT-EQ", yahoo: "LT.NS"}
+    aliases: ["larsen & toubro", "larsen and toubro", "l&t"]
+  - id: NSE:AXISBANK
+    name: Axis Bank
+    kind: equity
+    sources: {fyers: "NSE:AXISBANK-EQ", yahoo: "AXISBANK.NS"}
+    aliases: ["axis bank"]
+
+  # --- BSE
+  - id: BSE:SENSEX
+    name: Sensex
+    kind: index
+    sources: {fyers: "BSE:SENSEX-INDEX", yahoo: "^BSESN"}
+    aliases: ["sensex"]
+
+  # --- MCX (continuous front-month futures; Fyers only)
+  - id: MCX:CRUDEOIL
+    name: Crude Oil
+    kind: future
+    sources: {fyers: "MCX:CRUDEOIL@FRONT", yahoo: null}
+    aliases: ["crude oil", "crude", "brent", "wti"]
+  - id: MCX:NATURALGAS
+    name: Natural Gas
+    kind: future
+    sources: {fyers: "MCX:NATURALGAS@FRONT", yahoo: null}
+    aliases: ["natural gas", "natgas"]
+  - id: MCX:GOLD
+    name: Gold
+    kind: future
+    sources: {fyers: "MCX:GOLD@FRONT", yahoo: null}
+    aliases: ["gold", "bullion"]
+  - id: MCX:SILVER
+    name: Silver
+    kind: future
+    sources: {fyers: "MCX:SILVER@FRONT", yahoo: null}
+    aliases: ["silver"]

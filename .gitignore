@@ -1,0 +1,28 @@
+# secrets
+.env
+.env.*
+!.env.example
+
+# runtime data (candles, databases, tokens, logs)
+data/
+*.log
+
+# python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+build/
+dist/
+
+# node
+node_modules/
+frontend/dist/
+
+# OS / editor
+Thumbs.db
+.DS_Store
+.vscode/*
+!.vscode/extensions.json

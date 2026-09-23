@@ -1,0 +1,59 @@
+# Market sessions, holidays and expiry rules. All times are IST (Asia/Kolkata).
+# Checked 2026-09-23 against published 2026 holiday lists. Add next year's holidays every December.
+# MCX: some of these dates keep the evening session (17:00 onwards) open. Verify each against MCX
+# circulars; until then the scheduler treats them as fully closed (data ingestion doesn't depend on it).
+
+exchanges:
+  NSE:
+    pre_open: "09:00"
+    open: "09:15"
+    close: "15:30"
+    weekly_expiry_weekday: tuesday   # index derivatives since 2025-09-01; monthly = last Tuesday
+    phases:
+      - {name: open, start: "09:15", end: "09:45"}
+      - {name: morning, start: "09:45", end: "11:30"}
+      - {name: midday, start: "11:30", end: "13:30"}
+      - {name: afternoon, start: "13:30", end: "15:00"}
+      - {name: close, start: "15:00", end: close}
+  BSE:
+    pre_open: "09:00"
+    open: "09:15"
+    close: "15:30"
+    weekly_expiry_weekday: thursday  # Sensex derivatives since 2025-09-01
+    phases:
+      - {name: open, start: "09:15", end: "09:45"}
+      - {name: morning, start: "09:45", end: "11:30"}
+      - {name: midday, start: "11:30", end: "13:30"}
+      - {name: afternoon, start: "13:30", end: "15:00"}
+      - {name: close, start: "15:00", end: close}
+  MCX:
+    open: "09:00"
+    close: "23:55"
+    close_us_dst: "23:30"            # non-agri contracts while US daylight saving time is on
+    phases:
+      - {name: open, start: "09:00", end: "09:30"}
+      - {name: day, start: "09:30", end: "17:00"}
+      - {name: evening, start: "17:00", end: close-30}
+      - {name: close, start: close-30, end: close}
+
+holidays:
+  - {date: 2026-01-15, name: "Municipal Corporation elections (Maharashtra)", exchanges: [NSE, BSE, MCX]}
+  - {date: 2026-01-26, name: "Republic Day", exchanges: [NSE, BSE, MCX]}
+  - {date: 2026-03-03, name: "Holi", exchanges: [NSE, BSE, MCX]}
+  - {date: 2026-03-26, name: "Shri Ram Navami", exchanges: [NSE, BSE, MCX]}
+  - {date: 2026-03-31, name: "Shri Mahavir Jayanti", exchanges: [NSE, BSE, MCX]}
+  - {date: 2026-04-03, name: "Good Friday", exchanges: [NSE, BSE, MCX]}
+  - {date: 2026-04-14, name: "Dr. Baba Saheb Ambedkar Jayanti", exchanges: [NSE, BSE, MCX]}
+  - {date: 2026-05-01, name: "Maharashtra Day", exchanges: [NSE, BSE, MCX]}
+  - {date: 2026-05-28, name: "Bakri Eid", exchanges: [NSE, BSE, MCX]}
+  - {date: 2026-06-26, name: "Moharram", exchanges: [NSE, BSE, MCX]}
+  - {date: 2026-09-14, name: "Ganesh Chaturthi", exchanges: [NSE, BSE, MCX]}
+  - {date: 2026-10-02, name: "Mahatma Gandhi Jayanti", exchanges: [NSE, BSE, MCX]}
+  - {date: 2026-10-20, name: "Dussehra", exchanges: [NSE, BSE, MCX]}
+  - {date: 2026-11-10, name: "Diwali Balipratipada", exchanges: [NSE, BSE, MCX]}
+  - {date: 2026-11-24, name: "Prakash Gurpurb Sri Guru Nanak Dev", exchanges: [NSE, BSE, MCX]}
+  - {date: 2026-12-25, name: "Christmas", exchanges: [NSE, BSE, MCX]}
+
+special_sessions:
+  # open/close stay null until the exchange circular announces the timing
+  - {date: 2026-11-08, name: "Muhurat trading (Diwali)", exchanges: [NSE, BSE, MCX], open: null, close: null}

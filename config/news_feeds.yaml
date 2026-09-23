@@ -1,0 +1,29 @@
+# Free news sources, each checked by hand on 2026-09-23.
+# Backtests may use an item only from `fetched_at` (when we actually had it), never from the publisher's time.
+# Be polite: poll no faster than listed, and send the user agent below.
+
+poll_minutes: 5
+user_agent: "candly/0.1 (personal research)"
+
+feeds:
+  - {id: et_markets, name: "Economic Times - Markets", kind: news, url: "https://economictimes.indiatimes.com/markets/rssfeeds/1977021501.cms"}
+  - {id: et_stocks, name: "Economic Times - Stocks", kind: news, url: "https://economictimes.indiatimes.com/markets/stocks/rssfeeds/2146842.cms"}
+  - {id: bs_markets, name: "Business Standard - Markets", kind: news, url: "https://www.business-standard.com/rss/markets-106.rss"}
+  - {id: mint_markets, name: "LiveMint - Markets", kind: news, url: "https://www.livemint.com/rss/markets"}
+  - {id: hbl_markets, name: "Hindu BusinessLine - Markets", kind: news, url: "https://www.thehindubusinessline.com/markets/feeder/default.rss"}
+  # NSE pubDate looks like "23-Sep-2026 10:45:40" (IST, no timezone)
+  - {id: nse_announcements, name: "NSE - Corporate announcements", kind: exchange, url: "https://nsearchives.nseindia.com/content/RSS/Online_announcements.xml"}
+  - {id: nse_results, name: "NSE - Financial results", kind: exchange, url: "https://nsearchives.nseindia.com/content/RSS/Financial_Results.xml"}
+  - {id: rbi_press, name: "RBI - Press releases", kind: regulator, url: "https://www.rbi.org.in/pressreleases_rss.xml"}
+
+per_instrument:
+  google_news:
+    url_template: "https://news.google.com/rss/search?q={query}&hl=en-IN&gl=IN&ceid=IN:en"
+    query_template: '"{name}" share OR stock'
+    poll_minutes: 30
+    kinds: [equity]
+
+excluded:
+  - {url: "https://www.moneycontrol.com/rss/latestnews.xml", reason: "stale: newest item April 2024"}
+  - {url: "https://www.financialexpress.com/market/feed/", reason: "returned 0 items"}
+  - {url: "https://www.cnbctv18.com/commonfeeds/v1/cne/rss/market.xml", reason: "request killed locally (antivirus?); retest later"}

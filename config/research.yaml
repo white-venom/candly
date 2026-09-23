@@ -1,0 +1,33 @@
+# Validation protocol, pre-registered 2026-09-23.
+# Changing these after seeing results is overfitting. Record any change in PLAN.md with a reason.
+
+holdout:
+  start: 2025-10-01          # data on/after this date is LOCKED; only an official go/no-go run may read it
+
+walk_forward:
+  min_train_years: 3
+  test_window_months: 6
+  purge_bars: 10             # gap between train end and test start (>= longest horizon)
+  embargo_bars: 10
+
+horizons_bars: [1, 3, 5]
+
+stats:
+  min_samples: 30
+  fdr_alpha: 0.10            # Benjamini-Hochberg across ALL tests run
+  ci_level: 0.95
+  prior_strength: 20         # Beta-binomial pseudo-observations centred on the base rate
+
+abstain:
+  min_analogs: 30
+  min_edge: 0.03             # |p_up - base_rate| below this -> abstain
+
+forecast:
+  steps: 3
+  bands: [0.1, 0.5, 0.9]
+
+go_no_go_1:
+  slice: {tf: 1D, exchange: NSE}
+  require_certified_buckets: 1
+  require_brier_skill_above: 0.0
+  require_ece_below: 0.03
