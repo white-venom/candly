@@ -21,7 +21,7 @@ class Settings(BaseSettings):
 
     fyers_app_id: str = ""
     fyers_secret_key: SecretStr = SecretStr("")
-    fyers_redirect_uri: str = "http://127.0.0.1:8000/api/auth/fyers/callback"
+    fyers_redirect_uri: str = "https://trade.fyers.in/api-login/redirect-uri/index.html"
     fyers_client_id: str = ""
     fyers_pin: SecretStr = SecretStr("")
     fyers_totp_secret: SecretStr = SecretStr("")

@@ -69,6 +69,12 @@ Frontend (run inside `frontend/`):
 - Models: `claude-haiku-4-5` for bulk news tagging, `claude-opus-5` for explanations and briefs.
 - Use structured outputs, prompt caching, and the Batch API for backfills. Log every prompt and response along with its cost.
 
+## Git
+
+- Only the lead (the main session) commits. Agents never commit.
+- Commit and push to `origin main` after each verified milestone (tests green).
+- Write short, human-style commit messages with an imperative subject, e.g. "Add Fyers history client". Never add AI or Claude attribution trailers.
+
 ## Team workflow
 
 - Agents in `.claude/agents/`: backend-engineer, quant-engineer, frontend-engineer, quant-auditor (read-only), reviewer (read-only).

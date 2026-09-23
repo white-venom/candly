@@ -144,9 +144,14 @@ type NewsItem = {
   event_type: string | null; summary: string | null;
 };
 
-// GET /api/auth/fyers/login     -> 307 redirect to the Fyers login page
-// GET /api/auth/fyers/callback  -> stores the token, then 307 to `${FRONTEND_URL}/?fyers=connected` (or `?fyers=error`)
-// GET /api/auth/fyers/status    -> { connected: boolean; expires_at: number | null }
+// Fyers login. Fyers rejects localhost/IP redirect URLs, so the app's redirect URL is Fyers' own page
+// (https://trade.fyers.in/api-login/redirect-uri/index.html). After logging in, the user copies the
+// address-bar URL (it contains auth_code=...) and pastes it into the dashboard.
+// GET  /api/auth/fyers/login     -> 307 redirect to the Fyers login page
+// POST /api/auth/fyers/code      body { code: string }  (a raw auth_code OR the full redirect URL)
+//                                -> { connected: boolean; expires_at: number | null }; 400 { detail } if the exchange fails
+// GET  /api/auth/fyers/callback  -> same exchange for a local redirect URL (kept for future use); 307 to `${FRONTEND_URL}/?fyers=connected|error`
+// GET  /api/auth/fyers/status    -> { connected: boolean; expires_at: number | null }
 ```
 
 ### Analytics routes
