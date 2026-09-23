@@ -77,11 +77,16 @@ def test_forecast_shape_matches_contract(random_daily):
 
 def test_analogs_only_use_outcomes_closed_by_the_reference_bar(random_daily):
     steps = 3
-    now = just_after_close(random_daily)
-    fc = make_forecast("NSE:RELIANCE", "1D", random_daily, None, steps=steps, now=now)
     ctx = compute_context(random_daily, "1D", "NSE")
-    ref = len(random_daily) - 1
-    same = (ctx["trend"] == fc.context.trend).to_numpy() & (ctx["atr14"] > 0).to_numpy()
+    trend = ctx["trend"].to_numpy()
+    # A reference bar whose previous steps-1 bars share its trend, so the exclusion is non-vacuous.
+    ref = next(
+        i for i in range(len(random_daily) - 1, 300, -1) if (trend[i - steps + 1 : i + 1] == trend[i]).all()
+    )
+    candles = random_daily.iloc[: ref + 1]
+    fc = make_forecast("NSE:RELIANCE", "1D", candles, None, steps=steps, now=just_after_close(candles))
+    upto = ctx.iloc[: ref + 1]
+    same = (upto["trend"] == fc.context.trend).to_numpy() & (upto["atr14"] > 0).to_numpy()
     assert fc.n_analogs == int(same[: ref - steps + 1].sum())
     assert fc.n_analogs < int(same[:ref].sum())
 

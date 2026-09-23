@@ -4,7 +4,9 @@
 as_of: 2026-09-23
 
 brokerage:
-  fyers: {per_order_inr: 20.0, pct_cap: 0.0003, delivery_free: true, verify: true}
+  # Fyers: intraday/F&O Rs 20 or 0.03% per executed order (whichever lower); delivery Rs 20 or 0.3%
+  # (checked by the acceptance test run 2026-09-23). DP charge applies per scrip per sell day on delivery.
+  fyers: {per_order_inr: 20.0, pct_cap: 0.0003, delivery_free: false, delivery_pct_cap: 0.003, dp_per_sell_inr: 12.5}
   kotak_neo: {per_order_inr: 20.0, verify: true}
 
 segments:
@@ -42,6 +44,7 @@ slippage:
 
 # Which cost segment a backtest trade uses.
 mapping:
-  equity: {intraday: equity_intraday, multi_day: equity_delivery}
+  # Cash equity can't be shorted overnight, so multi-day equity shorts are costed as stock futures.
+  equity: {intraday: equity_intraday, multi_day: equity_delivery, multi_day_short: futures}
   index: {intraday: futures, multi_day: futures}   # indices aren't tradable; index futures are the proxy
   future: {intraday: mcx_futures, multi_day: mcx_futures}

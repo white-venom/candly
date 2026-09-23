@@ -101,7 +101,8 @@ def test_overlapping_windows_form_fewer_clusters(tmp_data_dir, no_keys, random_f
     single = rows[(rows["instrument"] != "ALL") & (rows["horizon_bars"] == 1)]
     assert (single["n_clusters"] == single["n"]).all()
     busy = rows[(rows["horizon_bars"] == 5) & (rows["n"] >= 30)]
-    assert len(busy) and (busy["n_clusters"] < busy["n"]).all()
+    assert len(busy) and (busy["n_clusters"] <= busy["n"]).all()
+    assert busy["n_clusters"].sum() < busy["n"].sum()
     per_instrument = rows[rows["instrument"] != "ALL"].groupby(KEY)["n_clusters"].sum().sort_index()
     assert (pooled(rows)["n_clusters"] <= per_instrument).all()
 

@@ -54,6 +54,16 @@ holidays:
   - {date: 2026-11-24, name: "Prakash Gurpurb Sri Guru Nanak Dev", exchanges: [NSE, BSE, MCX]}
   - {date: 2026-12-25, name: "Christmas", exchanges: [NSE, BSE, MCX]}
 
+  # Past holidays that matter for session checks (full historical lists: see PLAN.md §20)
+  - {date: 2024-01-22, name: "Ram temple consecration (Maharashtra govt holiday)", exchanges: [NSE, BSE]}
+
 special_sessions:
-  # open/close stay null until the exchange circular announces the timing
+  # open/close stay null until the exchange circular announces the timing (treated as closed until then).
+  # Sources: exchange/broker notices cited in docs/test-reports/2026-09-23-first-acceptance.md.
+  - {date: 2026-02-01, name: "Union Budget (Sunday)", exchanges: [NSE, BSE], open: "09:15", close: "15:30"}
+  - {date: 2026-02-01, name: "Union Budget (Sunday)", exchanges: [MCX], open: null, close: null}
+  - {date: 2025-02-01, name: "Union Budget (Saturday)", exchanges: [NSE, BSE], open: "09:15", close: "15:30"}
+  - {date: 2024-01-20, name: "Special full session (Saturday)", exchanges: [NSE, BSE], open: "09:15", close: "15:30"}
+  - {date: 2020-02-01, name: "Union Budget (Saturday)", exchanges: [NSE, BSE], open: "09:15", close: "15:30"}
+  - {date: 2015-02-28, name: "Union Budget (Saturday)", exchanges: [NSE, BSE], open: "09:15", close: "15:30"}
   - {date: 2026-11-08, name: "Muhurat trading (Diwali)", exchanges: [NSE, BSE, MCX], open: null, close: null}

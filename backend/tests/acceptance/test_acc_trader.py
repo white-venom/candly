@@ -192,8 +192,5 @@ def test_intraday_round_trip_cost_is_realistic():
     assert 0.0010 <= cost <= 0.0020
 
 
-@pytest.mark.xfail(
-    reason="report F11: Fyers charges ₹20 or 0.3% per delivery order; costs.yaml says free", strict=True
-)
 def test_fyers_delivery_brokerage_is_not_free():
     assert not load_costs_config()["brokerage"]["fyers"].get("delivery_free", False)
