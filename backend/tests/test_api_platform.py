@@ -13,7 +13,7 @@ from fastapi.testclient import TestClient
 from candly.api.routes import platform
 from candly.core.calendar import IST, get_calendar
 from candly.core.instruments import load_watchlist
-from candly.data import clock
+from candly.data import clock, expiries
 from candly.data.sources import fyers
 from candly.data.store import save_candles
 from candly.news.models import NewsItem, news_id
@@ -100,6 +100,7 @@ def test_health(client):
         {"exchange": "MCX", "open": True, "phase": "day"},
     ]
     assert body["ingest"] == {"status": "ok", "reason": None}  # Yahoo needs no login
+    assert body["expiry_check"] == {"status": "unavailable", "checked_at": None, "mismatches": []}
 
 
 def test_health_reports_ingest_blocked_until_fyers_is_connected(fyers_client):
@@ -138,9 +139,9 @@ def test_health_on_a_weekend(client, monkeypatch):
     assert all(m == {"exchange": m["exchange"], "open": False, "phase": "closed"} for m in markets)
 
 
-def write_mcx_master(data_dir, rows: list[tuple[str, str, pd.Timestamp]]) -> None:
-    """A Fyers MCX symbol master cached today: (ticker, underlying, expiry) rows."""
-    path = data_dir / "cache" / "fyers" / "MCX_COM.csv"
+def write_master(data_dir, segment: str, rows: list[tuple[str, str, pd.Timestamp]]) -> None:
+    """A Fyers symbol master cached today: (ticker, underlying, expiry) rows."""
+    path = data_dir / "cache" / "fyers" / f"{segment}.csv"
     path.parent.mkdir(parents=True, exist_ok=True)
     lines = [
         f"1,{ticker},30,100,1.0,,0900-2330,2026-09-23,{clock.epoch_seconds(expiry)},{ticker},11,20,1,{root}"
@@ -150,8 +151,18 @@ def write_mcx_master(data_dir, rows: list[tuple[str, str, pd.Timestamp]]) -> Non
     os.utime(path, (clock.epoch_seconds(NOW), clock.epoch_seconds(NOW)))
 
 
+def refresh_from(data_dir, nifty: list[tuple[str, pd.Timestamp]]) -> None:
+    """Runs the daily expiry refresh on cached masters: these NIFTY contracts, one CRUDEOIL future and
+    no SENSEX contracts."""
+    write_master(data_dir, "NSE_FO", [(ticker, "NIFTY", expiry) for ticker, expiry in nifty])
+    write_master(data_dir, "BSE_FO", [("BSE:BANKEX26SEPFUT", "BANKEX", ist(2026, 9, 28, 15, 30))])
+    write_master(data_dir, "MCX_COM", [("MCX:CRUDEOIL26OCTFUT", "CRUDEOIL", ist(2026, 10, 19, 23, 30))])
+    expiries.refresh_expiries()
+
+
+@respx.mock  # the masters are cached for the day: nothing is downloaded
 def test_instruments(client, tmp_data_dir):
-    write_mcx_master(tmp_data_dir, [("MCX:CRUDEOIL26OCTFUT", "CRUDEOIL", ist(2026, 10, 19, 23, 30))])
+    refresh_from(tmp_data_dir, [("NSE:NIFTY26SEPFUT", ist(2026, 9, 29, 15, 30))])
     save_candles("NSE:RELIANCE", "1D", daily([date(2026, 9, 21), date(2026, 9, 22)]))
     body = client.get("/api/instruments").json()
     assert [i["id"] for i in body] == [i.id for i in load_watchlist()]
@@ -167,27 +178,51 @@ def test_instruments(client, tmp_data_dir):
 
     expiry = {i["id"]: i["expiry"] for i in body}
     assert expiry["NSE:NIFTY50"] == {
-        "next": "2026-09-29", "kind": "monthly", "days_to_expiry": 4, "is_expiry_day": False
+        "next": "2026-09-29", "kind": "monthly", "days_to_expiry": 4, "is_expiry_day": False,
+        "source": "exchange",
     }
     assert expiry["BSE:SENSEX"] == {
-        "next": "2026-09-24", "kind": "monthly", "days_to_expiry": 1, "is_expiry_day": False
+        "next": "2026-09-24", "kind": "monthly", "days_to_expiry": 1, "is_expiry_day": False,
+        "source": "rules",  # BSE lists no SENSEX contracts in this master
     }
     assert expiry["MCX:CRUDEOIL"] == {
-        "next": "2026-10-19", "kind": "contract", "days_to_expiry": 17, "is_expiry_day": False
+        "next": "2026-10-19", "kind": "contract", "days_to_expiry": 17, "is_expiry_day": False,
+        "source": "exchange",
     }
     assert expiry["NSE:INDIAVIX"] is None and expiry["MCX:GOLD"] is None
+    assert respx.calls.call_count == 0
 
 
-@respx.mock
-def test_instruments_without_an_mcx_master(client):
-    master = fyers.SYMBOL_MASTER_URL.format(segment="MCX_COM")
-    route = respx.get(master).mock(return_value=httpx.Response(503))
-    for _ in range(3):
+@respx.mock  # requests never download a symbol master; only the daily refresh does
+def test_instruments_before_any_expiry_refresh(client):
+    for _ in range(2):
         response = client.get("/api/instruments")
         assert response.status_code == 200
         expiry = {i["id"]: i["expiry"] for i in response.json()}
-        assert expiry["MCX:CRUDEOIL"] is None and expiry["NSE:RELIANCE"]["kind"] == "monthly"
-    assert route.call_count == 1  # a failed download is not retried on every request
+        assert expiry["MCX:CRUDEOIL"] is None
+        assert expiry["NSE:RELIANCE"]["kind"] == "monthly" and expiry["NSE:RELIANCE"]["source"] == "rules"
+    assert respx.calls.call_count == 0
+
+
+@respx.mock
+def test_health_reports_the_daily_expiry_check(client, tmp_data_dir):
+    unchecked = {"status": "unavailable", "checked_at": None, "mismatches": []}
+    assert client.get("/api/health").json()["expiry_check"] == unchecked
+    # The exchange moved NIFTY's September expiry to Monday the 28th; config/expiry.yaml says the 29th.
+    nifty = [
+        ("NSE:NIFTY26SEPFUT", ist(2026, 9, 28, 15, 30)),
+        ("NSE:NIFTY2610625000CE", ist(2026, 10, 6, 15, 30)),
+        ("NSE:NIFTY26O1325000CE", ist(2026, 10, 13, 15, 30)),
+        ("NSE:NIFTY26OCTFUT", ist(2026, 10, 27, 15, 30)),
+    ]
+    refresh_from(tmp_data_dir, nifty)
+    assert client.get("/api/health").json()["expiry_check"] == {
+        "status": "mismatch",
+        "checked_at": clock.epoch_seconds(NOW),
+        "mismatches": [{"instrument": "NSE:NIFTY50", "rules": "2026-09-29", "exchange": "2026-09-28"}],
+    }
+    expiry = {i["id"]: i["expiry"] for i in client.get("/api/instruments").json()}
+    assert (expiry["NSE:NIFTY50"]["next"], expiry["NSE:NIFTY50"]["source"]) == ("2026-09-28", "exchange")
 
 
 def test_candles(client, monkeypatch):

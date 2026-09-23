@@ -6,6 +6,7 @@ ingest, or rebuild_scorecard nightly.
 
 import logging
 import threading
+from datetime import datetime
 
 import pandas as pd
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -16,6 +17,7 @@ from candly.core.calendar import IST, get_calendar
 from candly.core.instruments import EXCHANGES, load_watchlist
 from candly.core.settings import get_settings
 from candly.data import clock
+from candly.data.expiries import refresh_expiries as _refresh_expiries
 from candly.data.ingest import ingest
 from candly.data.sources import SourceError, fyers
 from candly.news.fetch import poll_news as _poll_news
@@ -97,6 +99,14 @@ def poll_news() -> int:
         return 0
 
 
+def refresh_expiries() -> dict | None:
+    try:
+        return _refresh_expiries()
+    except Exception:
+        log.exception("expiry refresh failed")
+        return None
+
+
 def refresh_fyers_session() -> None:
     """Swap an expired access token for a new one via the refresh token, before the market opens."""
     if not get_settings().has_fyers:
@@ -145,14 +155,23 @@ def get_scheduler() -> BackgroundScheduler:
                 CronTrigger(hour=6, minute=5, timezone=IST),
                 id="refresh_fyers_session",
             )
+            # Every day, weekends included: expiry circulars come out on any day.
+            scheduler.add_job(
+                refresh_expiries,
+                CronTrigger(hour=8, minute=30, timezone=IST),
+                id="refresh_expiries",
+            )
             _scheduler = scheduler
         return _scheduler
 
 
 def start_scheduler() -> BackgroundScheduler:
+    """Starts the jobs, and runs the expiry refresh once right away (then daily at 08:30 IST)."""
     scheduler = get_scheduler()
     if not scheduler.running:
         scheduler.start()
+        if scheduler.get_job("refresh_expiries") is not None:
+            scheduler.modify_job("refresh_expiries", next_run_time=datetime.now(IST))
         log.info("scheduler started with jobs: %s", [job.id for job in scheduler.get_jobs()])
     return scheduler
 

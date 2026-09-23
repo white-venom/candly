@@ -17,7 +17,7 @@ from candly.core.instruments import EXCHANGES, Instrument, UnknownInstrument, ge
 from candly.core.settings import get_settings
 from candly.core.timeframes import TIMEFRAMES
 from candly.data import clock
-from candly.data.expiries import expiry_info
+from candly.data.expiries import expiry_check, expiry_with_source
 from candly.data.live import get_forming
 from candly.data.sources import fyers
 from candly.data.store import candle_source, data_summary, load_candles, series_stats
@@ -113,10 +113,11 @@ def health() -> dict:
         },
         "markets": markets,
         "ingest": _ingest_status(data_source, settings.has_fyers, fyers_connected),
+        "expiry_check": expiry_check(),
     }
 
 
-def _expiry_json(info: ExpiryInfo | None) -> dict | None:
+def _expiry_json(info: ExpiryInfo | None, source: str | None) -> dict | None:
     if info is None:
         return None
     return {
@@ -124,6 +125,7 @@ def _expiry_json(info: ExpiryInfo | None) -> dict | None:
         "kind": info.kind,
         "days_to_expiry": info.days_to_expiry,
         "is_expiry_day": info.is_expiry_day,
+        "source": source,
     }
 
 
@@ -144,7 +146,7 @@ def instruments() -> list[dict]:
                 tf: {"bars": s["bars"], "first": _epoch(s["first"]), "last": _epoch(s["last"])}
                 for tf, s in summary.get(inst.id, {}).items()
             },
-            "expiry": _expiry_json(expiry_info(inst.id, today)),
+            "expiry": _expiry_json(*expiry_with_source(inst.id, today)),
         }
         for inst in load_watchlist()
     ]

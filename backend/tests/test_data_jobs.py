@@ -1,4 +1,5 @@
 import logging
+import threading
 from datetime import datetime
 
 import pandas as pd
@@ -112,18 +113,39 @@ def test_scheduler_is_not_started_on_import_and_registers_jobs():
             "daily_ingest_mcx",
             "daily_ingest_catchup",
             "refresh_fyers_session",
+            "refresh_expiries",
         }
         catchup = sched.get_job("daily_ingest_catchup")
         assert catchup.args == (("NSE", "BSE", "MCX"),)
         assert str(catchup.trigger.fields[6]) == "40" and str(catchup.trigger.fields[5]) == "8"
+        expiry = sched.get_job("refresh_expiries")
+        assert expiry.func is scheduler.refresh_expiries
+        fields = {f.name: str(f) for f in expiry.trigger.fields}
+        assert (fields["day_of_week"], fields["hour"], fields["minute"]) == ("*", "8", "30")  # weekends too
+        assert str(expiry.trigger.timezone) == "Asia/Kolkata"
         assert scheduler.get_scheduler() is sched
     finally:
         scheduler.stop_scheduler()
 
 
-def test_news_job_never_raises(monkeypatch):
+def test_starting_the_scheduler_refreshes_expiries_at_once(monkeypatch):
+    ran = threading.Event()
+    monkeypatch.setattr(scheduler, "refresh_expiries", ran.set)
+    for job in ("poll_news", "intraday_cycle", "daily_ingest", "refresh_fyers_session"):
+        monkeypatch.setattr(scheduler, job, lambda *args: None)
+    scheduler.stop_scheduler()
+    try:
+        scheduler.start_scheduler()
+        assert ran.wait(timeout=10)
+    finally:
+        scheduler.stop_scheduler()
+
+
+def test_news_and_expiry_jobs_never_raise(monkeypatch):
     def broken():
         raise RuntimeError("feed parser exploded")
 
     monkeypatch.setattr(scheduler, "_poll_news", broken)
+    monkeypatch.setattr(scheduler, "_refresh_expiries", broken)
     assert scheduler.poll_news() == 0
+    assert scheduler.refresh_expiries() is None

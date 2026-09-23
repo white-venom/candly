@@ -539,14 +539,17 @@ def master_day(path: Path) -> str:
 
 def read_master(path: Path) -> pd.DataFrame:
     """Columns expiry (epoch), ticker, underlying, from a downloaded symbol master CSV."""
-    raw = pd.read_csv(path, header=None, dtype=str, keep_default_na=False, on_bad_lines="skip")
-    return pd.DataFrame(
-        {
-            "expiry": pd.to_numeric(raw[MASTER_EXPIRY], errors="coerce"),
-            "ticker": raw[MASTER_TICKER].str.strip(),
-            "underlying": raw[MASTER_UNDERLYING].str.strip(),
-        }
-    )
+    try:
+        raw = pd.read_csv(path, header=None, dtype=str, keep_default_na=False, on_bad_lines="skip")
+        return pd.DataFrame(
+            {
+                "expiry": pd.to_numeric(raw[MASTER_EXPIRY], errors="coerce"),
+                "ticker": raw[MASTER_TICKER].str.strip(),
+                "underlying": raw[MASTER_UNDERLYING].str.strip(),
+            }
+        )
+    except (ValueError, KeyError) as exc:  # empty file, an HTML error page, too few columns
+        raise FyersError(f"unreadable symbol master ({type(exc).__name__}: {exc})") from exc
 
 
 def symbol_master(segment: str, *, retries: int = MAX_RETRIES) -> pd.DataFrame:
@@ -556,16 +559,21 @@ def symbol_master(segment: str, *, retries: int = MAX_RETRIES) -> pd.DataFrame:
     cached = _master_cache.get(path)
     if cached and cached[0] == today:
         return cached[1]
-    if not (path.exists() and master_day(path) == today):
+    if path.exists() and master_day(path) == today:
+        table = read_master(path)
+    else:
         with _client() as client:
             response = _request(client, "GET", SYMBOL_MASTER_URL.format(segment=segment), retries=retries)
         response.raise_for_status()
         path.parent.mkdir(parents=True, exist_ok=True)
         fd, tmp = tempfile.mkstemp(dir=path.parent, suffix=".tmp")
-        with os.fdopen(fd, "wb") as fh:
-            fh.write(response.content)
-        os.replace(tmp, path)
-    table = read_master(path)
+        try:
+            with os.fdopen(fd, "wb") as fh:
+                fh.write(response.content)
+            table = read_master(Path(tmp))  # a broken download never replaces the last good copy
+            os.replace(tmp, path)
+        finally:
+            Path(tmp).unlink(missing_ok=True)
     _master_cache[path] = (today, table)
     return table
 

@@ -355,6 +355,29 @@ type ExpiryInfo = { next: string /* YYYY-MM-DD, IST */; kind: "weekly" | "monthl
   - `--archive-source yahoo`.
   - The 1D ingest re-reads the last 5 sessions and re-fetches up to 10 daily sessions that are missing while intraday data exists.
 
+**Live expiries (daily check)**
+
+Expiry dates change: SEBI reshuffles, holiday shifts and exchange circulars all move them. So live and future expiries come from the exchanges' own contract lists.
+- `data.expiries.refresh_expiries()`
+  - Runs daily at 08:30 IST (weekends too) and at scheduler start.
+  - Downloads the Fyers NSE_FO, BSE_FO and MCX_COM masters.
+  - Appends every listed date to `data/expiries/live.json` with a `first_seen` date. A date the exchange stops listing is kept but marked `withdrawn`.
+  - Compares the next 3 dates with the rules and logs each mismatch once.
+- Precedence:
+  - Exchange dates are used from the first refresh until 3 days after the last good one.
+  - Before that, or if the data is stale, NSE/BSE fall back to the rules in `config/expiry.yaml`, which also serve backtests.
+  - MCX always uses stored exchange dates.
+- Helpers: `expiry_with_source()`, `exchange_expiries()`, `expiry_check()`.
+- API:
+
+```ts
+// Health gains:
+expiry_check?: { status: "ok" | "mismatch" | "unavailable"; checked_at: number | null;
+                 mismatches: { instrument: string; rules: string; exchange: string }[] };
+// ExpiryInfo (in Instrument.expiry) gains:
+source?: "exchange" | "rules";
+```
+
 **Signals and calls**
 - `ScannerRow` excludes instruments with `tradable=false` (e.g. INDIAVIX).
 - A directional call (`abstain=false`) always has a non-null `invalidation` at least `patterns.min_stop_atr` ATR from the reference close. Otherwise the forecast abstains.
