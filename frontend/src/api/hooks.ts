@@ -1,0 +1,163 @@
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { apiGet, apiPost } from "./client";
+import type {
+  AccuracyResponse,
+  CandlesResponse,
+  Forecast,
+  FyersCodeRequest,
+  FyersStatus,
+  Health,
+  IndicatorInfo,
+  IndicatorsResponse,
+  Instrument,
+  LedgerEntry,
+  LevelsResponse,
+  NewsItem,
+  PatternSignal,
+  ScannerRow,
+  ScorecardResponse,
+} from "./types";
+
+const SECOND = 1000;
+const MINUTE = 60 * SECOND;
+
+export function useHealth() {
+  return useQuery({
+    queryKey: ["health"],
+    queryFn: ({ signal }) => apiGet<Health>("/health", undefined, signal),
+    refetchInterval: 30 * SECOND,
+  });
+}
+
+export function useFyersStatus(enabled: boolean) {
+  return useQuery({
+    queryKey: ["fyers-status"],
+    queryFn: ({ signal }) => apiGet<FyersStatus>("/auth/fyers/status", undefined, signal),
+    enabled,
+    refetchInterval: 5 * MINUTE,
+  });
+}
+
+export function useSubmitFyersCode() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (body: FyersCodeRequest) => apiPost<FyersStatus>("/auth/fyers/code", body),
+    onSuccess: async () => {
+      await Promise.all([
+        client.invalidateQueries({ queryKey: ["health"] }),
+        client.invalidateQueries({ queryKey: ["fyers-status"] }),
+      ]);
+    },
+  });
+}
+
+export function useInstruments() {
+  return useQuery({
+    queryKey: ["instruments"],
+    queryFn: ({ signal }) => apiGet<Instrument[]>("/instruments", undefined, signal),
+    staleTime: 5 * MINUTE,
+  });
+}
+
+export function useCandles(instrument: string, tf: string, limit = 500) {
+  return useQuery({
+    queryKey: ["candles", instrument, tf, limit],
+    queryFn: ({ signal }) => apiGet<CandlesResponse>("/candles", { instrument, tf, limit }, signal),
+    enabled: Boolean(instrument && tf),
+    refetchInterval: MINUTE,
+  });
+}
+
+export function useIndicatorCatalog() {
+  return useQuery({
+    queryKey: ["indicator-catalog"],
+    queryFn: ({ signal }) => apiGet<IndicatorInfo[]>("/indicators/catalog", undefined, signal),
+    staleTime: Infinity,
+  });
+}
+
+export function useIndicators(instrument: string, tf: string, names: string[], limit = 500) {
+  const joined = [...names].sort().join(",");
+  return useQuery({
+    queryKey: ["indicators", instrument, tf, joined, limit],
+    queryFn: ({ signal }) => apiGet<IndicatorsResponse>("/indicators", { instrument, tf, names: joined, limit }, signal),
+    enabled: Boolean(instrument && tf && joined),
+    refetchInterval: MINUTE,
+  });
+}
+
+export function usePatterns(instrument: string, tf: string, limit = 200) {
+  return useQuery({
+    queryKey: ["patterns", instrument, tf, limit],
+    queryFn: ({ signal }) => apiGet<PatternSignal[]>("/patterns", { instrument, tf, limit }, signal),
+    enabled: Boolean(instrument && tf),
+    refetchInterval: MINUTE,
+  });
+}
+
+export function useLevels(instrument: string, tf: string) {
+  return useQuery({
+    queryKey: ["levels", instrument, tf],
+    queryFn: ({ signal }) => apiGet<LevelsResponse>("/levels", { instrument, tf }, signal),
+    enabled: Boolean(instrument && tf),
+    refetchInterval: MINUTE,
+  });
+}
+
+export function useForecast(instrument: string, tf: string, steps = 3) {
+  return useQuery({
+    queryKey: ["forecast", instrument, tf, steps],
+    queryFn: ({ signal }) => apiGet<Forecast>("/forecast", { instrument, tf, steps }, signal),
+    enabled: Boolean(instrument && tf),
+    refetchInterval: MINUTE,
+  });
+}
+
+export function useNews(instrument: string | null, limit = 50) {
+  return useQuery({
+    queryKey: ["news", instrument, limit],
+    queryFn: ({ signal }) => apiGet<NewsItem[]>("/news", { instrument, limit }, signal),
+    refetchInterval: 5 * MINUTE,
+  });
+}
+
+export function useScanner(tf: string) {
+  return useQuery({
+    queryKey: ["scanner", tf],
+    queryFn: ({ signal }) => apiGet<ScannerRow[]>("/scanner", { tf }, signal),
+    placeholderData: keepPreviousData,
+    refetchInterval: MINUTE,
+  });
+}
+
+export type ScorecardFilters = { tf: string; instrument: string | null; pattern: string | null; certifiedOnly: boolean };
+
+export function useScorecard({ tf, instrument, pattern, certifiedOnly }: ScorecardFilters) {
+  return useQuery({
+    queryKey: ["scorecard", tf, instrument, pattern, certifiedOnly],
+    queryFn: ({ signal }) =>
+      apiGet<ScorecardResponse>("/scorecard", { tf, instrument, pattern, certified_only: certifiedOnly }, signal),
+    placeholderData: keepPreviousData,
+    staleTime: 5 * MINUTE,
+  });
+}
+
+export type LedgerFilters = { instrument: string | null; tf: string | null; status?: LedgerEntry["status"] | null; limit?: number };
+
+export function useLedger({ instrument, tf, status = null, limit = 100 }: LedgerFilters) {
+  return useQuery({
+    queryKey: ["ledger", instrument, tf, status, limit],
+    queryFn: ({ signal }) => apiGet<LedgerEntry[]>("/ledger", { instrument, tf, status, limit }, signal),
+    placeholderData: keepPreviousData,
+    refetchInterval: MINUTE,
+  });
+}
+
+export function useAccuracy(instrument: string | null, tf: string | null, days: number) {
+  return useQuery({
+    queryKey: ["accuracy", instrument, tf, days],
+    queryFn: ({ signal }) => apiGet<AccuracyResponse>("/accuracy", { instrument, tf, days }, signal),
+    placeholderData: keepPreviousData,
+    refetchInterval: 5 * MINUTE,
+  });
+}

@@ -4,7 +4,39 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>frontend</title>
+    <meta name="color-scheme" content="dark light" />
+    <title>candly</title>
+    <!-- Sets data-theme before first paint (URL ?theme= > saved choice > system preference > dark). Mirrors src/lib/theme.ts. -->
+    <script id="theme-init">
+      (function () {
+        var KEY = "candly.theme";
+        var theme = null;
+        var param = null;
+        try {
+          param = new URLSearchParams(window.location.search).get("theme");
+        } catch (e) {}
+        if (param === "light" || param === "dark") {
+          theme = param;
+          try {
+            window.localStorage.setItem(KEY, param);
+          } catch (e) {}
+        } else {
+          try {
+            var saved = window.localStorage.getItem(KEY);
+            if (saved === "light" || saved === "dark") theme = saved;
+          } catch (e) {}
+        }
+        if (!theme) {
+          try {
+            if (window.matchMedia("(prefers-color-scheme: light)").matches) theme = "light";
+            else if (window.matchMedia("(prefers-color-scheme: dark)").matches) theme = "dark";
+          } catch (e) {}
+        }
+        theme = theme || "dark";
+        document.documentElement.setAttribute("data-theme", theme);
+        document.documentElement.style.colorScheme = theme;
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

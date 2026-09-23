@@ -1,32 +1,38 @@
-# React + TypeScript + Vite
+# candly dashboard
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+React + TypeScript front end for candly: the chart with patterns, indicators, levels and the forecast, plus Scanner, Scorecard, Accuracy (expected vs actual) and News pages. The backend computes every number; this app only displays them.
 
-Currently, two official plugins are available:
+## Commands (run inside `frontend/`)
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+| | |
+|---|---|
+| `npm run dev` | http://localhost:5173, proxies `/api` to `http://127.0.0.1:8000` |
+| `npm run build` | type-check (`tsc -b`) and production build |
+| `npm run lint` | oxlint |
+| `npm run test` | vitest (jsdom) |
 
-## React Compiler
+Start the API first (see the repo's CLAUDE.md). Without it every view shows "Backend not running".
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Layout
 
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```
+src/api/        types.ts mirrors docs/CONTRACTS.md §4; client.ts (typed errors); hooks.ts (TanStack Query)
+src/chart/      lightweight-charts v5: chartTheme.ts (pure theme → options), transforms.ts (pure data → series),
+                PriceChartController.ts (creates the chart once, applies data/theme onto it), PriceChart.tsx
+src/components/ header, status pill, Fyers connect, why-panel pieces, SVG charts, shared states
+src/pages/      Chart, Scanner, Scorecard, Accuracy, News
+src/lib/        IST time formatting, colour tokens, theme resolution, formatting helpers
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+Routes: `/chart/NSE:RELIANCE/1D`, `/scanner?tf=`, `/scorecard?tf=&instrument=&pattern=&certified=1`, `/accuracy?instrument=&tf=&days=`, `/news?instrument=`.
+
+## Time
+
+The API sends UTC UNIX seconds. They go into the chart unchanged; IST appears only through `localization.timeFormatter`, `timeScale.tickMarkFormatter` and the `src/lib/time.ts` formatters.
+
+## Theme
+
+- Colour tokens live in `src/index.css` under `:root[data-theme="dark"]` and `:root[data-theme="light"]`, exposed to Tailwind v4 through `@theme inline` (the default Tailwind palette is removed, so components can only use tokens).
+- `src/lib/palette.ts` mirrors the tokens for the canvas chart; `palette.test.ts` fails if the two drift or a pair drops below WCAG AA.
+- First paint: the inline script in `index.html` sets `data-theme` from `?theme=light|dark` (also saved), else the saved choice, else `prefers-color-scheme`, else dark.
+- Toggling re-colours the price chart in place (`applyOptions`, no re-creation). SVG charts use the CSS variables, so they follow automatically.
