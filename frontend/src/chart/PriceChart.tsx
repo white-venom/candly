@@ -12,6 +12,8 @@ type Props = {
   forming: Candle | null;
   signals: PatternSignal[];
   levels: Level[];
+  /** draw the levels dashed and dimmed: a newer session exists than the one they come from */
+  levelsStale: boolean;
   forecast: Forecast | null;
   plots: IndicatorPlot[];
   height: number;
@@ -19,7 +21,7 @@ type Props = {
   onHover?: (bar: HoverBar | null) => void;
 };
 
-export function PriceChart({ tf, viewKey, candles, forming, signals, levels, forecast, plots, height, label, onHover }: Props) {
+export function PriceChart({ tf, viewKey, candles, forming, signals, levels, levelsStale, forecast, plots, height, label, onHover }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [controller, setController] = useState<PriceChartController | null>(null);
   const { theme } = useTheme();
@@ -59,8 +61,8 @@ export function PriceChart({ tf, viewKey, candles, forming, signals, levels, for
   }, [controller, signals]);
 
   useEffect(() => {
-    controller?.setLevels(levels);
-  }, [controller, levels]);
+    controller?.setLevels(levels, levelsStale);
+  }, [controller, levels, levelsStale]);
 
   useEffect(() => {
     controller?.setForecast(forecast);

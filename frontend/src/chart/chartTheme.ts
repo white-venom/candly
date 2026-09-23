@@ -29,6 +29,8 @@ export type ChartTheme = {
   invalidation: LineLook;
   invalidationAbstain: LineLook;
   levels: Record<Level["kind"], LineLook>;
+  /** levels built from an older session than the newest data: dashed and dimmed */
+  levelsStale: Record<Level["kind"], LineLook>;
   markers: Record<"confirmed" | "forming", Record<Direction, string>>;
   histogram: { up: string; down: string };
   indicators: readonly string[];
@@ -68,6 +70,13 @@ export function chartTheme(theme: Theme): ChartTheme {
     crosshairMarkerVisible: false,
   });
   const level = (color: string): LineLook => ({ color, lineStyle: LineStyle.Dotted, lineWidth: 1 });
+  const staleLevel = (color: string): LineLook => ({ color: withAlpha(color, 0.45), lineStyle: LineStyle.LargeDashed, lineWidth: 1 });
+  const byRole = (look: (color: string) => LineLook) =>
+    Object.fromEntries([
+      ...SUPPORT.map((k) => [k, look(t.up)]),
+      ...RESISTANCE.map((k) => [k, look(t.down)]),
+      ...PIVOT.map((k) => [k, look(t.neutral)]),
+    ]) as Record<Level["kind"], LineLook>;
 
   return {
     tokens: t,
@@ -109,11 +118,8 @@ export function chartTheme(theme: Theme): ChartTheme {
     },
     invalidation: { color: t.danger, lineStyle: LineStyle.Dashed, lineWidth: 2 },
     invalidationAbstain: { color: t.abstain, lineStyle: LineStyle.Dashed, lineWidth: 1 },
-    levels: Object.fromEntries([
-      ...SUPPORT.map((k) => [k, level(t.up)]),
-      ...RESISTANCE.map((k) => [k, level(t.down)]),
-      ...PIVOT.map((k) => [k, level(t.neutral)]),
-    ]) as Record<Level["kind"], LineLook>,
+    levels: byRole(level),
+    levelsStale: byRole(staleLevel),
     markers: {
       confirmed: { bullish: t.up, bearish: t.down, neutral: t.neutral },
       forming: {

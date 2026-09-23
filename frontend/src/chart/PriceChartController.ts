@@ -59,6 +59,7 @@ export class PriceChartController {
   private signals: PatternSignal[] = [];
   private forecast: Forecast | null = null;
   private levelLines: { level: Level; line: IPriceLine }[] = [];
+  private levelsStale = false;
   private invalidationLine: IPriceLine | null = null;
   private indicatorHandles: IndicatorHandle[] = [];
 
@@ -100,7 +101,7 @@ export class PriceChartController {
     this.candleSeries.applyOptions(th.candles);
     this.ghostSeries.applyOptions(this.forecast?.abstain ? th.ghostAbstain : th.ghost);
     for (const key of BAND_KEYS) this.bandSeries[key].applyOptions(th.band[key]);
-    for (const { level, line } of this.levelLines) line.applyOptions(th.levels[level.kind]);
+    for (const { level, line } of this.levelLines) line.applyOptions(this.levelLook(level));
     this.invalidationLine?.applyOptions(this.invalidationLook());
     for (const handle of this.indicatorHandles) this.styleIndicator(handle);
     // Per-bar colours (forming candle, volume) and marker colours live in the data.
@@ -127,15 +128,17 @@ export class PriceChartController {
     this.renderMarkers();
   }
 
-  setLevels(levels: Level[]): void {
+  /** Stale levels (built from an older session than the newest data) are drawn dashed and dimmed. */
+  setLevels(levels: Level[], stale = false): void {
     for (const { line } of this.levelLines) this.candleSeries.removePriceLine(line);
+    this.levelsStale = stale;
     this.levelLines = levels.map((level) => ({
       level,
       line: this.candleSeries.createPriceLine({
         price: level.price,
         title: level.label,
         axisLabelVisible: true,
-        ...this.theme.levels[level.kind],
+        ...this.levelLook(level),
       }),
     }));
   }
@@ -216,6 +219,10 @@ export class PriceChartController {
   private renderMarkers(): void {
     const times = new Set(barsWithForming(this.candles, this.forming).bars.map((c) => c.time));
     this.markers.setMarkers(signalMarkers(this.signals, times, this.theme));
+  }
+
+  private levelLook(level: Level) {
+    return (this.levelsStale ? this.theme.levelsStale : this.theme.levels)[level.kind];
   }
 
   private invalidationLook() {

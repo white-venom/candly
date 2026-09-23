@@ -46,12 +46,14 @@ export function ChartLegend({
   forecast,
   plots,
   hasLevels,
+  levelsStale,
 }: {
   tf: string;
   bar: HoverBar | null;
   forecast: Forecast | null;
   plots: IndicatorPlot[];
   hasLevels: boolean;
+  levelsStale: boolean;
 }) {
   const groups = [...new Map(plots.map((p) => [p.group, p])).values()];
   return (
@@ -97,13 +99,13 @@ export function ChartLegend({
         {hasLevels && (
           <Key
             swatch={
-              <span className="flex w-4 flex-col gap-0.5">
-                <span className="border-t border-dotted border-down" />
-                <span className="border-t border-dotted border-up" />
+              <span className={clsx("flex w-4 flex-col gap-0.5", levelsStale && "opacity-50")}>
+                <span className={clsx("border-t border-down", levelsStale ? "border-dashed" : "border-dotted")} />
+                <span className={clsx("border-t border-up", levelsStale ? "border-dashed" : "border-dotted")} />
               </span>
             }
           >
-            Levels
+            {levelsStale ? "Levels (stale)" : "Levels"}
           </Key>
         )}
         {groups.map((p) => (

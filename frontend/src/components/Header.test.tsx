@@ -67,4 +67,21 @@ describe("header", () => {
     expect(screen.getByTestId("location").textContent).toBe("/chart/MCX:CRUDEOIL/1D");
     expect(within(screen.getByRole("group", { name: "Timeframe" })).getAllByRole("button").map((b) => b.textContent)).toEqual(["1D"]);
   });
+
+  it("shows the selected instrument's expiry next to it, highlighted on expiry day", async () => {
+    const user = userEvent.setup();
+    const onExpiryDay = instruments.map((i) =>
+      i.id === "NSE:RELIANCE" ? { ...i, expiry: { next: "2026-09-23", kind: "monthly" as const, days_to_expiry: 0, is_expiry_day: true } } : i,
+    );
+    mockApi({ "/api/health": health, "/api/instruments": onExpiryDay });
+    renderWithProviders(<Header />, { route: "/chart/NSE:RELIANCE/1D" });
+    const today = await screen.findByText("Expiry today");
+    expect(today.className).toContain("text-forming");
+    expect(screen.getByRole("banner").contains(today)).toBe(true);
+
+    await user.selectOptions(screen.getByLabelText("Instrument"), "MCX:CRUDEOIL");
+    const contract = screen.getByText("Contract expiry Mon 19 Oct · 17d");
+    expect(contract.className).toContain("text-ink-muted");
+    expect(screen.queryByText("Expiry today")).toBeNull();
+  });
 });

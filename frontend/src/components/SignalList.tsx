@@ -1,8 +1,9 @@
 import { useState } from "react";
 import type { PatternSignal, ScoreStats } from "../api/types";
 import { fmtInt, fmtNum, fmtPct, fmtPrice, fmtProb, fmtPts, fmtPValue, humanize, signTone } from "../lib/format";
+import type { SignalFilters } from "../lib/signalFilters";
 import { formatBarTimeIST } from "../lib/time";
-import { Badge, CertifiedBadge, DirectionTag, FormingBadge, Stat } from "./ui";
+import { Badge, CertifiedBadge, DirectionTag, FormingBadge, Stat, type Tone } from "./ui";
 
 function StatsGrid({ stats }: { stats: ScoreStats }) {
   const edge = stats.hit_rate - stats.base_rate;
@@ -26,8 +27,15 @@ function StatsGrid({ stats }: { stats: ScoreStats }) {
   );
 }
 
+function expiryTag(context: PatternSignal["context"]): { text: string; tone: Tone } | null {
+  if (context.expiry_day) return { text: "expiry day", tone: "warn" };
+  const days = context.days_to_expiry;
+  if (days === null || days === undefined) return null;
+  return { text: `expiry in ${days}d`, tone: "neutral" };
+}
+
 function ContextTags({ context }: { context: PatternSignal["context"] }) {
-  const tags = [
+  const plain = [
     context.trend && `trend ${context.trend}`,
     context.vol_regime && `vol ${context.vol_regime}`,
     context.session_phase && humanize(context.session_phase),
@@ -35,12 +43,14 @@ function ContextTags({ context }: { context: PatternSignal["context"] }) {
     context.near_level && `near ${humanize(context.near_level)}`,
     context.rsi14 !== null && `RSI ${fmtNum(context.rsi14, 0)}`,
   ].filter((t): t is string => Boolean(t));
+  const expiry = expiryTag(context);
+  const tags = [...(expiry ? [expiry] : []), ...plain.map((text) => ({ text, tone: "neutral" as const }))];
   if (tags.length === 0) return null;
   return (
     <ul aria-label="Context" className="mt-1.5 flex flex-wrap gap-1">
       {tags.map((t) => (
-        <li key={t}>
-          <Badge>{t}</Badge>
+        <li key={t.text}>
+          <Badge tone={t.tone}>{t.text}</Badge>
         </li>
       ))}
     </ul>
@@ -67,6 +77,33 @@ function SignalItem({ signal, tf }: { signal: PatternSignal; tf: string }) {
         <p className="mt-1 text-xs text-ink-muted">Invalidation {fmtPrice(signal.invalidation)}</p>
       )}
     </li>
+  );
+}
+
+export function SignalFilterToggles({ filters, onChange }: { filters: SignalFilters; onChange: (next: SignalFilters) => void }) {
+  return (
+    <fieldset className="mb-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-ink-muted">
+      <legend className="sr-only">Signal filters, for this list and the chart markers</legend>
+      <label className="inline-flex cursor-pointer items-center gap-1.5 hover:text-ink">
+        <input
+          type="checkbox"
+          checked={filters.showNeutral}
+          onChange={(e) => onChange({ ...filters, showNeutral: e.target.checked })}
+          className="accent-accent"
+        />
+        Show neutral patterns
+      </label>
+      <label className="inline-flex cursor-pointer items-center gap-1.5 hover:text-ink">
+        <input
+          type="checkbox"
+          checked={filters.certifiedOnly}
+          onChange={(e) => onChange({ ...filters, certifiedOnly: e.target.checked })}
+          className="accent-accent"
+        />
+        Certified only
+      </label>
+      <span className="text-ink-faint">Also filters the chart markers.</span>
+    </fieldset>
   );
 }
 

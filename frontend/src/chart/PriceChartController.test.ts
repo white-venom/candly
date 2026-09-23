@@ -94,6 +94,22 @@ describe("PriceChartController theme switching", () => {
     );
   });
 
+  it("draws stale levels dashed and dimmed, and keeps that look across a theme switch", () => {
+    const { controller, candleSeries } = setup();
+    const dark = chartTheme("dark");
+    controller.setLevels([{ price: 110, label: "Prev day high", kind: "pdh" }], true);
+    expect(candleSeries.createPriceLine).toHaveBeenLastCalledWith(expect.objectContaining({ price: 110, ...dark.levelsStale.pdh }));
+    expect(dark.levelsStale.pdh.lineStyle).not.toBe(dark.levels.pdh.lineStyle);
+    expect(dark.levelsStale.pdh.color).not.toBe(dark.levels.pdh.color);
+
+    const line = candleSeries.createPriceLine.mock.results.at(-1)!.value;
+    controller.setTheme("light");
+    expect(line.applyOptions).toHaveBeenLastCalledWith(chartTheme("light").levelsStale.pdh);
+
+    controller.setLevels([{ price: 110, label: "Prev day high", kind: "pdh" }], false);
+    expect(candleSeries.createPriceLine).toHaveBeenLastCalledWith(expect.objectContaining(chartTheme("light").levels.pdh));
+  });
+
   it("clears the forecast drawing when there is no forecast", () => {
     const { controller, candleSeries, ghost, p10 } = setup();
     controller.setForecast(forecast);

@@ -1,6 +1,7 @@
 import type { Forecast } from "../api/types";
 import { fmtInt, fmtPct, fmtPrice, fmtProb, fmtPts, signTone } from "../lib/format";
 import { formatBarTimeIST, formatDateTimeIST } from "../lib/time";
+import { TradeCard } from "./TradeCard";
 import { Badge, DirectionTag, Stat } from "./ui";
 
 function Abstaining({ forecast }: { forecast: Forecast }) {
@@ -44,6 +45,7 @@ export function ForecastSummary({ forecast, tf }: { forecast: Forecast; tf: stri
   return (
     <div className="flex flex-col gap-3">
       {forecast.abstain ? <Abstaining forecast={forecast} /> : <Call forecast={forecast} />}
+      {!forecast.abstain && forecast.trade && <TradeCard trade={forecast.trade} />}
 
       <dl className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-3">
         <Stat

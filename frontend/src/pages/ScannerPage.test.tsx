@@ -7,11 +7,34 @@ import { ScannerPage } from "./ScannerPage";
 
 const rows = [
   scannerRow({}),
-  scannerRow({ instrument: "NSE:TCS", name: "TCS", change_pct: -0.4, p_up: 0.5, score: 0, abstain: true, direction: "neutral", top_signal: null }),
-  scannerRow({ instrument: "NSE:INFY", name: "Infosys", change_pct: 2.5, score: 0.02, rel_volume: null }),
+  scannerRow({
+    instrument: "NSE:TCS",
+    name: "TCS",
+    change_pct: -0.4,
+    p_up: 0.5,
+    score: 0,
+    abstain: true,
+    abstain_reason: "edge below costs",
+    direction: "neutral",
+    top_signal: null,
+  }),
+  scannerRow({
+    instrument: "NSE:INFY",
+    name: "Infosys",
+    change_pct: 2.5,
+    score: 0.02,
+    rel_volume: null,
+    expiry: { next: "2026-09-23", kind: "monthly", days_to_expiry: 0, is_expiry_day: true },
+  }),
 ];
 
 const names = () => screen.getAllByRole("row").slice(1).map((r) => within(r).getAllByRole("cell")[0].querySelector("a")!.textContent);
+
+/** The text of one column, row by row, found by its header. */
+function column(label: string): (string | null)[] {
+  const index = screen.getAllByRole("columnheader").findIndex((h) => h.textContent?.startsWith(label));
+  return screen.getAllByRole("row").slice(1).map((r) => within(r).getAllByRole("cell")[index].textContent);
+}
 
 describe("scanner page", () => {
   it("shows loading, then rows sorted by score", async () => {
@@ -21,6 +44,17 @@ describe("scanner page", () => {
     await screen.findByText("TCS");
     expect(names()).toEqual(["Reliance Industries", "Infosys", "TCS"]);
     expect(screen.getByText("no clear edge")).toBeTruthy();
+  });
+
+  it("shows why a row abstains, and each instrument's expiry", async () => {
+    mockApi({ "/api/scanner": [...rows, scannerRow({ instrument: "NSE:SBIN", name: "SBI", score: 0, abstain: true, expiry: null })] });
+    renderWithProviders(<ScannerPage />, { route: "/scanner?tf=1D" });
+    await screen.findByText("TCS");
+    expect(names()).toEqual(["Reliance Industries", "Infosys", "TCS", "SBI"]);
+    // SBI abstains without a reason and has no expiry.
+    expect(column("Reason")).toEqual(["—", "—", "edge below costs", "—"]);
+    expect(column("Expiry")).toEqual(["Monthly expiry Tue 29 Sep · 4d", "Expiry today", "Monthly expiry Tue 29 Sep · 4d", "—"]);
+    expect(screen.getByText("Expiry today").className).toContain("text-forming");
   });
 
   it("sorts by a column and flips direction", async () => {

@@ -17,13 +17,16 @@ import { PriceChart } from "../chart/PriceChart";
 import { useIndicatorSelection } from "../chart/indicatorSelection";
 import { latestBar, planIndicators, type HoverBar } from "../chart/transforms";
 import { ErrorBoundary } from "../components/ErrorBoundary";
+import { ExpiryBadge } from "../components/ExpiryBadge";
 import { ForecastSummary } from "../components/ForecastSummary";
 import { NewsItemRow } from "../components/NewsItemRow";
-import { SignalList } from "../components/SignalList";
+import { SignalFilterToggles, SignalList } from "../components/SignalList";
 import { EmptyState, ErrorState, LoadingState, QueryView } from "../components/States";
 import { Card } from "../components/ui";
 import { describeError } from "../lib/errors";
 import { chartPath, defaultSelection, readLastSelection, writeLastSelection } from "../lib/routes";
+import { emptySignalsText, useSignalFilters, type SignalFilters } from "../lib/signalFilters";
+import { formatDateIST } from "../lib/time";
 import { defaultTimeframe, sortTimeframes } from "../lib/timeframes";
 
 const NO_CANDLES: Candle[] = [];
@@ -50,9 +53,11 @@ export function ChartRedirect() {
   return <LoadingState label="Loading instruments…" />;
 }
 
-function WhyPanel({ instrument, tf }: { instrument: string; tf: string }) {
+type SignalFilterProps = { filters: SignalFilters; onFiltersChange: (next: SignalFilters) => void };
+
+function WhyPanel({ instrument, tf, filters, onFiltersChange }: { instrument: string; tf: string } & SignalFilterProps) {
   const forecast = useForecast(instrument, tf);
-  const patterns = usePatterns(instrument, tf);
+  const patterns = usePatterns(instrument, tf, filters);
   const news = useNews(instrument, 8);
   return (
     <div className="flex flex-col gap-3">
@@ -62,7 +67,8 @@ function WhyPanel({ instrument, tf }: { instrument: string; tf: string }) {
         </QueryView>
       </Card>
       <Card title="Signals">
-        <QueryView query={patterns} isEmpty={(p) => p.length === 0} empty="No pattern signals on this chart yet.">
+        <SignalFilterToggles filters={filters} onChange={onFiltersChange} />
+        <QueryView query={patterns} isEmpty={(p) => p.length === 0} empty={emptySignalsText(filters)}>
           {(p) => <SignalList signals={p} tf={tf} />}
         </QueryView>
       </Card>
@@ -81,9 +87,9 @@ function WhyPanel({ instrument, tf }: { instrument: string; tf: string }) {
   );
 }
 
-function ChartView({ instrument, tf, name }: { instrument: string; tf: string; name: string }) {
+function ChartView({ instrument, tf, name, filters }: { instrument: string; tf: string; name: string; filters: SignalFilters }) {
   const candles = useCandles(instrument, tf);
-  const patterns = usePatterns(instrument, tf);
+  const patterns = usePatterns(instrument, tf, filters);
   const levels = useLevels(instrument, tf);
   const forecast = useForecast(instrument, tf);
   const catalog = useIndicatorCatalog();
@@ -104,6 +110,7 @@ function ChartView({ instrument, tf, name }: { instrument: string; tf: string; n
   const forecastData = forecast.data ?? null;
   const shownBar = hover ?? latestBar(closed, forming);
   const levelList = levels.data?.levels ?? NO_LEVELS;
+  const levelsStale = levels.data?.stale === true;
 
   return (
     <Card className="min-w-0">
@@ -120,7 +127,20 @@ function ChartView({ instrument, tf, name }: { instrument: string; tf: string; n
       >
         {(data) => (
           <>
-            <ChartLegend tf={tf} bar={shownBar} forecast={forecastData} plots={plots} hasLevels={levelList.length > 0} />
+            <ChartLegend
+              tf={tf}
+              bar={shownBar}
+              forecast={forecastData}
+              plots={plots}
+              hasLevels={levelList.length > 0}
+              levelsStale={levelsStale}
+            />
+            {levelsStale && (
+              <p role="status" className="mb-1 px-1 text-xs font-medium text-forming">
+                {levels.data?.as_of !== undefined ? `Levels from ${formatDateIST(levels.data.as_of)}` : "Levels from an older session"}
+                {" — newer session data exists"}
+              </p>
+            )}
             <ErrorBoundary label="price chart">
               <PriceChart
                 tf={tf}
@@ -129,6 +149,7 @@ function ChartView({ instrument, tf, name }: { instrument: string; tf: string; n
                 forming={data.forming}
                 signals={patterns.data ?? NO_SIGNALS}
                 levels={levelList}
+                levelsStale={levelsStale}
                 forecast={forecastData}
                 plots={plots}
                 height={PRICE_PANE_HEIGHT + OSCILLATOR_PANE_HEIGHT * oscillatorPanes}
@@ -157,6 +178,7 @@ function ChartView({ instrument, tf, name }: { instrument: string; tf: string; n
 export function ChartPage() {
   const { instrument = "", tf = "" } = useParams();
   const instruments = useInstruments();
+  const { filters, update: setFilters } = useSignalFilters();
   const info = instruments.data?.find((i) => i.id === instrument);
   const valid = info !== undefined && info.timeframes.includes(tf);
 
@@ -192,13 +214,16 @@ export function ChartPage() {
   return (
     <div className="flex flex-col gap-3 xl:flex-row xl:items-start">
       <div className="min-w-0 flex-1">
-        <h1 className="mb-2 text-lg font-semibold text-ink">
-          {info.name} <span className="text-sm font-normal text-ink-muted">{info.id} · {tf}</span>
-        </h1>
-        <ChartView instrument={instrument} tf={tf} name={info.name} />
+        <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+          <h1 className="text-lg font-semibold text-ink">
+            {info.name} <span className="text-sm font-normal text-ink-muted">{info.id} · {tf}</span>
+          </h1>
+          {info.expiry && <ExpiryBadge expiry={info.expiry} />}
+        </div>
+        <ChartView instrument={instrument} tf={tf} name={info.name} filters={filters} />
       </div>
       <aside aria-label="Why" className="w-full xl:w-[400px] xl:shrink-0">
-        <WhyPanel instrument={instrument} tf={tf} />
+        <WhyPanel instrument={instrument} tf={tf} filters={filters} onFiltersChange={setFilters} />
       </aside>
     </div>
   );

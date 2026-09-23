@@ -31,6 +31,11 @@ export function fmtPrice(x: Num): string {
   return isNum(x) ? priceFormat.format(x) : DASH;
 }
 
+/** Rupees, Indian digit grouping: 100000 → "₹1,00,000". */
+export function fmtInr(x: Num, digits = 0): string {
+  return isNum(x) ? `₹${x.toLocaleString("en-IN", { minimumFractionDigits: digits, maximumFractionDigits: digits })}` : DASH;
+}
+
 export function fmtInt(x: Num): string {
   return isNum(x) ? intFormat.format(x) : DASH;
 }

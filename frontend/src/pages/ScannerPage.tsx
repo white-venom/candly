@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
 import { useScanner } from "../api/hooks";
 import type { ScannerRow } from "../api/types";
+import { ExpiryBadge } from "../components/ExpiryBadge";
 import { QueryView } from "../components/States";
 import { TimeframeSelect } from "../components/TimeframeSelect";
 import { Badge, CertifiedBadge, DirectionTag, FormingBadge } from "../components/ui";
@@ -22,9 +23,11 @@ const COLUMNS: { key: SortKey | null; label: string; numeric?: boolean }[] = [
   { key: "p_up", label: "p(up) vs base", numeric: true },
   { key: "score", label: "Edge", numeric: true },
   { key: null, label: "Direction" },
+  { key: null, label: "Reason" },
   { key: null, label: "Top signal" },
   { key: "rel_volume", label: "Rel vol", numeric: true },
   { key: null, label: "Trend" },
+  { key: null, label: "Expiry" },
   { key: "time", label: "Bar (IST)" },
 ];
 
@@ -57,6 +60,9 @@ function Row({ row }: { row: ScannerRow }) {
       <td className="px-2 py-1.5">
         {row.abstain ? <span className="text-ink-faint">no clear edge</span> : <DirectionTag direction={row.direction} />}
       </td>
+      <td className="px-2 py-1.5 text-xs text-ink-muted">
+        {row.abstain && row.abstain_reason ? row.abstain_reason : <span className="text-ink-faint">—</span>}
+      </td>
       <td className="px-2 py-1.5">
         {row.top_signal ? (
           <span className="inline-flex flex-wrap items-center gap-1">
@@ -70,6 +76,7 @@ function Row({ row }: { row: ScannerRow }) {
       </td>
       <td className="px-2 py-1.5 text-right">{row.rel_volume === null ? "—" : `×${fmtNum(row.rel_volume, 1)}`}</td>
       <td className="px-2 py-1.5 text-ink-muted">{row.trend ?? "—"}</td>
+      <td className="px-2 py-1.5">{row.expiry ? <ExpiryBadge expiry={row.expiry} /> : <span className="text-ink-faint">—</span>}</td>
       <td className="px-2 py-1.5 text-xs whitespace-nowrap text-ink-muted">{formatBarTimeIST(row.time, row.tf)}</td>
     </tr>
   );

@@ -1,4 +1,5 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { applySignalFilters, type SignalFilters } from "../lib/signalFilters";
 import { apiGet, apiPost } from "./client";
 import type {
   AccuracyResponse,
@@ -86,10 +87,19 @@ export function useIndicators(instrument: string, tf: string, names: string[], l
   });
 }
 
-export function usePatterns(instrument: string, tf: string, limit = 200) {
+export function usePatterns(instrument: string, tf: string, filters: SignalFilters, limit = 200) {
+  const { showNeutral, certifiedOnly } = filters;
   return useQuery({
-    queryKey: ["patterns", instrument, tf, limit],
-    queryFn: ({ signal }) => apiGet<PatternSignal[]>("/patterns", { instrument, tf, limit }, signal),
+    queryKey: ["patterns", instrument, tf, limit, showNeutral, certifiedOnly],
+    queryFn: async ({ signal }) =>
+      applySignalFilters(
+        await apiGet<PatternSignal[]>(
+          "/patterns",
+          { instrument, tf, limit, directional_only: !showNeutral, certified_only: certifiedOnly },
+          signal,
+        ),
+        { showNeutral, certifiedOnly },
+      ),
     enabled: Boolean(instrument && tf),
     refetchInterval: MINUTE,
   });

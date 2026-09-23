@@ -18,11 +18,16 @@ export type Health = {
   ingest?: { status: "ok" | "blocked"; reason: string | null };
 };
 
+// Wave 2. `next` is an IST calendar date (YYYY-MM-DD); days_to_expiry counts trading days, 0 on the day.
+export type ExpiryInfo = { next: string; kind: "weekly" | "monthly" | "contract"; days_to_expiry: number; is_expiry_day: boolean };
+
 // GET /api/instruments -> Instrument[]
 export type Instrument = {
   id: string; exchange: "NSE" | "BSE" | "MCX"; symbol: string; name: string;
   kind: "equity" | "index" | "future"; tradable: boolean; timeframes: string[];
   data: Record<string, { bars: number; first: number | null; last: number | null }>;
+  // Wave 2; optional because older backends omit it. null when there is no expiry (e.g. INDIAVIX).
+  expiry?: ExpiryInfo | null;
 };
 
 // GET /api/candles?instrument=&tf=&limit=500&end=<unix>
@@ -52,7 +57,7 @@ export type IndicatorInfo = { name: string; label: string; pane: "price" | "osci
 export type IndicatorSeries = { name: string; label: string; pane: "price" | "oscillator" | "volume"; points: { time: number; value: number | null }[] };
 export type IndicatorsResponse = { instrument: string; tf: string; series: IndicatorSeries[] };
 
-// GET /api/patterns?instrument=&tf=&limit=200 -> PatternSignal[], newest first
+// GET /api/patterns?instrument=&tf=&limit=200&directional_only=&certified_only= -> PatternSignal[], newest first
 export type ScoreStats = {
   horizon_bars: number; n: number; hit_rate: number; base_rate: number;
   ci_low: number; ci_high: number; posterior: number; q_value: number | null;
@@ -66,6 +71,8 @@ export type PatternSignal = {
   context: {
     trend: "up" | "down" | "sideways" | null; vol_regime: "low" | "normal" | "high" | null;
     session_phase: string | null; rel_volume: number | null; near_level: string | null; rsi14: number | null;
+    // Wave 2; older backends omit them.
+    expiry_day?: boolean | null; days_to_expiry?: number | null;
   };
   stats: ScoreStats | null;
 };
@@ -75,7 +82,12 @@ export type Level = {
   price: number; label: string;
   kind: "pdh" | "pdl" | "pdc" | "swing_high" | "swing_low" | "vwap" | "pivot" | "r1" | "r2" | "s1" | "s2" | "cpr_top" | "cpr_bottom";
 };
-export type LevelsResponse = { instrument: string; tf: string; levels: Level[] };
+export type LevelsResponse = {
+  instrument: string; tf: string; levels: Level[];
+  // Wave 2; older backends omit them. as_of: UNIX s of the bar the levels come from.
+  // stale: a newer session exists in some timeframe than the daily bar used.
+  as_of?: number; stale?: boolean;
+};
 
 // GET /api/forecast?instrument=&tf=&steps=3
 export type Forecast = {
@@ -90,7 +102,13 @@ export type Forecast = {
   drivers: { name: string; effect: Direction; detail: string }[];
   n_analogs: number;
   explanation: string | null;
+  // Wave 2; older backends omit it. Non-null only for directional calls.
+  trade?: Trade | null;
 };
+
+// Forecast.trade; the contract leaves this shape unnamed. entry = reference close (fill at the next open),
+// stop = invalidation, target = p50 of the last step.
+export type Trade = { entry: number; stop: number; target: number; reward_risk: number };
 
 // GET /api/scanner?tf=1D -> ScannerRow[], sorted by score, descending
 export type ScannerRow = {
@@ -101,6 +119,8 @@ export type ScannerRow = {
   direction: Direction;
   top_signal: { label: string; state: "confirmed" | "forming"; certified: boolean } | null;
   rel_volume: number | null; trend: "up" | "down" | "sideways" | null;
+  // Wave 2; older backends omit them.
+  expiry?: ExpiryInfo | null; abstain_reason?: string | null;
 };
 
 // GET /api/scorecard?tf=1D&instrument=&pattern=&certified_only=false
@@ -115,7 +135,12 @@ export type ScorecardRow = {
   certified: boolean;
 };
 export type ScorecardResponse = {
-  meta: { tf: string; built_at: number | null; train_end: string; holdout_start: string; n_tests: number; fdr_alpha: number; horizons: number[] };
+  meta: {
+    tf: string; built_at: number | null; train_end: string; holdout_start: string;
+    n_tests: number; n_rows: number; instruments: string[];
+    fdr_alpha: number; horizons: number[];
+    config_sha256: Record<string, string>;
+  };
   rows: ScorecardRow[];
 };
 

@@ -4,6 +4,7 @@ import { useHealth, useInstruments } from "../api/hooks";
 import type { Health } from "../api/types";
 import { chartPath, readLastSelection } from "../lib/routes";
 import { defaultTimeframe, sortTimeframes } from "../lib/timeframes";
+import { ExpiryBadge } from "./ExpiryBadge";
 import { FyersConnect } from "./FyersConnect";
 import { InstrumentOptions } from "./InstrumentSelect";
 import { StatusPill } from "./StatusPill";
@@ -64,6 +65,7 @@ function ChartSelectors() {
           onChange={(tf) => navigate(chartPath(info.id, tf))}
         />
       )}
+      {info?.expiry && <ExpiryBadge expiry={info.expiry} />}
     </div>
   );
 }

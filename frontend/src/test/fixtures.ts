@@ -2,11 +2,13 @@ import type {
   AccuracyResponse,
   Candle,
   CandlesResponse,
+  ExpiryInfo,
   Forecast,
   Health,
   IndicatorInfo,
   Instrument,
   LedgerEntry,
+  LevelsResponse,
   PatternSignal,
   ScannerRow,
 } from "../api/types";
@@ -29,6 +31,9 @@ export const health: Health = {
   ingest: { status: "ok", reason: null },
 };
 
+/** Monthly stock expiry on the last Tuesday of September 2026, four trading days after T0. */
+export const monthlyExpiry: ExpiryInfo = { next: "2026-09-29", kind: "monthly", days_to_expiry: 4, is_expiry_day: false };
+
 export const instruments: Instrument[] = [
   {
     id: "NSE:RELIANCE",
@@ -39,6 +44,7 @@ export const instruments: Instrument[] = [
     tradable: true,
     timeframes: ["5m", "15m", "1h", "1D"],
     data: { "1D": { bars: 3, first: T0 - 2 * DAY, last: T0 } },
+    expiry: monthlyExpiry,
   },
   {
     id: "MCX:CRUDEOIL",
@@ -49,6 +55,7 @@ export const instruments: Instrument[] = [
     tradable: true,
     timeframes: ["1D"],
     data: {},
+    expiry: { next: "2026-10-19", kind: "contract", days_to_expiry: 17, is_expiry_day: false },
   },
 ];
 
@@ -89,6 +96,8 @@ export const forecast: Forecast = {
   drivers: [{ name: "Hammer at support", effect: "bullish", detail: "n=64, hit 58%" }],
   n_analogs: 64,
   explanation: null,
+  // entry = ref close, stop = invalidation, target = last p50; (104.5 − 103) / (103 − 98.5) = 0.33
+  trade: { entry: 103, stop: 98.5, target: 104.5, reward_risk: 0.33 },
 };
 
 export const abstainingForecast: Forecast = {
@@ -98,6 +107,15 @@ export const abstainingForecast: Forecast = {
   abstain: true,
   abstain_reason: "|p(up) − base rate| < 0.03",
   confidence: null,
+  trade: null,
+};
+
+export const levels: LevelsResponse = {
+  instrument: "NSE:RELIANCE",
+  tf: "1D",
+  levels: [{ price: 110, label: "Prev day high", kind: "pdh" }],
+  as_of: T0,
+  stale: false,
 };
 
 export function signal(overrides: Partial<PatternSignal> = {}): PatternSignal {
@@ -114,7 +132,16 @@ export function signal(overrides: Partial<PatternSignal> = {}): PatternSignal {
     state: "confirmed",
     bars: 1,
     invalidation: 98.5,
-    context: { trend: "down", vol_regime: "normal", session_phase: null, rel_volume: 1.4, near_level: "pdl", rsi14: 31 },
+    context: {
+      trend: "down",
+      vol_regime: "normal",
+      session_phase: null,
+      rel_volume: 1.4,
+      near_level: "pdl",
+      rsi14: 31,
+      expiry_day: false,
+      days_to_expiry: 4,
+    },
     stats: {
       horizon_bars: 3,
       n: 64,
@@ -154,6 +181,8 @@ export function scannerRow(overrides: Partial<ScannerRow>): ScannerRow {
     top_signal: { label: "Hammer", state: "confirmed", certified: false },
     rel_volume: 1.4,
     trend: "down",
+    expiry: monthlyExpiry,
+    abstain_reason: null,
     ...overrides,
   };
 }

@@ -26,13 +26,15 @@ export function Card({
   );
 }
 
-export type Tone = "up" | "down" | "forming" | "neutral" | "accent" | "danger";
+export type Tone = "up" | "down" | "forming" | "warn" | "neutral" | "accent" | "danger";
 
 // Outline only: tinted fills would pull coloured text below AA on the raised surface.
 const TONE: Record<Tone, string> = {
   up: "text-up border-up",
   down: "text-down border-down",
   forming: "text-forming border-forming border-dashed",
+  // Amber like "forming" but solid: an event worth noticing (expiry day), not an unfinished bar.
+  warn: "text-forming border-forming font-semibold",
   neutral: "text-ink-muted border-line-strong",
   accent: "text-accent border-accent",
   danger: "text-danger border-danger",
