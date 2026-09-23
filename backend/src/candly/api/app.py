@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from candly import __version__
 from candly.api.routes import analytics, platform
@@ -37,6 +38,8 @@ async def _validation_error(request: Request, exc: RequestValidationError) -> JS
 
 def create_app() -> FastAPI:
     app = FastAPI(title="candly", version=__version__, lifespan=lifespan)
+    # Blocks DNS-rebinding style requests from other sites; "testserver" is Starlette's TestClient host.
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=["127.0.0.1", "localhost", "testserver"])
     app.add_exception_handler(RequestValidationError, _validation_error)
     app.include_router(platform.router, prefix="/api")
     app.include_router(analytics.router, prefix="/api")

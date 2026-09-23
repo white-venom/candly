@@ -26,6 +26,29 @@ INTRADAY_TFS = ("5m", "15m", "1h")
 _JOB_DEFAULTS = {"coalesce": True, "max_instances": 1, "misfire_grace_time": 120}
 _scheduler: BackgroundScheduler | None = None
 _lock = threading.Lock()
+_blocked_by: str | None = None  # exception class that is currently stopping every ingest run
+_blocked_lock = threading.Lock()
+
+
+def _note_blocked(tf: str, exc: SourceError) -> None:
+    """Warn once when ingest stops (e.g. Fyers not logged in), not on every 5-minute run."""
+    global _blocked_by
+    kind = type(exc).__name__
+    with _blocked_lock:
+        first = _blocked_by != kind
+        _blocked_by = kind
+    if first:
+        log.warning("ingest paused: %s (repeats are logged at debug level until it resumes)", exc)
+    else:
+        log.debug("ingest %s skipped: %s", tf, exc)
+
+
+def _note_resumed() -> None:
+    global _blocked_by
+    with _blocked_lock:
+        was_blocked, _blocked_by = _blocked_by is not None, None
+    if was_blocked:
+        log.info("ingest resumed")
 
 
 def ingest_incremental(tf: str, exchanges: tuple[str, ...] | None = None) -> dict[str, int]:
@@ -38,10 +61,12 @@ def ingest_incremental(tf: str, exchanges: tuple[str, ...] | None = None) -> dic
     if not ids:
         return {}
     try:
-        return ingest(tf, instruments=ids)
+        counts = ingest(tf, instruments=ids)
     except SourceError as exc:
-        log.warning("ingest %s skipped: %s", tf, exc)
+        _note_blocked(tf, exc)
         return {}
+    _note_resumed()
+    return counts
 
 
 def exchanges_with_closed_bar(now: pd.Timestamp) -> tuple[str, ...]:

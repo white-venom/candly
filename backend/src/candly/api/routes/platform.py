@@ -27,6 +27,9 @@ router = APIRouter(tags=["platform"])
 MAX_CANDLES = 5000
 MAX_NEWS = 500
 LOGIN_STATE_SECONDS = 15 * 60
+INGEST_NOT_CONNECTED = "Fyers not connected — log in to resume data updates"
+INGEST_NO_KEYS = "Fyers keys are not set — add FYERS_APP_ID and FYERS_SECRET_KEY to .env"
+BAD_STATE = "login link expired or not from this app — click Connect Fyers again"
 _login_states: dict[str, float] = {}
 _state_lock = threading.Lock()
 
@@ -70,6 +73,13 @@ def _candles_json(df: pd.DataFrame) -> list[dict]:
     ]
 
 
+def _ingest_status(data_source: str, has_fyers: bool, fyers_connected: bool) -> dict:
+    """Once Fyers keys exist ingest uses Fyers only, so a missing session stalls every update."""
+    if data_source != "fyers" or fyers_connected:
+        return {"status": "ok", "reason": None}
+    return {"status": "blocked", "reason": INGEST_NOT_CONNECTED if has_fyers else INGEST_NO_KEYS}
+
+
 @router.get("/health")
 def health() -> dict:
     settings = get_settings()
@@ -85,19 +95,22 @@ def health() -> dict:
                 "phase": cal.session_phase(exchange, now) if trading_day else "closed",
             }
         )
+    data_source = settings.resolved_data_source()
+    fyers_connected = fyers.connection_status()["connected"]
     return {
         "status": "ok",
         "version": __version__,
         "time": clock.epoch_seconds(now),
-        "data_source": settings.resolved_data_source(),
+        "data_source": data_source,
         "keys": {
             "fyers": settings.has_fyers,
-            "fyers_connected": fyers.connection_status()["connected"],
+            "fyers_connected": fyers_connected,
             "kotak_neo": settings.has_kotak,
             "anthropic": settings.has_anthropic,
             "telegram": settings.has_telegram,
         },
         "markets": markets,
+        "ingest": _ingest_status(data_source, settings.has_fyers, fyers_connected),
     }
 
 
@@ -208,6 +221,10 @@ def fyers_login() -> RedirectResponse:
 
 @router.post("/auth/fyers/code")
 async def fyers_code(request: Request) -> dict:
+    # Requiring JSON makes this a CORS-preflighted request, so other sites can't post a "simple" form here.
+    media_type = request.headers.get("content-type", "").split(";")[0].strip().lower()
+    if media_type != "application/json":
+        raise HTTPException(status_code=415, detail="Content-Type must be application/json")
     try:
         body = await request.json()
     except ValueError:
@@ -215,6 +232,9 @@ async def fyers_code(request: Request) -> dict:
     code = body.get("code") if isinstance(body, dict) else None
     if not isinstance(code, str) or not code.strip():
         raise _bad('body must be JSON: {"code": "<auth_code or redirect URL>"}')
+    state = fyers.extract_state(code)
+    if state is not None and not _take_state(state):
+        raise _bad(BAD_STATE)
     return await run_in_threadpool(_exchange, code)
 
 

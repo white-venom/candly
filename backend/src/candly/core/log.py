@@ -20,6 +20,18 @@ class RedactSecrets(logging.Filter):
         return True
 
 
+class RedactAuthQuery(logging.Filter):
+    """Strips query strings from logged /api/auth/ paths (they can carry a one-time auth code)."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if isinstance(record.args, tuple) and record.args:
+            record.args = tuple(
+                arg.split("?", 1)[0] if isinstance(arg, str) and "/api/auth/" in arg and "?" in arg else arg
+                for arg in record.args
+            )
+        return True
+
+
 def setup_logging(level: int = logging.INFO) -> None:
     global _configured
     if _configured:
@@ -40,4 +52,5 @@ def setup_logging(level: int = logging.INFO) -> None:
         handler.setFormatter(formatter)
         handler.addFilter(redact)
         root.addHandler(handler)
+    logging.getLogger("uvicorn.access").addFilter(RedactAuthQuery())
     _configured = True

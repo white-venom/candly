@@ -127,8 +127,10 @@ def to_item(entry, spec: FeedSpec, fetched_at: datetime, mapper: InstrumentMappe
         summary = None  # Google's summary only repeats the headline and publisher
     text = f"{title}. {summary}" if summary else title
     instruments = mapper.map(text)
-    if spec.instrument_id and spec.instrument_id not in instruments:
-        instruments.append(spec.instrument_id)
+    if spec.instrument_id and not instruments:
+        # Search results are often about a namesake ("Reliance Power" for Reliance Industries); an item
+        # the mapper can't tie to any instrument is noise, not general market news.
+        return None
     return NewsItem(
         id=news_id(title, link),
         title=title,

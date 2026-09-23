@@ -1,5 +1,7 @@
 import hashlib
 import json
+import sys
+from dataclasses import asdict
 from datetime import datetime
 from urllib.parse import parse_qs, urlparse
 
@@ -16,6 +18,7 @@ from candly.data.sources import fyers
 NOW = pd.Timestamp(datetime(2026, 9, 23, 12, 2), tz=IST).tz_convert("UTC")
 NOW_S = clock.epoch_seconds(NOW)
 HISTORY = {"method": "GET", "host": "api-t1.fyers.in", "path": "/data/history"}
+windows_only = pytest.mark.skipif(sys.platform != "win32", reason="DPAPI is Windows-only")
 
 
 def ist(y, m, d, hh, mm) -> pd.Timestamp:
@@ -54,9 +57,20 @@ def sleeps(monkeypatch):
 def fy(monkeypatch, tmp_data_dir, fake_fyers_keys, sleeps):
     monkeypatch.setattr(clock, "utc_now", lambda: NOW)
     monkeypatch.setattr(fyers, "_limiter", fyers.RateLimiter(per_second=10_000, per_minute=10_000))
+    monkeypatch.setattr(fyers, "_refresh_failure", None)
     fyers._master_cache.clear()
     yield tmp_data_dir
     fyers._master_cache.clear()
+
+
+@pytest.fixture
+def pin(monkeypatch, fy):
+    monkeypatch.setenv("FYERS_PIN", "1234")
+    fyers.get_settings.cache_clear()
+
+
+def refresh_ok(access: str = "access-2") -> httpx.Response:
+    return httpx.Response(200, json={"s": "ok", "code": 200, "access_token": access})
 
 
 def test_login_url(fy):
@@ -121,8 +135,8 @@ def test_exchange_auth_code_stores_token(fy):
     }
     assert token.expires_at == clock.epoch_seconds(ist(2026, 9, 24, 6, 0))
     assert token.refresh_expires_at == NOW_S + 15 * 86400
-    saved = json.loads((fy / "secrets" / "fyers_token.json").read_text())
-    assert saved["access_token"] == "acc-new" and saved["refresh_token"] == "ref-new"
+    saved = fyers.load_token()
+    assert saved.access_token == "acc-new" and saved.refresh_token == "ref-new"
     assert "acc-new" not in repr(token)
     assert fyers.connection_status() == {"connected": True, "expires_at": token.expires_at}
 
@@ -192,6 +206,126 @@ def test_rejected_refresh_drops_refresh_token(fy, monkeypatch):
         fyers.ensure_token()
     assert fyers.load_token().refresh_token is None
     assert fyers.connection_status()["connected"] is False
+
+
+@respx.mock
+def test_refresh_retries_a_503_and_keeps_the_refresh_token(pin, sleeps):
+    store_token(expires_in=-10)
+    route = respx.post(fyers.REFRESH_TOKEN_URL).mock(side_effect=[httpx.Response(503), refresh_ok()])
+    token = fyers.ensure_token()
+    assert route.call_count == 2 and len(sleeps) == 1
+    assert token.access_token == "access-2"
+    assert fyers.load_token().refresh_token == "refresh-1"
+
+
+@pytest.mark.parametrize(
+    "outage",
+    [
+        httpx.Response(503),
+        httpx.Response(429),
+        httpx.Response(200, text="<html>Fyers is under maintenance</html>"),
+        httpx.ConnectError("connection refused"),
+    ],
+    ids=["503", "429", "html-page", "network"],
+)
+@respx.mock
+def test_refresh_outage_keeps_the_refresh_token(pin, outage):
+    store_token(expires_in=-10)
+    respx.post(fyers.REFRESH_TOKEN_URL).mock(side_effect=outage)
+    with pytest.raises(fyers.FyersError) as excinfo:
+        fyers.ensure_token()
+    assert not isinstance(excinfo.value, fyers.FyersNotConnected)
+    token = fyers.load_token()
+    assert token.refresh_token == "refresh-1" and token.refresh_expires_at == NOW_S + 86400
+
+
+@respx.mock
+def test_failed_refresh_is_not_retried_for_a_few_minutes(pin):
+    store_token(expires_in=-10)
+    route = respx.post(fyers.REFRESH_TOKEN_URL).mock(return_value=httpx.Response(503))
+    with pytest.raises(fyers.FyersError):
+        fyers.ensure_token()
+    calls = route.call_count
+    with pytest.raises(fyers.FyersError, match="retrying in a few minutes"):
+        fyers.ensure_token()
+    assert fyers.connection_status() == {"connected": False, "expires_at": None}
+    assert route.call_count == calls  # neither the job nor the health poll hit Fyers again
+
+    failed_at, reason = fyers._refresh_failure
+    fyers._refresh_failure = (failed_at - fyers.REFRESH_RETRY_SECONDS, reason)
+    route.mock(return_value=refresh_ok())
+    assert fyers.connection_status()["connected"] is True
+    assert fyers._refresh_failure is None
+
+
+@pytest.mark.parametrize(
+    ("body", "cleared"),
+    [
+        ({"s": "error", "code": -16, "message": "Server was unable to authenticate your token"}, True),
+        ({"s": "error", "code": -8, "message": "Your token has expired"}, True),
+        ({"s": "error", "code": -1, "message": "Invalid PIN"}, True),
+        ({"s": "error", "code": -99, "message": "Something went wrong, please try again"}, False),
+    ],
+)
+@respx.mock
+def test_only_an_explicit_rejection_clears_the_refresh_token(pin, body, cleared):
+    store_token(expires_in=-10)
+    respx.post(fyers.REFRESH_TOKEN_URL).mock(return_value=httpx.Response(400, json=body))
+    expected = fyers.FyersNotConnected if cleared else fyers.FyersError
+    with pytest.raises(expected):
+        fyers.ensure_token()
+    assert (fyers.load_token().refresh_token is None) is cleared
+
+
+@windows_only
+def test_token_is_encrypted_at_rest(fy):
+    store_token()
+    raw = (fy / "secrets" / "fyers_token.json").read_bytes()
+    assert raw.startswith(fyers.TOKEN_MAGIC)
+    assert b"access-1" not in raw and b"refresh-1" not in raw and b"TESTAPP" not in raw
+    token = fyers.load_token()
+    assert (token.access_token, token.refresh_token) == ("access-1", "refresh-1")
+    assert token.expires_at == NOW_S + 3600
+
+
+@windows_only
+def test_plaintext_token_file_is_migrated_to_encrypted(fy):
+    legacy = fyers.FyersToken("TESTAPP-100", "access-old", "refresh-old", NOW_S, NOW_S + 3600, NOW_S + 86400)
+    path = fy / "secrets" / "fyers_token.json"
+    path.parent.mkdir(parents=True)
+    path.write_text(json.dumps(asdict(legacy)), encoding="utf-8")
+    assert fyers.load_token() == legacy
+    assert path.read_bytes().startswith(fyers.TOKEN_MAGIC)
+    assert fyers.load_token() == legacy
+    assert fyers.ensure_token().access_token == "access-old"
+
+
+def test_plaintext_fallback_without_dpapi(fy, monkeypatch):
+    monkeypatch.setattr(fyers, "DPAPI", False)
+    store_token()
+    path = fy / "secrets" / "fyers_token.json"
+    assert json.loads(path.read_text(encoding="utf-8"))["access_token"] == "access-1"
+    if sys.platform != "win32":
+        assert path.stat().st_mode & 0o777 == 0o600
+    assert fyers.load_token().refresh_token == "refresh-1"
+
+
+def test_failed_token_write_leaves_no_temp_file(fy, monkeypatch):
+    def broken_replace(src, dst):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(fyers.os, "replace", broken_replace)
+    with pytest.raises(OSError, match="disk full"):
+        store_token()
+    assert list((fy / "secrets").iterdir()) == []
+
+
+def test_unreadable_token_file_is_ignored(fy):
+    path = fy / "secrets" / "fyers_token.json"
+    path.parent.mkdir(parents=True)
+    path.write_bytes(fyers.TOKEN_MAGIC + b"not a dpapi blob")
+    assert fyers.load_token() is None
+    assert fyers.connection_status() == {"connected": False, "expires_at": None}
 
 
 @respx.mock

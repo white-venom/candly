@@ -120,6 +120,11 @@ type Health = {
   data_source: "fyers" | "yahoo";
   keys: { fyers: boolean; fyers_connected: boolean; kotak_neo: boolean; anthropic: boolean; telegram: boolean };
   markets: { exchange: "NSE" | "BSE" | "MCX"; open: boolean; phase: string }[];
+  // "blocked" when data updates can't run. There is no Yahoo fallback once Fyers keys exist. Reasons:
+  //   "Fyers not connected — log in to resume data updates"
+  //   "Fyers keys are not set — add FYERS_APP_ID and FYERS_SECRET_KEY to .env"  (DATA_SOURCE=fyers without keys)
+  // Older backends omit it; treat missing as ok.
+  ingest?: { status: "ok" | "blocked"; reason: string | null };
 };
 
 // GET /api/instruments -> Instrument[]
@@ -147,8 +152,11 @@ type NewsItem = {
 // Fyers login. Fyers rejects localhost/IP redirect URLs, so the app's redirect URL is Fyers' own page
 // (https://trade.fyers.in/api-login/redirect-uri/index.html). After logging in, the user copies the
 // address-bar URL (it contains auth_code=...) and pastes it into the dashboard.
-// GET  /api/auth/fyers/login     -> 307 redirect to the Fyers login page
+// GET  /api/auth/fyers/login     -> 307 redirect to the Fyers login page (issues a one-time `state`, valid 15 min)
 // POST /api/auth/fyers/code      body { code: string }  (a raw auth_code OR the full redirect URL)
+//                                Content-Type must be application/json, else 415 (blocks cross-site simple POSTs).
+//                                If the pasted URL carries a `state`, it must be one issued by /login, else 400
+//                                "login link expired or not from this app — click Connect Fyers again".
 //                                -> { connected: boolean; expires_at: number | null }; 400 { detail } if the exchange fails
 // GET  /api/auth/fyers/callback  -> same exchange for a local redirect URL (kept for future use); 307 to `${FRONTEND_URL}/?fyers=connected|error`
 // GET  /api/auth/fyers/status    -> { connected: boolean; expires_at: number | null }
@@ -256,7 +264,7 @@ type AccuracyResponse = {
     direction_hit_rate: number | null; brier: number | null; brier_baseline: number | null; skill: number | null;
     ece: number | null; band_coverage_80: number | null; mean_match_score: number | null; mean_close_err_atr: number | null;
   };
-  calibration: { bin_low: number; bin_high: number; mean_pred: number; observed: number; n: number }[];
+  calibration: { bin_low: number; bin_high: number; mean_pred: number | null; observed: number | null; n: number }[];  // null when n = 0
   rolling: { time: number; hit_rate: number | null; brier: number | null; match_score: number | null }[];  // over the last 30 graded forecasts
   by_group: { group_by: "instrument" | "tf" | "pattern" | "session_phase" | "vol_regime"; key: string; n: number; hit_rate: number | null; brier: number | null }[];
 };

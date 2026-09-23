@@ -20,9 +20,6 @@ from candly.news.store import NewsStore
 
 cal = get_calendar()
 NOW = pd.Timestamp(datetime(2026, 9, 23, 12, 2), tz=IST).tz_convert("UTC")  # Wednesday, markets open
-PASTED_URL = (
-    "https://trade.fyers.in/api-login/redirect-uri/index.html?s=ok&code=200&auth_code=eyJsecretcode&state=abc"
-)
 
 
 def ist(y, m, d, hh, mm) -> pd.Timestamp:
@@ -61,7 +58,28 @@ def client(api, no_keys):
 @pytest.fixture
 def fyers_client(api, fake_fyers_keys, monkeypatch):
     monkeypatch.setattr(fyers, "_limiter", fyers.RateLimiter(per_second=10_000, per_minute=10_000))
+    monkeypatch.setattr(fyers, "_refresh_failure", None)
+    monkeypatch.setattr(fyers, "_sleep", lambda seconds: None)
     return api
+
+
+def token_ok() -> httpx.Response:
+    return httpx.Response(200, json={"s": "ok", "code": 200, "access_token": "a", "refresh_token": "r"})
+
+
+def issued_state(client: TestClient) -> str:
+    login = client.get("/api/auth/fyers/login").headers["location"]
+    return parse_qs(urlparse(login).query)["state"][0]
+
+
+def pasted_url(state: str) -> str:
+    page = "https://trade.fyers.in/api-login/redirect-uri/index.html"
+    return f"{page}?s=ok&code=200&auth_code=eyJsecretcode&state={state}"
+
+
+def store_token(expires_in: int) -> None:
+    now = clock.epoch_seconds(NOW)
+    fyers.save_token(fyers.FyersToken("TESTAPP-100", "acc", "ref", now - 100, now + expires_in, now + 86400))
 
 
 def test_health(client):
@@ -80,6 +98,37 @@ def test_health(client):
         {"exchange": "BSE", "open": True, "phase": "midday"},
         {"exchange": "MCX", "open": True, "phase": "day"},
     ]
+    assert body["ingest"] == {"status": "ok", "reason": None}  # Yahoo needs no login
+
+
+def test_health_reports_ingest_blocked_until_fyers_is_connected(fyers_client):
+    body = fyers_client.get("/api/health").json()
+    assert body["data_source"] == "fyers" and body["keys"]["fyers_connected"] is False
+    assert body["ingest"] == {"status": "blocked", "reason": platform.INGEST_NOT_CONNECTED}
+    store_token(expires_in=3600)
+    assert fyers_client.get("/api/health").json()["ingest"] == {"status": "ok", "reason": None}
+
+
+def test_health_blocked_when_fyers_is_forced_without_keys(client, monkeypatch):
+    monkeypatch.setenv("DATA_SOURCE", "fyers")
+    platform.get_settings.cache_clear()
+    ingest = client.get("/api/health").json()["ingest"]
+    assert ingest == {"status": "blocked", "reason": platform.INGEST_NO_KEYS}
+
+
+@respx.mock
+def test_health_polls_do_not_hammer_a_failing_refresh(fyers_client, monkeypatch):
+    monkeypatch.setenv("FYERS_PIN", "1234")
+    platform.get_settings.cache_clear()
+    store_token(expires_in=-10)
+    route = respx.post(fyers.REFRESH_TOKEN_URL).mock(return_value=httpx.Response(503))
+    first = fyers_client.get("/api/health").json()
+    assert first["ingest"]["status"] == "blocked"
+    calls = route.call_count
+    for _ in range(5):
+        assert fyers_client.get("/api/health").json()["ingest"]["status"] == "blocked"
+    assert route.call_count == calls
+    assert fyers.load_token().refresh_token == "ref"  # an outage never forces a new login
 
 
 def test_health_on_a_weekend(client, monkeypatch):
@@ -222,18 +271,62 @@ def test_fyers_login_redirects(fyers_client):
 
 @respx.mock
 def test_fyers_code_exchange(fyers_client):
-    route = respx.post(fyers.VALIDATE_AUTHCODE_URL).mock(
-        return_value=httpx.Response(
-            200, json={"s": "ok", "code": 200, "access_token": "a", "refresh_token": "r"}
-        )
-    )
-    response = fyers_client.post("/api/auth/fyers/code", json={"code": PASTED_URL})
+    route = respx.post(fyers.VALIDATE_AUTHCODE_URL).mock(return_value=token_ok())
+    url = pasted_url(issued_state(fyers_client))
+    response = fyers_client.post("/api/auth/fyers/code", json={"code": url})
     assert response.status_code == 200
     expires = clock.epoch_seconds(ist(2026, 9, 24, 6, 0))
     assert response.json() == {"connected": True, "expires_at": expires}
     assert b"eyJsecretcode" in route.calls.last.request.content
     assert fyers_client.get("/api/auth/fyers/status").json() == {"connected": True, "expires_at": expires}
-    assert fyers_client.get("/api/health").json()["keys"]["fyers_connected"] is True
+    health = fyers_client.get("/api/health").json()
+    assert health["keys"]["fyers_connected"] is True and health["ingest"]["status"] == "ok"
+
+
+@respx.mock
+def test_fyers_code_accepts_a_raw_auth_code(fyers_client):
+    route = respx.post(fyers.VALIDATE_AUTHCODE_URL).mock(return_value=token_ok())
+    assert fyers_client.post("/api/auth/fyers/code", json={"code": "eyJrawcode"}).status_code == 200
+    assert b"eyJrawcode" in route.calls.last.request.content
+
+
+@pytest.mark.parametrize("content_type", [None, "text/plain", "application/x-www-form-urlencoded"])
+@respx.mock
+def test_fyers_code_requires_a_json_content_type(fyers_client, content_type):
+    route = respx.post(fyers.VALIDATE_AUTHCODE_URL).mock(return_value=token_ok())
+    headers = {"content-type": content_type} if content_type else {}
+    response = fyers_client.post("/api/auth/fyers/code", content=b'{"code": "eyJrawcode"}', headers=headers)
+    assert response.status_code == 415 and isinstance(response.json()["detail"], str)
+    assert route.call_count == 0
+    ok = fyers_client.post(
+        "/api/auth/fyers/code",
+        content=b'{"code": "eyJrawcode"}',
+        headers={"content-type": "application/json; charset=utf-8"},
+    )
+    assert ok.status_code == 200
+
+
+@pytest.mark.parametrize("state", ["abc", "", "expired"])
+@respx.mock
+def test_fyers_code_rejects_a_state_the_server_did_not_issue(fyers_client, monkeypatch, state):
+    route = respx.post(fyers.VALIDATE_AUTHCODE_URL).mock(return_value=token_ok())
+    if state == "expired":
+        state = issued_state(fyers_client)
+        issued = platform._login_states[state]
+        monkeypatch.setitem(platform._login_states, state, issued - platform.LOGIN_STATE_SECONDS - 1)
+    response = fyers_client.post("/api/auth/fyers/code", json={"code": pasted_url(state)})
+    assert response.status_code == 400 and response.json()["detail"] == platform.BAD_STATE
+    assert route.call_count == 0
+
+
+@respx.mock
+def test_fyers_code_state_is_accepted_once(fyers_client):
+    route = respx.post(fyers.VALIDATE_AUTHCODE_URL).mock(return_value=token_ok())
+    url = pasted_url(issued_state(fyers_client))
+    assert fyers_client.post("/api/auth/fyers/code", json={"code": url}).status_code == 200
+    replay = fyers_client.post("/api/auth/fyers/code", json={"code": url})
+    assert replay.status_code == 400 and replay.json()["detail"] == platform.BAD_STATE
+    assert route.call_count == 1
 
 
 @respx.mock
@@ -266,17 +359,12 @@ def test_fyers_code_bad_bodies(fyers_client, kwargs):
 
 @respx.mock
 def test_fyers_callback(fyers_client):
-    route = respx.post(fyers.VALIDATE_AUTHCODE_URL).mock(
-        return_value=httpx.Response(
-            200, json={"s": "ok", "code": 200, "access_token": "a", "refresh_token": "r"}
-        )
-    )
+    route = respx.post(fyers.VALIDATE_AUTHCODE_URL).mock(return_value=token_ok())
     bad = fyers_client.get("/api/auth/fyers/callback", params={"auth_code": "eyJx", "state": "forged"})
     assert bad.status_code == 307 and bad.headers["location"] == "http://localhost:5173/?fyers=error"
     assert route.call_count == 0
 
-    login = fyers_client.get("/api/auth/fyers/login").headers["location"]
-    state = parse_qs(urlparse(login).query)["state"][0]
+    state = issued_state(fyers_client)
     good = fyers_client.get(
         "/api/auth/fyers/callback", params={"s": "ok", "code": "200", "auth_code": "eyJx", "state": state}
     )

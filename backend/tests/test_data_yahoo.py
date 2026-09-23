@@ -56,6 +56,16 @@ def test_intraday_drops_out_of_session_and_forming_bars():
     assert with_forming["ts"].iloc[-1] == ist(2026, 9, 23, 12, 0)
 
 
+def test_fake_holiday_bars_are_dropped_on_download(monkeypatch):
+    index = pd.DatetimeIndex(["2026-09-11", "2026-09-14", "2026-09-15"]).tz_localize(IST)
+    raw = yahoo_frame(index)
+    raw.iloc[1, :4] = 101.0  # 14 Sep (Ganesh Chaturthi): flat, zero-volume filler bar
+    raw.iloc[1, raw.columns.get_loc("Volume")] = 0.0
+    monkeypatch.setattr(yahoo, "_download", lambda symbol, interval, start, end: raw)
+    out = yahoo.fetch_candles(get_instrument("NSE:RELIANCE"), "1D")
+    assert list(out["ts"]) == [ist(2026, 9, 11, 9, 15), ist(2026, 9, 15, 9, 15)]
+
+
 def test_empty_download():
     assert yahoo.to_candles(pd.DataFrame(), "NSE", "1D", NOW).empty
 

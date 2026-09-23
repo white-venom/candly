@@ -39,3 +39,68 @@ mapper = InstrumentMapper(load_watchlist())
 )
 def test_mapping(text, expected):
     assert sorted(mapper.map(text)) == sorted(expected)
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("Nifty IT index falls 2% on weak US cues", []),
+        ("Nifty Midcap 100 hits a record high", []),
+        ("Nifty Smallcap 250 underperforms", []),
+        ("Nifty Next 50 rebalancing: five stocks in", []),
+        ("Nifty PSU Bank rallies 3%", []),
+        ("Nifty Pharma, Nifty Metal drag", []),
+        ("Nifty Financial Services slips", []),
+        ("Nifty next week: key levels to watch", ["NSE:NIFTY50"]),
+        ("Nifty IT drags, but Nifty ends flat", ["NSE:NIFTY50"]),
+        ("GIFT Nifty signals a gap-up open", ["NSE:NIFTY50"]),
+    ],
+)
+def test_sectoral_indices_are_not_the_nifty_50(text, expected):
+    assert sorted(mapper.map(text)) == sorted(expected)
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("Crude palm oil imports rise 12% in August", []),
+        ("India's crude steel output climbs", []),
+        ("Crude soybean oil prices ease", []),
+        ("Crude oil slips below $70 a barrel", ["MCX:CRUDEOIL"]),
+        ("Crude extends losses on supply glut", ["MCX:CRUDEOIL"]),
+    ],
+)
+def test_crude_means_crude_oil_only(text, expected):
+    assert mapper.map(text) == expected
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("Senco Gold shares jump 5% after Q2 update", []),
+        ("Senco Gold IPO price band fixed", []),
+        ("Silver Lake to invest in Reliance Retail", ["NSE:RELIANCE"]),
+        ("Muthoot Finance cuts gold loan rates", []),
+        ("Golden jubilee: silver screen legend honoured", []),
+        ("Gold prices hit a record; MCX gold futures up 1%", ["MCX:GOLD"]),
+        ("Gold rate today: the yellow metal climbs ₹500 per 10 grams", ["MCX:GOLD"]),
+        ("Silver futures surge on MCX", ["MCX:SILVER"]),
+        ("Bullion demand picks up before Diwali", ["MCX:GOLD"]),
+    ],
+)
+def test_gold_and_silver_need_commodity_context(text, expected):
+    assert sorted(mapper.map(text)) == sorted(expected)
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("CBOE Volatility Index spikes as Wall Street tumbles", []),
+        ("Cboe Volatility Index jumps; Nifty falls 1%", ["NSE:NIFTY50"]),
+        ("US stocks: volatility index at a three-month high", []),
+        ("Volatility index falls as Nifty hits a record", ["NSE:INDIAVIX", "NSE:NIFTY50"]),
+        ("India VIX cools to 11", ["NSE:INDIAVIX"]),
+    ],
+)
+def test_volatility_index_means_india_vix_only(text, expected):
+    assert sorted(mapper.map(text)) == sorted(expected)

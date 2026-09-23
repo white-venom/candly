@@ -134,6 +134,39 @@ def test_fyers_derived_timeframes_resample_stored_5m(fake, monkeypatch, fake_fye
     assert series_stats("NSE:RELIANCE", "15m")["bars"] == 50
 
 
+def test_mid_session_since_snaps_to_the_session_open(fake, monkeypatch, fake_fyers_keys):
+    monkeypatch.setattr(fyers, "ensure_token", lambda: None)
+    ingest.ingest("1h", instruments=["NSE:RELIANCE"], source="fyers")
+    stored = load_candles("NSE:RELIANCE", "1h")
+
+    counts = ingest.ingest("1h", instruments=["NSE:RELIANCE"], source="fyers", since=ist(2026, 9, 23, 12, 7))
+    assert fake.calls[-1][2:] == ("5m", ist(2026, 9, 23, 9, 15))
+    assert counts == {"NSE:RELIANCE": 0}  # the 11:15 bar was not replaced by a 12:10-12:15 fragment
+    pd.testing.assert_frame_equal(load_candles("NSE:RELIANCE", "1h"), stored)
+
+    ingest.ingest("15m", instruments=["NSE:INFY"], source="yahoo", since=ist(2026, 9, 22, 10, 40))
+    assert fake.calls[-1] == ("yahoo", "NSE:INFY", "15m", ist(2026, 9, 22, 9, 15))
+
+
+def test_cli_clean_existing(fake, monkeypatch, capsys):
+    monkeypatch.setattr(ingest, "setup_logging", lambda: None)
+    ingest.ingest("1D", instruments=["NSE:RELIANCE"], source="yahoo")
+    assert ingest.main(["--tf", "1D", "--clean-existing"]) == 0
+    out = capsys.readouterr().out
+    assert "NSE:RELIANCE" in out and "dropped" in out
+    assert fake.calls[-1][1] == "NSE:RELIANCE" and len(fake.calls) == 1  # no download
+
+
+def test_cli_reports_a_fyers_outage_cleanly(fake, monkeypatch, capsys, fake_fyers_keys):
+    def outage():
+        raise fyers.FyersError("could not reach Fyers (ConnectError)")
+
+    monkeypatch.setattr(ingest, "setup_logging", lambda: None)
+    monkeypatch.setattr(fyers, "ensure_token", outage)
+    assert ingest.main(["--tf", "1D", "--source", "fyers"]) == 2
+    assert "could not reach Fyers" in capsys.readouterr().err
+
+
 def test_cli(fake, monkeypatch, capsys):
     monkeypatch.setattr(ingest, "setup_logging", lambda: None)
     code = ingest.main(["--tf", "1D", "--instrument", "NSE:RELIANCE", "MCX:GOLD", "--source", "yahoo"])

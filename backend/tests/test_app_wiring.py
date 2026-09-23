@@ -1,15 +1,35 @@
+import logging
+
 from apscheduler.schedulers.background import BackgroundScheduler
 from fastapi.testclient import TestClient
 
 from candly.api.app import create_app
+from candly.core.log import RedactAuthQuery
+from candly.jobs import pipeline
 from candly.jobs.pipeline import daily_pipeline, intraday_pipeline, nightly_scorecards, register_pipeline_jobs
 
 
-def test_bad_query_param_type_returns_400(tmp_data_dir, no_keys):
+def test_bad_query_param_type_returns_400():
     client = TestClient(create_app())
     response = client.get("/api/indicators", params={"instrument": "NSE:RELIANCE", "tf": "1D", "limit": "x"})
     assert response.status_code == 400
     assert "limit" in response.json()["detail"]
+
+
+def test_untrusted_host_is_rejected():
+    client = TestClient(create_app())
+    assert client.get("/api/health", headers={"host": "evil.example"}).status_code == 400
+    assert client.get("/api/health", headers={"host": "localhost:5173"}).status_code == 200
+
+
+def test_access_log_drops_auth_query_strings():
+    record = logging.LogRecord(
+        "uvicorn.access", logging.INFO, __file__, 1, '%s - "%s %s HTTP/%s" %d',
+        ("127.0.0.1:5000", "GET", "/api/auth/fyers/callback?auth_code=SECRET&state=x", "1.1", 307), None,
+    )
+    RedactAuthQuery().filter(record)
+    assert "SECRET" not in record.getMessage()
+    assert "/api/auth/fyers/callback" in record.getMessage()
 
 
 def test_pipeline_jobs_replace_platform_ingest_jobs():
@@ -21,3 +41,47 @@ def test_pipeline_jobs_replace_platform_ingest_jobs():
     assert jobs["daily_ingest_nse_bse"] is daily_pipeline
     assert jobs["daily_ingest_mcx"] is daily_pipeline
     assert jobs["nightly_scorecards"] is nightly_scorecards
+
+
+def _record_calls(monkeypatch, exchanges):
+    calls = []
+    monkeypatch.setattr(pipeline, "exchanges_with_closed_bar", lambda now: exchanges)
+    monkeypatch.setattr(pipeline, "ingest_incremental", lambda tf, ex: calls.append(("ingest", tf, ex)))
+    monkeypatch.setattr(
+        pipeline, "run_forecast_cycle", lambda tf, ids: calls.append(("forecast", tf, len(ids)))
+    )
+    monkeypatch.setattr(pipeline, "grade_pending_job", lambda: calls.append(("grade",)))
+    return calls
+
+
+def test_intraday_pipeline_ingests_before_forecasting_then_grades(monkeypatch):
+    calls = _record_calls(monkeypatch, ("MCX",))
+    intraday_pipeline()
+    assert [c[0] for c in calls] == ["ingest", "forecast"] * 3 + ["grade"]
+    assert all(c[2] == ("MCX",) for c in calls if c[0] == "ingest")
+    assert all(c[2] == 4 for c in calls if c[0] == "forecast")  # the four MCX instruments
+
+
+def test_intraday_pipeline_does_nothing_when_markets_are_closed(monkeypatch):
+    calls = _record_calls(monkeypatch, ())
+    intraday_pipeline()
+    assert calls == []
+
+
+def test_daily_pipeline_order(monkeypatch):
+    calls = _record_calls(monkeypatch, ())
+    daily_pipeline(("NSE", "BSE"))
+    assert [c[0] for c in calls] == ["ingest", "forecast", "grade"]
+
+
+def test_nightly_scorecards_survive_one_failure(monkeypatch):
+    built = []
+
+    def fake_rebuild(tf):
+        if tf == "1h":
+            raise RuntimeError("boom")
+        built.append(tf)
+
+    monkeypatch.setattr(pipeline, "rebuild_scorecard", fake_rebuild)
+    nightly_scorecards()
+    assert built == ["1D", "15m", "5m"]

@@ -50,7 +50,19 @@ GOOGLE_RELIANCE = rss(
         "https://news.google.com/rss/articles/abc",
         "Wed, 23 Sep 2026 05:00:00 GMT",
         '<source url="https://economictimes.indiatimes.com">The Economic Times</source>',
-    )
+    ),
+    rss_item(  # a namesake, not Reliance Industries: the mapper finds nothing, so it isn't stored
+        "Reliance Power shares hit upper circuit - Mint",
+        "https://news.google.com/rss/articles/def",
+        "Wed, 23 Sep 2026 05:10:00 GMT",
+        '<source url="https://www.livemint.com">Mint</source>',
+    ),
+    rss_item(  # returned for the Reliance query but about other instruments: tagged with those only
+        "HDFC Bank lifts Nifty to a record close - Mint",
+        "https://news.google.com/rss/articles/ghi",
+        "Wed, 23 Sep 2026 05:20:00 GMT",
+        '<source url="https://www.livemint.com">Mint</source>',
+    ),
 )
 
 
@@ -84,7 +96,7 @@ def feeds(monkeypatch, tmp_data_dir, no_keys):
 
 def test_poll_stores_mapped_scored_items(feeds, tmp_data_dir):
     now, routes = feeds
-    assert fetch.poll_news() == 4
+    assert fetch.poll_news() == 5
     assert routes["et"].calls.last.request.headers["User-Agent"] == "candly/0.1 (personal research)"
     assert routes["google"].call_count == 10  # one query per equity
     items = {n.title: n for n in NewsStore().query(limit=100)}
@@ -103,6 +115,8 @@ def test_poll_stores_mapped_scored_items(feeds, tmp_data_dir):
     jio = items["Reliance Jio plans IPO"]
     assert jio.source == "Google News / The Economic Times"
     assert jio.instruments == ["NSE:RELIANCE"] and jio.event_type == "deal"
+    assert "Reliance Power shares hit upper circuit" not in items
+    assert items["HDFC Bank lifts Nifty to a record close"].instruments == ["NSE:HDFCBANK", "NSE:NIFTY50"]
 
     rbi_state = NewsStore().feed_state("rbi_press")
     assert rbi_state["status"] == 500 and rbi_state["error"]

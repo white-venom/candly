@@ -48,6 +48,16 @@ def test_add_dedupes_and_query_orders_newest_first(store):
     assert got[0].instruments == ["NSE:INFY"]
 
 
+def test_repeat_sighting_from_another_feed_adds_instrument_links(store):
+    first = item("Reliance and TCS lead gains", "https://x.test/r", 0, ["NSE:RELIANCE"])
+    again = item("Reliance and TCS lead gains", "https://x.test/r", 30, ["NSE:TCS", "NSE:RELIANCE"])
+    assert store.add([first]) == 1
+    assert store.add([again]) == 0
+    got = store.query(instrument_id="NSE:TCS")
+    assert len(got) == 1 and got[0].instruments == ["NSE:RELIANCE", "NSE:TCS"]
+    assert got[0].fetched_at == T0 + timedelta(minutes=1)  # the row itself is the first sighting
+
+
 def test_query_filters(store):
     store.add(
         [

@@ -3,8 +3,8 @@
 .env.*
 !.env.example
 
-# runtime data (candles, databases, tokens, logs)
-data/
+# runtime data (candles, databases, tokens, logs) — root only, not the candly.data package
+/data/
 *.log
 
 # python

@@ -76,7 +76,8 @@ class NewsStore:
             conn.close()
 
     def add(self, items: Iterable[NewsItem]) -> int:
-        """Insert new items (dedupe on id). Returns how many were new."""
+        """Insert new items (dedupe on id). An item seen before keeps its first row, but gains any new
+        instrument links (another feed's summary can name more instruments). Returns how many were new."""
         added = 0
         with self._connect() as conn:
             for item in items:
@@ -97,12 +98,11 @@ class NewsStore:
                         item.feed,
                     ),
                 )
-                if cursor.rowcount:
-                    added += 1
-                    conn.executemany(
-                        "INSERT OR IGNORE INTO news_instruments (news_id, instrument_id) VALUES (?, ?)",
-                        [(item.id, instrument_id) for instrument_id in item.instruments],
-                    )
+                added += cursor.rowcount
+                conn.executemany(
+                    "INSERT OR IGNORE INTO news_instruments (news_id, instrument_id) VALUES (?, ?)",
+                    [(item.id, instrument_id) for instrument_id in item.instruments],
+                )
         return added
 
     def query(
