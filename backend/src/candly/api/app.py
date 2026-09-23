@@ -1,7 +1,9 @@
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 
 from candly import __version__
 from candly.api.routes import analytics, platform
@@ -15,8 +17,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     if not get_settings().scheduler_enabled:
         yield
         return
-    from candly.jobs.scheduler import start_scheduler, stop_scheduler
+    from candly.jobs.pipeline import register_pipeline_jobs
+    from candly.jobs.scheduler import get_scheduler, start_scheduler, stop_scheduler
 
+    register_pipeline_jobs(get_scheduler())
     start_scheduler()
     try:
         yield
@@ -24,8 +28,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         stop_scheduler()
 
 
+async def _validation_error(request: Request, exc: RequestValidationError) -> JSONResponse:
+    problems = "; ".join(
+        f"{'.'.join(str(p) for p in err['loc'][1:]) or 'request'}: {err['msg']}" for err in exc.errors()
+    )
+    return JSONResponse(status_code=400, content={"detail": problems})
+
+
 def create_app() -> FastAPI:
     app = FastAPI(title="candly", version=__version__, lifespan=lifespan)
+    app.add_exception_handler(RequestValidationError, _validation_error)
     app.include_router(platform.router, prefix="/api")
     app.include_router(analytics.router, prefix="/api")
     return app

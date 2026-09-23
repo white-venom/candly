@@ -262,6 +262,33 @@ type AccuracyResponse = {
 };
 ```
 
+### Details settled during wave 1
+
+These were agreed while building and override anything above.
+
+- **Candles**
+  - `CandlesResponse.source` is where the stored series came from, e.g. `"yahoo"`, `"fyers"` or `"fyers+yahoo"`. It is not the current setting.
+  - `save_candles` takes an optional `source=`.
+  - The store also exposes `candle_source()` and `series_stats()`.
+  - `load_candles` rejects naive `start`/`end`.
+- **Indicators**
+  - Series names include `adx14`, `plus_di14`, `minus_di14`, `stoch_k`, `stoch_d`, `bb_width` and `supertrend_dir`.
+  - The family names `macd`, `bb`, `stoch` and `adx` expand to all their lines.
+  - A series whose name ends in `_hist` is drawn as a histogram.
+- **Scorecard**
+  - `base_rate` is the rate of moves *in the pattern's direction* on the same rows: P(down) for bearish rows, P(up) otherwise. That makes `hit_rate − base_rate` comparable across rows.
+  - CIs are at `stats.ci_level` from research.yaml (95%).
+  - `/api/scorecard` returns 503 until a scorecard has been built.
+- **Ledger and accuracy**
+  - `/api/ledger` and `/api/accuracy` accept an optional `method` query: ledger defaults to all methods, accuracy to `analog_v1`.
+  - There are always 10 calibration bins. Empty bins have `mean_pred` and `observed` set to `null`.
+- **Forecast**
+  - The first ghost candle is the first bar **after** the reference (last closed) bar. During a session, that is the bar that is currently forming.
+  - `expected_move_pct` is signed.
+  - `ScannerRow.score` is a probability difference (0–1).
+- **Errors:** every validation error returns 400 with `{detail}`, including FastAPI's own type errors.
+- **News:** the Python `NewsItem` is a pydantic model (`news/models.py`). A backtest must filter on `fetched_at` (as-of time), never on `published_at`.
+
 ### Grading definitions
 
 These are used by the ledger and the Accuracy page.
