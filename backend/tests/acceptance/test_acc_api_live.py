@@ -18,7 +18,9 @@ from candly.forecast.timing import last_expected_closed_bar
 pytestmark = pytest.mark.network
 
 SHAPES = {
-    "Health": {"status", "version", "time", "data_source", "keys", "markets", "ingest", "expiry_check", "sync"},
+    "Health": {
+        "status", "version", "time", "data_source", "keys", "markets", "ingest", "expiry_check", "sync"
+    },
     "Instrument": {"id", "exchange", "symbol", "name", "kind", "tradable", "timeframes", "data", "expiry"},
     "Candles": {"instrument", "tf", "source", "candles", "forming"},
     "Candle": {"time", "open", "high", "low", "close", "volume"},
