@@ -1,3 +1,4 @@
+import os
 from datetime import UTC, date, datetime
 from urllib.parse import parse_qs, urlparse
 
@@ -137,7 +138,20 @@ def test_health_on_a_weekend(client, monkeypatch):
     assert all(m == {"exchange": m["exchange"], "open": False, "phase": "closed"} for m in markets)
 
 
-def test_instruments(client):
+def write_mcx_master(data_dir, rows: list[tuple[str, str, pd.Timestamp]]) -> None:
+    """A Fyers MCX symbol master cached today: (ticker, underlying, expiry) rows."""
+    path = data_dir / "cache" / "fyers" / "MCX_COM.csv"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    lines = [
+        f"1,{ticker},30,100,1.0,,0900-2330,2026-09-23,{clock.epoch_seconds(expiry)},{ticker},11,20,1,{root}"
+        for ticker, root, expiry in rows
+    ]
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    os.utime(path, (clock.epoch_seconds(NOW), clock.epoch_seconds(NOW)))
+
+
+def test_instruments(client, tmp_data_dir):
+    write_mcx_master(tmp_data_dir, [("MCX:CRUDEOIL26OCTFUT", "CRUDEOIL", ist(2026, 10, 19, 23, 30))])
     save_candles("NSE:RELIANCE", "1D", daily([date(2026, 9, 21), date(2026, 9, 22)]))
     body = client.get("/api/instruments").json()
     assert [i["id"] for i in body] == [i.id for i in load_watchlist()]
@@ -150,6 +164,30 @@ def test_instruments(client):
         "last": clock.epoch_seconds(ist(2026, 9, 22, 9, 15)),
     }
     assert reliance["data"]["5m"] == {"bars": 0, "first": None, "last": None}
+
+    expiry = {i["id"]: i["expiry"] for i in body}
+    assert expiry["NSE:NIFTY50"] == {
+        "next": "2026-09-29", "kind": "monthly", "days_to_expiry": 4, "is_expiry_day": False
+    }
+    assert expiry["BSE:SENSEX"] == {
+        "next": "2026-09-24", "kind": "monthly", "days_to_expiry": 1, "is_expiry_day": False
+    }
+    assert expiry["MCX:CRUDEOIL"] == {
+        "next": "2026-10-19", "kind": "contract", "days_to_expiry": 17, "is_expiry_day": False
+    }
+    assert expiry["NSE:INDIAVIX"] is None and expiry["MCX:GOLD"] is None
+
+
+@respx.mock
+def test_instruments_without_an_mcx_master(client):
+    master = fyers.SYMBOL_MASTER_URL.format(segment="MCX_COM")
+    route = respx.get(master).mock(return_value=httpx.Response(503))
+    for _ in range(3):
+        response = client.get("/api/instruments")
+        assert response.status_code == 200
+        expiry = {i["id"]: i["expiry"] for i in response.json()}
+        assert expiry["MCX:CRUDEOIL"] is None and expiry["NSE:RELIANCE"]["kind"] == "monthly"
+    assert route.call_count == 1  # a failed download is not retried on every request
 
 
 def test_candles(client, monkeypatch):

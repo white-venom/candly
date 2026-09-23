@@ -336,9 +336,36 @@ type ExpiryInfo = { next: string /* YYYY-MM-DD, IST */; kind: "weekly" | "monthl
 //                          (true when a newer session exists in any timeframe than the daily bar used)
 ```
 
+**Data layer (backend wave 2)**
+- `data.expiries`
+  - `expiry_info(instrument_id, d)`
+  - `known_mcx_expiries(instrument_id) -> list[date]`
+  - `mcx_roll_dates(instrument_id) -> list[date]`
+  - MCX expiries come from the live Fyers symbol master and are recorded in `data/expiries/mcx.json` as they are seen. So MCX expiry info starts on 2026-09-23. Masking historical rolls needs a dated MCX expiry list in config (to do).
+  - An MCX contract expiry day sets `is_monthly_expiry_day = true`.
+- `data.quality`
+  - `missing_daily_sessions(instrument_id) -> list[date]`
+  - `suspicious_bars(df, kind) -> bool mask`
+  - `bar_count_anomalies(...)`
+  - CLI `python -m candly.data.quality --report` → `data/quality/report.json`
+- `data.store`
+  - `load_ts(instrument_id, tf)`: ts column only.
+  - `archive_source(source)`: moves series into `data/archive/<source>-<UTC>/`.
+- **Ingest CLI**
+  - `--archive-source yahoo`.
+  - The 1D ingest re-reads the last 5 sessions and re-fetches up to 10 daily sessions that are missing while intraday data exists.
+
 **Signals and calls**
 - `ScannerRow` excludes instruments with `tradable=false` (e.g. INDIAVIX).
 - A directional call (`abstain=false`) always has a non-null `invalidation` at least `patterns.min_stop_atr` ATR from the reference close. Otherwise the forecast abstains.
+- `Forecast` gains `trade: { entry: number; stop: number; target: number; reward_risk: number } | null`, non-null only for directional calls:
+  - `entry` = reference close (fill at the next open);
+  - `stop` = invalidation;
+  - `target` = p50 of the last step.
+
+  Position size is computed in the UI from the user's own capital and risk-% settings, as `qty = floor(capital × risk% / |entry − stop|)`.
+- New abstain reasons: "unvalidated bucket", "horizon crosses session close", "edge below costs".
+- `PatternSignal` rows can be filtered: `/api/patterns?...&directional_only=true&certified_only=true`.
 
 ### Grading definitions
 

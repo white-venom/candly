@@ -11,11 +11,13 @@ from fastapi.responses import RedirectResponse
 from starlette.concurrency import run_in_threadpool
 
 from candly import __version__
-from candly.core.calendar import get_calendar
+from candly.core.calendar import IST, get_calendar
+from candly.core.expiry import ExpiryInfo
 from candly.core.instruments import EXCHANGES, Instrument, UnknownInstrument, get_instrument, load_watchlist
 from candly.core.settings import get_settings
 from candly.core.timeframes import TIMEFRAMES
 from candly.data import clock
+from candly.data.expiries import expiry_info
 from candly.data.live import get_forming
 from candly.data.sources import fyers
 from candly.data.store import candle_source, data_summary, load_candles, series_stats
@@ -114,9 +116,21 @@ def health() -> dict:
     }
 
 
+def _expiry_json(info: ExpiryInfo | None) -> dict | None:
+    if info is None:
+        return None
+    return {
+        "next": info.next_expiry.isoformat(),
+        "kind": info.kind,
+        "days_to_expiry": info.days_to_expiry,
+        "is_expiry_day": info.is_expiry_day,
+    }
+
+
 @router.get("/instruments")
 def instruments() -> list[dict]:
     summary = data_summary()
+    today = clock.utc_now().tz_convert(IST).date()
     return [
         {
             "id": inst.id,
@@ -130,6 +144,7 @@ def instruments() -> list[dict]:
                 tf: {"bars": s["bars"], "first": _epoch(s["first"]), "last": _epoch(s["last"])}
                 for tf, s in summary.get(inst.id, {}).items()
             },
+            "expiry": _expiry_json(expiry_info(inst.id, today)),
         }
         for inst in load_watchlist()
     ]

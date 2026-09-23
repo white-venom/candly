@@ -110,8 +110,12 @@ def test_scheduler_is_not_started_on_import_and_registers_jobs():
             "intraday_ingest",
             "daily_ingest_nse_bse",
             "daily_ingest_mcx",
+            "daily_ingest_catchup",
             "refresh_fyers_session",
         }
+        catchup = sched.get_job("daily_ingest_catchup")
+        assert catchup.args == (("NSE", "BSE", "MCX"),)
+        assert str(catchup.trigger.fields[6]) == "40" and str(catchup.trigger.fields[5]) == "8"
         assert scheduler.get_scheduler() is sched
     finally:
         scheduler.stop_scheduler()

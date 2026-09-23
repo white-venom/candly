@@ -153,22 +153,24 @@ def _client() -> httpx.Client:
     return httpx.Client(timeout=TIMEOUT, headers={"User-Agent": USER_AGENT})
 
 
-def _request(client: httpx.Client, method: str, url: str, **kwargs) -> httpx.Response:
+def _request(
+    client: httpx.Client, method: str, url: str, *, retries: int = MAX_RETRIES, **kwargs
+) -> httpx.Response:
     """Throttled request; retries 429, -429, 5xx and transport errors with backoff."""
-    for attempt in range(MAX_RETRIES + 1):
+    for attempt in range(retries + 1):
         _limiter.wait()
         try:
             response = client.request(method, url, **kwargs)
         except httpx.TransportError as exc:
-            if attempt == MAX_RETRIES:
+            if attempt == retries:
                 raise FyersError(f"could not reach Fyers ({type(exc).__name__})") from exc
             _sleep(_backoff(attempt))
             continue
         limited = response.status_code == 429 or _json(response).get("code") == RATE_LIMITED_CODE
         if not (limited or response.status_code >= 500):
             return response
-        if attempt == MAX_RETRIES:
-            raise FyersError(f"Fyers returned HTTP {response.status_code} after {MAX_RETRIES} retries")
+        if attempt == retries:
+            raise FyersError(f"Fyers returned HTTP {response.status_code} after {retries} retries")
         log.warning("Fyers HTTP %s; retrying", response.status_code)
         _sleep(_backoff(attempt, response if limited else None))
     raise AssertionError("unreachable")
@@ -519,39 +521,52 @@ def _expire(token: FyersToken) -> None:
 
 # --- symbols ---------------------------------------------------------------------------------
 
-_master_cache: dict[str, tuple[str, pd.DataFrame]] = {}
+_master_cache: dict[Path, tuple[str, pd.DataFrame]] = {}
 
 
 def _today_ist() -> str:
     return clock.utc_now().tz_convert(IST).date().isoformat()
 
 
-def symbol_master(segment: str) -> pd.DataFrame:
-    """Columns expiry (epoch), ticker, underlying. Cached on disk and in memory for the IST day."""
-    today = _today_ist()
-    cached = _master_cache.get(segment)
-    if cached and cached[0] == today:
-        return cached[1]
-    path = get_settings().data_dir / "cache" / "fyers" / f"{segment}.csv"
-    fresh = path.exists() and datetime.fromtimestamp(path.stat().st_mtime, IST).date().isoformat() == today
-    if not fresh:
-        with _client() as client:
-            response = _request(client, "GET", SYMBOL_MASTER_URL.format(segment=segment))
-        response.raise_for_status()
-        path.parent.mkdir(parents=True, exist_ok=True)
-        fd, tmp = tempfile.mkstemp(dir=path.parent, suffix=".tmp")
-        with os.fdopen(fd, "wb") as fh:
-            fh.write(response.content)
-        os.replace(tmp, path)
+def master_path(segment: str) -> Path:
+    return get_settings().data_dir / "cache" / "fyers" / f"{segment}.csv"
+
+
+def master_day(path: Path) -> str:
+    """IST date (YYYY-MM-DD) the cached master file was downloaded."""
+    return datetime.fromtimestamp(path.stat().st_mtime, IST).date().isoformat()
+
+
+def read_master(path: Path) -> pd.DataFrame:
+    """Columns expiry (epoch), ticker, underlying, from a downloaded symbol master CSV."""
     raw = pd.read_csv(path, header=None, dtype=str, keep_default_na=False, on_bad_lines="skip")
-    table = pd.DataFrame(
+    return pd.DataFrame(
         {
             "expiry": pd.to_numeric(raw[MASTER_EXPIRY], errors="coerce"),
             "ticker": raw[MASTER_TICKER].str.strip(),
             "underlying": raw[MASTER_UNDERLYING].str.strip(),
         }
     )
-    _master_cache[segment] = (today, table)
+
+
+def symbol_master(segment: str, *, retries: int = MAX_RETRIES) -> pd.DataFrame:
+    """Columns expiry (epoch), ticker, underlying. Cached on disk and in memory for the IST day."""
+    today = _today_ist()
+    path = master_path(segment)
+    cached = _master_cache.get(path)
+    if cached and cached[0] == today:
+        return cached[1]
+    if not (path.exists() and master_day(path) == today):
+        with _client() as client:
+            response = _request(client, "GET", SYMBOL_MASTER_URL.format(segment=segment), retries=retries)
+        response.raise_for_status()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        fd, tmp = tempfile.mkstemp(dir=path.parent, suffix=".tmp")
+        with os.fdopen(fd, "wb") as fh:
+            fh.write(response.content)
+        os.replace(tmp, path)
+    table = read_master(path)
+    _master_cache[path] = (today, table)
     return table
 
 

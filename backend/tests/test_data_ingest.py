@@ -1,3 +1,4 @@
+import logging
 from datetime import date, datetime
 
 import numpy as np
@@ -8,7 +9,7 @@ from candly.core.calendar import IST, get_calendar
 from candly.core.settings import get_settings
 from candly.data import clock, ingest
 from candly.data.sources import SourceError, fyers
-from candly.data.store import load_candles, series_stats
+from candly.data.store import candle_source, load_candles, save_candles, series_stats
 
 cal = get_calendar()
 NOW = pd.Timestamp(datetime(2026, 9, 23, 16, 0), tz=IST).tz_convert("UTC")  # after the NSE close
@@ -39,27 +40,38 @@ def trading_days(exchange: str, start: date, end: date) -> list[date]:
 
 
 class FakeSource:
-    """Serves daily bars up to 23 Sep and 5m bars for 22-23 Sep, filtered by the requested start."""
+    """Serves daily bars for 1-23 Sep (minus `hidden_days`) and 5m bars for 22-23 Sep, filtered by the
+    requested start and end."""
 
     def __init__(self):
         self.calls: list[tuple[str, str, str, pd.Timestamp]] = []
         self.fail: set[str] = set()
+        self.fail_starts: set[pd.Timestamp] = set()
+        self.hidden_days: set[date] = set()
+        self.close_bump: dict[date, float] = {}
 
     def __call__(self, source, instrument, tf, start=None, end=None, *, include_forming=False):
         self.calls.append((source, instrument.id, tf, start))
-        if instrument.id in self.fail:
+        if instrument.id in self.fail or start in self.fail_starts:
             raise SourceError("boom")
         ex = instrument.exchange
         if tf == "1D":
-            opens = [
-                cal.session_times(ex, d)[0] for d in trading_days(ex, date(2026, 9, 1), date(2026, 9, 23))
-            ]
+            days = trading_days(ex, date(2026, 9, 1), date(2026, 9, 23))
+            opens = [cal.session_times(ex, d)[0] for d in days]
         else:
             opens = [
                 ts for d in (date(2026, 9, 22), date(2026, 9, 23)) for ts in cal.expected_bar_opens(ex, d, tf)
             ]
         df = bars(opens)
-        return df[df["ts"] >= start].reset_index(drop=True) if start is not None else df
+        for day, bump in self.close_bump.items():
+            df.loc[df["ts"] == cal.session_times(ex, day)[0], "close"] += bump
+        hidden = [cal.session_times(ex, d)[0] for d in self.hidden_days]
+        df = df[~df["ts"].isin(hidden)]
+        if start is not None:
+            df = df[df["ts"] >= start]
+        if end is not None:
+            df = df[df["ts"] < end]
+        return df.reset_index(drop=True)
 
 
 @pytest.fixture
@@ -70,17 +82,106 @@ def fake(monkeypatch, tmp_data_dir, no_keys):
     return source
 
 
-def test_backfill_then_up_to_date_then_incremental(fake, monkeypatch):
+def test_backfill_then_daily_runs_always_reread_the_last_five_sessions(fake, monkeypatch):
     counts = ingest.ingest("1D", instruments=["NSE:RELIANCE"])
     assert counts == {"NSE:RELIANCE": 16}
     assert fake.calls[-1] == ("yahoo", "NSE:RELIANCE", "1D", clock.ist_midnight(date(2005, 1, 1)))
 
+    # Up to date, but the last 5 sessions (17, 18, 21, 22, 23 Sep) are still re-read.
     assert ingest.ingest("1D", instruments=["NSE:RELIANCE"]) == {"NSE:RELIANCE": 0}
-    assert len(fake.calls) == 1  # already holds the latest closed bar: no fetch
+    assert fake.calls[-1][3] == ist(2026, 9, 17, 0, 0)
+
+    # A provisional close that the source later corrects is overwritten.
+    fake.close_bump[date(2026, 9, 22)] = 0.5
+    assert ingest.ingest("1D", instruments=["NSE:RELIANCE"]) == {"NSE:RELIANCE": 1}
+    stored = load_candles("NSE:RELIANCE", "1D").set_index("ts")["close"]
+    assert stored[ist(2026, 9, 22, 9, 15)] == 101 + 14 + 0.5
 
     monkeypatch.setattr(clock, "utc_now", lambda: NOW + pd.Timedelta(days=1))
     ingest.ingest("1D", instruments=["NSE:RELIANCE"])
-    assert fake.calls[-1][3] == ist(2026, 9, 23, 9, 15) - ingest.DAILY_OVERLAP
+    assert fake.calls[-1][3] == ist(2026, 9, 18, 0, 0)
+
+    # After a long pause the re-read starts at the last stored session instead.
+    monkeypatch.setattr(clock, "utc_now", lambda: NOW + pd.Timedelta(days=30))
+    ingest.ingest("1D", instruments=["NSE:RELIANCE"])
+    assert fake.calls[-1][3] == ist(2026, 9, 23, 0, 0)
+
+
+def test_recent_sessions_start_skips_holidays_and_the_forming_day():
+    during = ist(2026, 9, 15, 12, 0)  # Tuesday session in progress; Monday 14 Sep is a holiday
+    assert ingest.recent_sessions_start("NSE", 5, during) == ist(2026, 9, 7, 0, 0)  # 7, 8, 9, 10, 11 Sep
+
+
+def test_daily_ingest_refetches_sessions_missing_next_to_intraday_data(fake, monkeypatch, caplog):
+    fake.hidden_days = {date(2026, 9, 2), date(2026, 9, 3)}
+    ingest.ingest("1D", instruments=["NSE:RELIANCE"])
+    one_hour = cal.expected_bar_opens("NSE", date(2026, 9, 2), "1h") + cal.expected_bar_opens(
+        "NSE", date(2026, 9, 3), "1h"
+    )
+    save_candles("NSE:RELIANCE", "1h", bars(one_hour))
+
+    fake.hidden_days = {date(2026, 9, 3)}  # the source now has 2 Sep, but still not 3 Sep
+    fake.calls.clear()
+    with caplog.at_level(logging.WARNING, logger="candly.data.ingest"):
+        counts = ingest.ingest("1D", instruments=["NSE:RELIANCE"])
+    assert counts == {"NSE:RELIANCE": 1}
+    assert [call[3] for call in fake.calls[1:]] == [ist(2026, 9, 2, 0, 0), ist(2026, 9, 3, 0, 0)]
+    assert ist(2026, 9, 2, 9, 15) in set(load_candles("NSE:RELIANCE", "1D")["ts"])
+    assert "still missing: ['2026-09-03']" in caplog.text
+
+
+def test_missing_session_refetch_is_capped_and_best_effort(fake):
+    fake.hidden_days = set(trading_days("NSE", date(2026, 9, 1), date(2026, 9, 16)))  # 11 sessions
+    ingest.ingest("1D", instruments=["NSE:RELIANCE"])
+    days = sorted(fake.hidden_days)
+    save_candles("NSE:RELIANCE", "1h", bars([cal.session_times("NSE", d)[0] for d in days]))
+    fake.calls.clear()
+    fake.fail_starts = {ist(2026, 9, 16, 0, 0)}
+
+    report = ingest.run_ingest("1D", instruments=["NSE:RELIANCE"])
+    assert report.failed == {} and report.counts == {"NSE:RELIANCE": 0}
+    refetched = [call[3] for call in fake.calls[1:]]
+    assert refetched == [clock.ist_midnight(d) for d in days[-ingest.MISSING_REFETCH_LIMIT :]]
+
+
+def test_archive_yahoo_then_fyers_backfills_from_scratch(fake, monkeypatch, fake_fyers_keys, capsys):
+    monkeypatch.setattr(ingest, "setup_logging", lambda: None)
+    monkeypatch.setattr(fyers, "ensure_token", lambda: None)
+    for tf in ("1D", "5m", "1h"):
+        ingest.ingest(tf, instruments=["NSE:RELIANCE", "NSE:INFY"], source="yahoo")
+    save_candles("NSE:TCS", "1D", bars([ist(2026, 9, 22, 9, 15)]), source="fyers")
+    save_candles("NSE:INFY", "1D", bars([ist(2026, 9, 22, 9, 15)]), source="fyers")  # now fyers+yahoo
+
+    assert ingest.main(["--archive-source", "yahoo"]) == 0
+    out = capsys.readouterr().out
+    assert "6 yahoo series archived" in out
+    archives = list((get_settings().data_dir / "archive").iterdir())
+    assert len(archives) == 1 and archives[0].name.startswith("yahoo-")
+    assert (archives[0] / "NSE" / "1D" / "INFY.parquet").exists()
+    assert (archives[0] / "NSE" / "5m" / "RELIANCE.parquet").exists()
+    assert series_stats("NSE:RELIANCE", "1D")["bars"] == 0 and series_stats("NSE:INFY", "1h")["bars"] == 0
+    assert series_stats("NSE:TCS", "1D")["bars"] == 1  # fyers-only series stay
+
+    fake.calls.clear()
+    for tf in ("1D", "5m", "15m", "1h"):
+        ingest.ingest(tf, instruments=["NSE:RELIANCE"], source="fyers")
+    assert [call[2:] for call in fake.calls] == [
+        ("1D", clock.ist_midnight(date(2005, 1, 1))),
+        ("5m", clock.ist_midnight(date(2017, 7, 3))),
+    ]  # 15m and 1h are resampled from the stored 5m, not fetched
+    for tf, n in (("1D", 16), ("5m", 150), ("15m", 50), ("1h", 14)):
+        assert series_stats("NSE:RELIANCE", tf)["bars"] == n
+        assert candle_source("NSE:RELIANCE", tf) == "fyers"
+
+
+def test_archive_source_cli_runs_on_its_own(fake, monkeypatch, capsys):
+    monkeypatch.setattr(ingest, "setup_logging", lambda: None)
+    assert ingest.main(["--archive-source", "yahoo"]) == 0
+    assert "nothing to archive" in capsys.readouterr().out
+    with pytest.raises(SystemExit):
+        ingest.main(["--archive-source", "yahoo", "--tf", "1D"])
+    with pytest.raises(SystemExit):
+        ingest.main([])
 
 
 def test_intraday_overlap_starts_at_last_session_open(fake, monkeypatch):

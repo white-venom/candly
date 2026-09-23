@@ -122,12 +122,27 @@ def _read_arrow(path: Path, read: Callable[[Path], T]) -> T | None:
         return None
 
 
+def _sources(schema: pa.Schema) -> set[str]:
+    raw = (schema.metadata or {}).get(_SOURCE_KEY, b"").decode()
+    return {s for s in raw.split(",") if s}
+
+
 def _read(path: Path) -> tuple[pd.DataFrame, set[str]]:
     table = _read_arrow(path, pq.read_table)
     if table is None:
         return empty_candles(), set()
-    raw_sources = (table.schema.metadata or {}).get(_SOURCE_KEY, b"").decode()
-    return validate_candles(table.to_pandas()), {s for s in raw_sources.split(",") if s}
+    return validate_candles(table.to_pandas()), _sources(table.schema)
+
+
+def _read_ts(path: Path) -> pd.Series | None:
+    table = _read_arrow(path, lambda p: pq.read_table(p, columns=["ts"]))
+    return None if table is None else pd.to_datetime(table.column("ts").to_pandas(), utc=True)
+
+
+def load_ts(instrument_id: str, tf: str) -> pd.Series:
+    """Bar open times of a stored series, ascending, reading only the ts column (cheap)."""
+    ts = _read_ts(candle_path(instrument_id, tf))
+    return pd.Series([], dtype="datetime64[ns, UTC]") if ts is None else ts
 
 
 def load_candles(
@@ -151,8 +166,7 @@ def candle_source(instrument_id: str, tf: str) -> str | None:
     schema = _read_arrow(candle_path(instrument_id, tf), pq.read_schema)
     if schema is None:
         return None
-    raw = (schema.metadata or {}).get(_SOURCE_KEY, b"").decode()
-    return "+".join(sorted(s for s in raw.split(",") if s)) or None
+    return "+".join(sorted(_sources(schema))) or None
 
 
 def _count_changes(existing: pd.DataFrame, incoming: pd.DataFrame) -> int:
@@ -231,10 +245,9 @@ def series_stats(instrument_id: str, tf: str) -> dict:
     cached = _stats_cache.get(path)
     if cached and cached[0] == key:
         return dict(cached[1])
-    table = _read_arrow(path, lambda p: pq.read_table(p, columns=["ts"]))
-    if table is None:
+    ts = _read_ts(path)
+    if ts is None:
         return {"bars": 0, "first": None, "last": None}
-    ts = pd.to_datetime(table.column("ts").to_pandas(), utc=True)
     stats = {
         "bars": len(ts),
         "first": ts.min() if len(ts) else None,
@@ -247,6 +260,27 @@ def series_stats(instrument_id: str, tf: str) -> dict:
 def data_summary() -> dict[str, dict[str, dict]]:
     """{instrument_id: {tf: {"bars", "first", "last"}}} for every watchlist instrument and timeframe."""
     return {inst.id: {tf: series_stats(inst.id, tf) for tf in inst.timeframes} for inst in load_watchlist()}
+
+
+def archive_source(source: str) -> list[Path]:
+    """Move every stored series whose recorded sources include `source` (e.g. "yahoo" or "fyers+yahoo")
+    to data/archive/{source}-{UTC time}/, keeping the EXCHANGE/tf/SYMBOL.parquet layout, so the next
+    ingest backfills it from scratch. Nothing is deleted. Returns the archived paths."""
+    candles_dir = get_settings().candles_dir
+    stamp = clock.utc_now().strftime("%Y%m%dT%H%M%SZ")
+    target_root = get_settings().data_dir / "archive" / f"{source}-{stamp}"
+    moved: list[Path] = []
+    for path in sorted(candles_dir.glob("*/*/*.parquet")):
+        with series_lock(path):
+            schema = _read_arrow(path, pq.read_schema)
+            if schema is None or source not in _sources(schema):
+                continue
+            target = target_root / path.relative_to(candles_dir)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            _replace(str(path), target)
+        moved.append(target)
+        log.info("archived %s -> %s", path, target)
+    return moved
 
 
 def clean_existing(tf: str, exchanges: tuple[str, ...] = ("NSE", "BSE")) -> dict[str, int]:

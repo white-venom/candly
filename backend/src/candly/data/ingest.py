@@ -1,8 +1,10 @@
 """Candle ingestion: backfill empty series, then update incrementally from the last stored bar.
+Every 1D run also re-reads the last few sessions and re-fetches daily bars missing next to intraday data.
 
 CLI: python -m candly.data.ingest --tf 1D [--instrument NSE:RELIANCE ...] [--source auto|fyers|yahoo]
      [--since 2015-01-01]
      python -m candly.data.ingest --tf 1D --clean-existing   (re-clean stored NSE/BSE series, no download)
+     python -m candly.data.ingest --archive-source yahoo     (move Yahoo series to data/archive/, no download)
 """
 
 import argparse
@@ -17,12 +19,14 @@ import pandas as pd
 from candly.core.calendar import IST, get_calendar
 from candly.core.instruments import Instrument, UnknownInstrument, get_instrument, load_watchlist
 from candly.core.log import setup_logging
-from candly.core.timeframes import TIMEFRAMES, is_intraday, validate_tf
+from candly.core.settings import get_settings
+from candly.core.timeframes import TIMEFRAMES, validate_tf
 from candly.data import clock
 from candly.data.clean import closed_only
+from candly.data.quality import missing_daily_sessions
 from candly.data.resample import resample_candles
 from candly.data.sources import SOURCES, SourceError, fetch_candles, fyers, resolve_source
-from candly.data.store import clean_existing, load_candles, save_candles, series_stats
+from candly.data.store import archive_source, clean_existing, load_candles, save_candles, series_stats
 
 log = logging.getLogger(__name__)
 
@@ -32,7 +36,8 @@ BACKFILL_START = {
     "15m": date(2017, 7, 3),
     "1h": date(2017, 7, 3),
 }
-DAILY_OVERLAP = pd.Timedelta(days=10)
+DAILY_REFETCH_SESSIONS = 5  # every 1D run re-reads at least this many recent sessions
+MISSING_REFETCH_LIMIT = 10  # most recent missing daily sessions re-fetched per 1D run
 
 
 @dataclass
@@ -75,32 +80,70 @@ def _session_open_on_or_before(exchange: str, ts: pd.Timestamp) -> pd.Timestamp:
     return min(ts, cal.session_times(exchange, cal.local_date(ts))[0])
 
 
-def _overlap_start(exchange: str, tf: str, last: pd.Timestamp) -> pd.Timestamp:
-    """Re-read a little history before the last stored bar so late corrections are picked up."""
-    if is_intraday(tf):
-        return _session_open_on_or_before(exchange, last)
-    return last - DAILY_OVERLAP
+def recent_sessions_start(exchange: str, sessions: int, now: pd.Timestamp) -> pd.Timestamp:
+    """IST midnight of the `sessions`-th most recent session whose daily bar has closed by `now`."""
+    cal = get_calendar()
+    latest = latest_closed_open(exchange, "1D", now)
+    day = cal.local_date(latest if latest is not None else now)
+    found = 0 if latest is None else 1
+    while found < sessions:
+        day -= timedelta(days=1)
+        found += cal.is_trading_day(exchange, day)
+    return clock.ist_midnight(day)
 
 
 def _update_start(inst: Instrument, tf: str, since: pd.Timestamp | None) -> pd.Timestamp | None:
-    """Where to start fetching, or None when the series already holds the latest closed bar."""
+    """Where to start fetching, or None when an intraday series already holds the latest closed bar."""
     if since is not None:
         return _session_open_on_or_before(inst.exchange, since)
     last = series_stats(inst.id, tf)["last"]
     if last is None:
         return clock.ist_midnight(BACKFILL_START[tf])
-    latest = latest_closed_open(inst.exchange, tf, clock.utc_now())
+    now = clock.utc_now()
+    if tf == "1D":
+        # Always re-read the last few sessions: a late or provisional daily close gets corrected.
+        last_day = clock.ist_midnight(get_calendar().local_date(last))
+        return min(last_day, recent_sessions_start(inst.exchange, DAILY_REFETCH_SESSIONS, now))
+    latest = latest_closed_open(inst.exchange, tf, now)
     if latest is not None and last >= latest:
         return None
-    return _overlap_start(inst.exchange, tf, last)
+    # Re-read the last stored session so late intraday corrections are picked up.
+    return _session_open_on_or_before(inst.exchange, last)
+
+
+def _refetch_missing_daily(inst: Instrument, source: str) -> int:
+    """Re-fetch the 1D bar of sessions the intraday series have but the daily series lacks, e.g. a close
+    the source published late. Best effort: the main update has already been saved."""
+    missing = missing_daily_sessions(inst.id)[-MISSING_REFETCH_LIMIT:]
+    count = 0
+    for day in missing:
+        start, end = clock.ist_midnight(day), clock.ist_midnight(day + timedelta(days=1))
+        try:
+            count += save_candles(inst.id, "1D", fetch_candles(source, inst, "1D", start, end), source=source)
+        except fyers.FyersNotConnected:
+            raise
+        except Exception as exc:
+            log.warning("%s 1D: re-fetching %s failed: %s", inst.id, day, exc)
+    if missing:
+        still = sorted(set(missing) & set(missing_daily_sessions(inst.id)))
+        log.log(
+            logging.WARNING if still else logging.INFO,
+            "%s 1D: re-fetched %d sessions present intraday but missing daily; still missing: %s",
+            inst.id,
+            len(missing),
+            [d.isoformat() for d in still] or "none",
+        )
+    return count
 
 
 def _ingest_series(inst: Instrument, tf: str, source: str, since: pd.Timestamp | None) -> int:
     start = _update_start(inst, tf, since)
     if start is None:
         return 0
-    df = fetch_candles(source, inst, tf, start)
-    return save_candles(inst.id, tf, df, source=source)
+    count = save_candles(inst.id, tf, fetch_candles(source, inst, tf, start), source=source)
+    if tf == "1D":
+        count += _refetch_missing_daily(inst, source)
+    return count
 
 
 def _ingest_derived(inst: Instrument, tf: str, since: pd.Timestamp | None) -> int:
@@ -112,7 +155,7 @@ def _ingest_derived(inst: Instrument, tf: str, since: pd.Timestamp | None) -> in
     elif last is None:
         start = None
     else:
-        start = _overlap_start(inst.exchange, tf, last)
+        start = _session_open_on_or_before(inst.exchange, last)
     base = load_candles(inst.id, "5m", start=start)
     derived = closed_only(resample_candles(base, tf, inst.exchange), inst.exchange, tf, clock.utc_now())
     return save_candles(inst.id, tf, derived, source="fyers")
@@ -187,7 +230,7 @@ def _fmt(ts: pd.Timestamp | None) -> str:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m candly.data.ingest", description="Download candles.")
-    parser.add_argument("--tf", required=True, choices=list(TIMEFRAMES))
+    parser.add_argument("--tf", choices=list(TIMEFRAMES))
     parser.add_argument("--instrument", dest="instruments", nargs="+", action="extend", metavar="ID")
     parser.add_argument("--source", choices=["auto", *SOURCES], default="auto")
     parser.add_argument("--since", type=date.fromisoformat, metavar="YYYY-MM-DD")
@@ -196,8 +239,26 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="re-run the candle cleaning over the stored NSE/BSE series of --tf instead of downloading",
     )
+    parser.add_argument(
+        "--archive-source",
+        choices=SOURCES,
+        metavar="SOURCE",
+        help="move every stored series that came from SOURCE to data/archive/ (nothing is deleted), so the "
+        "next ingest backfills from scratch; runs on its own",
+    )
     args = parser.parse_args(argv)
+    if args.archive_source and (args.tf or args.instruments or args.since or args.clean_existing):
+        parser.error("--archive-source runs on its own; run the ingest afterwards")
+    if not args.archive_source and not args.tf:
+        parser.error("--tf is required")
     setup_logging()
+    if args.archive_source:
+        moved = archive_source(args.archive_source)
+        data_dir = get_settings().data_dir
+        for path in moved:
+            print(f"archived {path.relative_to(data_dir)}")
+        print(f"\n{len(moved)} {args.archive_source} series archived" if moved else "nothing to archive")
+        return 0
     if args.clean_existing:
         dropped = clean_existing(args.tf)
         print(f"\n{'instrument':<18} {'dropped':>7}")

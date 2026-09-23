@@ -132,6 +132,14 @@ def get_scheduler() -> BackgroundScheduler:
                 args=[("MCX",)],
                 id="daily_ingest_mcx",
             )
+            # Before the open, pick up daily closes a source published late, so "previous day" levels
+            # never come from an older session (acceptance report F1). Pure ingest: no forecasts.
+            scheduler.add_job(
+                daily_ingest,
+                CronTrigger(day_of_week="mon-fri", hour=8, minute=40, timezone=IST),
+                args=[EXCHANGES],
+                id="daily_ingest_catchup",
+            )
             scheduler.add_job(
                 refresh_fyers_session,
                 CronTrigger(hour=6, minute=5, timezone=IST),

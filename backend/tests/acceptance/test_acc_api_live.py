@@ -19,7 +19,7 @@ pytestmark = pytest.mark.network
 
 SHAPES = {
     "Health": {"status", "version", "time", "data_source", "keys", "markets", "ingest"},
-    "Instrument": {"id", "exchange", "symbol", "name", "kind", "tradable", "timeframes", "data"},
+    "Instrument": {"id", "exchange", "symbol", "name", "kind", "tradable", "timeframes", "data", "expiry"},
     "Candles": {"instrument", "tf", "source", "candles", "forming"},
     "Candle": {"time", "open", "high", "low", "close", "volume"},
     "NewsItem": {
