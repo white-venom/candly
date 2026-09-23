@@ -4,6 +4,7 @@ import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router";
 import { ApiError } from "./api/client";
 import App from "./App";
+import { SizingProvider } from "./components/SizingProvider";
 import { ThemeProvider } from "./components/ThemeProvider";
 import "./index.css";
 
@@ -21,11 +22,13 @@ const queryClient = new QueryClient({
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <ThemeProvider>
-      <QueryClientProvider client={queryClient}>
-        <BrowserRouter>
-          <App />
-        </BrowserRouter>
-      </QueryClientProvider>
+      <SizingProvider>
+        <QueryClientProvider client={queryClient}>
+          <BrowserRouter>
+            <App />
+          </BrowserRouter>
+        </QueryClientProvider>
+      </SizingProvider>
     </ThemeProvider>
   </StrictMode>,
 );

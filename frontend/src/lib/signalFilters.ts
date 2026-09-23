@@ -38,7 +38,7 @@ export function useSignalFilters() {
 
 export function emptySignalsText(filters: SignalFilters): string {
   if (filters.certifiedOnly) return "No certified signals on this chart.";
-  if (!filters.showNeutral) return "No directional signals on this chart yet. Tick “Show neutral patterns” to see the rest.";
+  if (!filters.showNeutral) return "No directional signals on this chart yet. Neutral patterns can be shown from the Patterns menu.";
   return "No pattern signals on this chart yet.";
 }
 

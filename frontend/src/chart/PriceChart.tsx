@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import type { Candle, Forecast, Level, PatternSignal } from "../api/types";
+import type { Candle, Forecast } from "../api/types";
 import { useTheme } from "../lib/theme";
+import type { DrawnLevel } from "./levels";
 import { PriceChartController } from "./PriceChartController";
-import type { HoverBar, IndicatorPlot } from "./transforms";
+import type { Hover, IndicatorPlot, MarkerGlyph } from "./transforms";
 
 type Props = {
   tf: string;
@@ -10,18 +11,18 @@ type Props = {
   viewKey: string;
   candles: Candle[];
   forming: Candle | null;
-  signals: PatternSignal[];
-  levels: Level[];
+  markers: MarkerGlyph[];
+  levels: DrawnLevel[];
   /** draw the levels dashed and dimmed: a newer session exists than the one they come from */
   levelsStale: boolean;
   forecast: Forecast | null;
   plots: IndicatorPlot[];
-  height: number;
   label: string;
-  onHover?: (bar: HoverBar | null) => void;
+  onHover?: (hover: Hover | null) => void;
 };
 
-export function PriceChart({ tf, viewKey, candles, forming, signals, levels, levelsStale, forecast, plots, height, label, onHover }: Props) {
+/** The canvas chart; it fills its parent and resizes with it. */
+export function PriceChart({ tf, viewKey, candles, forming, markers, levels, levelsStale, forecast, plots, label, onHover }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [controller, setController] = useState<PriceChartController | null>(null);
   const { theme } = useTheme();
@@ -57,8 +58,8 @@ export function PriceChart({ tf, viewKey, candles, forming, signals, levels, lev
   }, [controller, candles, forming, viewKey]);
 
   useEffect(() => {
-    controller?.setSignals(signals);
-  }, [controller, signals]);
+    controller?.setMarkers(markers);
+  }, [controller, markers]);
 
   useEffect(() => {
     controller?.setLevels(levels, levelsStale);
@@ -77,5 +78,5 @@ export function PriceChart({ tf, viewKey, candles, forming, signals, levels, lev
     return controller.onHover(onHover);
   }, [controller, onHover]);
 
-  return <div ref={containerRef} role="img" aria-label={label} className="w-full" style={{ height }} />;
+  return <div ref={containerRef} role="img" aria-label={label} className="absolute inset-0" />;
 }

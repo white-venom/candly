@@ -5,14 +5,14 @@ import {
   type ChartOptions,
   type DeepPartial,
   type LineSeriesPartialOptions,
-  type PriceLineOptions,
 } from "lightweight-charts";
-import type { Direction, Level } from "../api/types";
+import type { Direction } from "../api/types";
 import { withAlpha } from "../lib/color";
 import { TOKENS, type Tokens } from "../lib/palette";
 import type { Theme } from "../lib/theme";
 
-type LineLook = Pick<PriceLineOptions, "color" | "lineStyle" | "lineWidth">;
+/** A horizontal line across the pane with a short tag ("PDH", "Stop") on the price axis. */
+export type TagLook = { color: string; dash: number[]; width: number; tagBackground: string; tagText: string };
 
 export type ChartTheme = {
   tokens: Tokens;
@@ -26,19 +26,22 @@ export type ChartTheme = {
   /** ghost candles of an abstaining forecast: grey, so they never read as a call */
   ghostAbstain: CandlestickSeriesPartialOptions;
   band: { p10: LineSeriesPartialOptions; p50: LineSeriesPartialOptions; p90: LineSeriesPartialOptions };
-  invalidation: LineLook;
-  invalidationAbstain: LineLook;
-  levels: Record<Level["kind"], LineLook>;
-  /** levels built from an older session than the newest data: dashed and dimmed */
-  levelsStale: Record<Level["kind"], LineLook>;
-  markers: Record<"confirmed" | "forming", Record<Direction, string>>;
+  /** the translucent fill between p10 and p90 */
+  bandFill: string;
+  bandFillAbstain: string;
+  /** the call's stop (invalidation): dashed */
+  stop: TagLook;
+  /** key levels: thin, dotted and neutral; colour is kept for direction */
+  level: TagLook;
+  /** levels built from an older session than the newest data: dimmed */
+  levelStale: TagLook;
+  /** the last price's axis tag, coloured by the last candle */
+  lastPrice: { up: TagLook; down: TagLook };
+  /** pattern arrows; forming ones are drawn hollow in the same colour */
+  markers: Record<Direction, string>;
   histogram: { up: string; down: string };
   indicators: readonly string[];
 };
-
-const SUPPORT: Level["kind"][] = ["pdl", "swing_low", "s1", "s2", "cpr_bottom"];
-const RESISTANCE: Level["kind"][] = ["pdh", "swing_high", "r1", "r2", "cpr_top"];
-const PIVOT: Level["kind"][] = ["pdc", "vwap", "pivot"];
 
 const QUIET_SERIES = { priceLineVisible: false, lastValueVisible: false } as const;
 
@@ -61,22 +64,14 @@ function ghostOptions(up: string, down: string): CandlestickSeriesPartialOptions
 /** Pure: theme → every colour option the price chart uses. Applied live on toggle. */
 export function chartTheme(theme: Theme): ChartTheme {
   const t = TOKENS[theme];
-  const volumeAlpha = theme === "dark" ? 0.45 : 0.4;
-  const bandLine = (lineStyle: LineStyle, lineWidth: 1 | 2): LineSeriesPartialOptions => ({
+  const volumeAlpha = theme === "dark" ? 0.24 : 0.22;
+  const bandLine = (color: string, lineStyle: LineStyle): LineSeriesPartialOptions => ({
     ...QUIET_SERIES,
-    color: t.band,
+    color,
     lineStyle,
-    lineWidth,
+    lineWidth: 1,
     crosshairMarkerVisible: false,
   });
-  const level = (color: string): LineLook => ({ color, lineStyle: LineStyle.Dotted, lineWidth: 1 });
-  const staleLevel = (color: string): LineLook => ({ color: withAlpha(color, 0.45), lineStyle: LineStyle.LargeDashed, lineWidth: 1 });
-  const byRole = (look: (color: string) => LineLook) =>
-    Object.fromEntries([
-      ...SUPPORT.map((k) => [k, look(t.up)]),
-      ...RESISTANCE.map((k) => [k, look(t.down)]),
-      ...PIVOT.map((k) => [k, look(t.neutral)]),
-    ]) as Record<Level["kind"], LineLook>;
 
   return {
     tokens: t,
@@ -86,12 +81,12 @@ export function chartTheme(theme: Theme): ChartTheme {
         textColor: t.inkMuted,
         panes: { separatorColor: t.line, separatorHoverColor: withAlpha(t.inkFaint, 0.25) },
       },
-      grid: { vertLines: { color: t.grid }, horzLines: { color: t.grid } },
+      grid: { vertLines: { color: t.grid, visible: false }, horzLines: { color: t.grid } },
       rightPriceScale: { borderColor: t.line },
       timeScale: { borderColor: t.line },
       crosshair: {
-        vertLine: { color: t.inkFaint, labelBackgroundColor: t.raised },
-        horzLine: { color: t.inkFaint, labelBackgroundColor: t.raised },
+        vertLine: { color: withAlpha(t.inkFaint, 0.6), labelBackgroundColor: t.raised },
+        horzLine: { color: withAlpha(t.inkFaint, 0.6), labelBackgroundColor: t.raised },
       },
     },
     candles: {
@@ -107,28 +102,26 @@ export function chartTheme(theme: Theme): ChartTheme {
     volume: {
       up: withAlpha(t.up, volumeAlpha),
       down: withAlpha(t.down, volumeAlpha),
-      forming: withAlpha(t.forming, 0.55),
+      forming: withAlpha(t.forming, 0.45),
     },
     ghost: ghostOptions(t.up, t.down),
     ghostAbstain: ghostOptions(t.abstain, t.abstain),
     band: {
-      p10: bandLine(LineStyle.Solid, 1),
-      p50: bandLine(LineStyle.Dashed, 2),
-      p90: bandLine(LineStyle.Solid, 1),
+      p10: bandLine(withAlpha(t.band, 0.55), LineStyle.Solid),
+      p50: bandLine(t.band, LineStyle.Dashed),
+      p90: bandLine(withAlpha(t.band, 0.55), LineStyle.Solid),
     },
-    invalidation: { color: t.danger, lineStyle: LineStyle.Dashed, lineWidth: 2 },
-    invalidationAbstain: { color: t.abstain, lineStyle: LineStyle.Dashed, lineWidth: 1 },
-    levels: byRole(level),
-    levelsStale: byRole(staleLevel),
-    markers: {
-      confirmed: { bullish: t.up, bearish: t.down, neutral: t.neutral },
-      forming: {
-        bullish: withAlpha(t.up, 0.5),
-        bearish: withAlpha(t.down, 0.5),
-        neutral: withAlpha(t.neutral, 0.5),
-      },
+    bandFill: withAlpha(t.band, 0.1),
+    bandFillAbstain: withAlpha(t.abstain, 0.08),
+    stop: { color: t.danger, dash: [6, 4], width: 1, tagBackground: t.danger, tagText: t.surface },
+    level: { color: t.lineStrong, dash: [1, 3], width: 1, tagBackground: t.raised, tagText: t.inkMuted },
+    levelStale: { color: withAlpha(t.lineStrong, 0.45), dash: [1, 5], width: 1, tagBackground: t.raised, tagText: t.inkFaint },
+    lastPrice: {
+      up: { color: t.up, dash: [], width: 1, tagBackground: t.up, tagText: t.surface },
+      down: { color: t.down, dash: [], width: 1, tagBackground: t.down, tagText: t.surface },
     },
-    histogram: { up: withAlpha(t.up, 0.6), down: withAlpha(t.down, 0.6) },
+    markers: { bullish: t.up, bearish: t.down, neutral: t.neutral },
+    histogram: { up: withAlpha(t.up, 0.55), down: withAlpha(t.down, 0.55) },
     indicators: t.indicators,
   };
 }

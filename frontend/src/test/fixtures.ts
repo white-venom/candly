@@ -59,6 +59,24 @@ export const instruments: Instrument[] = [
   },
 ];
 
+export const nifty: Instrument = {
+  id: "NSE:NIFTY50",
+  exchange: "NSE",
+  symbol: "NIFTY50",
+  name: "Nifty 50",
+  kind: "index",
+  tradable: true,
+  timeframes: ["5m", "15m", "1h", "1D"],
+  data: { "1D": { bars: 3, first: T0 - 2 * DAY, last: T0 } },
+  expiry: { next: "2026-09-24", kind: "weekly", days_to_expiry: 1, is_expiry_day: false },
+};
+
+/** Health while Fyers isn't connected, so data updates are on hold. */
+export const pausedHealth: Health = {
+  ...health,
+  ingest: { status: "blocked", reason: "Fyers not connected — log in to resume data updates" },
+};
+
 export function candle(time: number, open: number, close: number, volume = 1000): Candle {
   return { time, open, high: Math.max(open, close) + 2, low: Math.min(open, close) - 2, close, volume };
 }

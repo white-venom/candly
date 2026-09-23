@@ -1,41 +1,42 @@
-import { useEffect, useMemo, useState } from "react";
-import { Link, Navigate, useParams } from "react-router";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Link, Navigate, useNavigate, useParams } from "react-router";
 import {
   useCandles,
   useForecast,
+  useHealth,
   useIndicatorCatalog,
   useIndicators,
   useInstruments,
   useLevels,
-  useNews,
   usePatterns,
 } from "../api/hooks";
-import type { Candle, IndicatorSeries, Level, PatternSignal } from "../api/types";
-import { ChartLegend } from "../chart/ChartLegend";
-import { IndicatorToggles } from "../chart/IndicatorToggles";
-import { PriceChart } from "../chart/PriceChart";
+import type { Candle, IndicatorSeries, Instrument, PatternSignal } from "../api/types";
 import { useIndicatorSelection } from "../chart/indicatorSelection";
-import { latestBar, planIndicators, type HoverBar } from "../chart/transforms";
-import { ErrorBoundary } from "../components/ErrorBoundary";
-import { ExpiryBadge } from "../components/ExpiryBadge";
-import { ForecastSummary } from "../components/ForecastSummary";
-import { NewsItemRow } from "../components/NewsItemRow";
-import { SignalFilterToggles, SignalList } from "../components/SignalList";
-import { EmptyState, ErrorState, LoadingState, QueryView } from "../components/States";
-import { Card } from "../components/ui";
-import { describeError } from "../lib/errors";
+import { levelsToDraw, type DrawnLevel } from "../chart/levels";
+import { barsWithForming, latestBar, markerGlyphs, planIndicators } from "../chart/transforms";
+import { NoticeStrip } from "../components/shell/NoticeStrip";
+import { SetupPanel } from "../components/setup/SetupPanel";
+import { EmptyState, ErrorState, LoadingState } from "../components/ui/States";
+import { ChartArea } from "../components/workspace/ChartArea";
+import { IndicatorsMenu } from "../components/workspace/IndicatorsMenu";
+import { LayerControls } from "../components/workspace/LayerControls";
+import { TopBar } from "../components/workspace/TopBar";
+import { Watchlist } from "../components/workspace/Watchlist";
+import { watchlistOrder } from "../lib/instruments";
+import { DEFAULT_LAYERS } from "../lib/layers";
+import { dataStatus } from "../lib/messages";
+import { usePref } from "../lib/prefs";
 import { chartPath, defaultSelection, readLastSelection, writeLastSelection } from "../lib/routes";
-import { emptySignalsText, useSignalFilters, type SignalFilters } from "../lib/signalFilters";
-import { formatDateIST } from "../lib/time";
+import { useHotkeys } from "../lib/shortcuts";
+import { useSignalFilters, type SignalFilters } from "../lib/signalFilters";
+import { formatDayIST } from "../lib/time";
 import { defaultTimeframe, sortTimeframes } from "../lib/timeframes";
 
 const NO_CANDLES: Candle[] = [];
 const NO_SIGNALS: PatternSignal[] = [];
-const NO_LEVELS: Level[] = [];
+const NO_LEVELS: DrawnLevel[] = [];
 const NO_SERIES: IndicatorSeries[] = [];
-
-const PRICE_PANE_HEIGHT = 460;
-const OSCILLATOR_PANE_HEIGHT = 130;
+const NO_INSTRUMENTS: Instrument[] = [];
 
 /** `/`, `/chart` and `/chart/:instrument` land here and are sent to a full chart URL. */
 export function ChartRedirect() {
@@ -46,185 +47,208 @@ export function ChartRedirect() {
     const target = known
       ? { instrument: known.id, tf: defaultTimeframe(known.timeframes) }
       : defaultSelection(instruments.data, readLastSelection());
-    if (!target) return <EmptyState className="m-4" />;
+    if (!target) return <EmptyState title="No instruments yet" hint="Check config/watchlist.yaml and restart the backend." />;
     return <Navigate to={chartPath(target.instrument, target.tf)} replace />;
   }
-  if (instruments.isError) return <ErrorState error={instruments.error} className="m-4" />;
-  return <LoadingState label="Loading instruments…" />;
+  if (instruments.isError) return <ErrorState error={instruments.error} className="flex-1" />;
+  return <LoadingState label="Loading instruments…" className="flex-1" />;
 }
 
-type SignalFilterProps = { filters: SignalFilters; onFiltersChange: (next: SignalFilters) => void };
-
-function WhyPanel({ instrument, tf, filters, onFiltersChange }: { instrument: string; tf: string } & SignalFilterProps) {
-  const forecast = useForecast(instrument, tf);
-  const patterns = usePatterns(instrument, tf, filters);
-  const news = useNews(instrument, 8);
-  return (
-    <div className="flex flex-col gap-3">
-      <Card title="Forecast — why">
-        <QueryView query={forecast} loadingLabel="Loading forecast…">
-          {(f) => <ForecastSummary forecast={f} tf={tf} />}
-        </QueryView>
-      </Card>
-      <Card title="Signals">
-        <SignalFilterToggles filters={filters} onChange={onFiltersChange} />
-        <QueryView query={patterns} isEmpty={(p) => p.length === 0} empty={emptySignalsText(filters)}>
-          {(p) => <SignalList signals={p} tf={tf} />}
-        </QueryView>
-      </Card>
-      <Card title="Latest news">
-        <QueryView query={news} isEmpty={(n) => n.length === 0} empty="No news logged for this instrument yet.">
-          {(items) => (
-            <div>
-              {items.map((item) => (
-                <NewsItemRow key={item.id} item={item} />
-              ))}
-            </div>
-          )}
-        </QueryView>
-      </Card>
-    </div>
-  );
-}
-
-function ChartView({ instrument, tf, name, filters }: { instrument: string; tf: string; name: string; filters: SignalFilters }) {
-  const candles = useCandles(instrument, tf);
-  const patterns = usePatterns(instrument, tf, filters);
-  const levels = useLevels(instrument, tf);
-  const forecast = useForecast(instrument, tf);
+function Workspace({
+  info,
+  tf,
+  filters,
+  onFilters,
+  showWatchlist,
+  showPanel,
+}: {
+  info: Instrument;
+  tf: string;
+  filters: SignalFilters;
+  onFilters: (next: SignalFilters) => void;
+  showWatchlist?: () => void;
+  showPanel?: () => void;
+}) {
+  const navigate = useNavigate();
+  const candles = useCandles(info.id, tf);
+  const patterns = usePatterns(info.id, tf, filters);
+  const levels = useLevels(info.id, tf);
+  const forecast = useForecast(info.id, tf);
   const catalog = useIndicatorCatalog();
-  const { enabled, toggle } = useIndicatorSelection(catalog.data);
+  const selection = useIndicatorSelection(catalog.data);
   const indicators = useIndicators(
-    instrument,
+    info.id,
     tf,
-    enabled.map((e) => e.name),
+    selection.enabled.map((e) => e.name),
   );
-  const [hover, setHover] = useState<HoverBar | null>(null);
+  const health = useHealth();
+  const [layers, setLayers] = usePref("candly.layers", DEFAULT_LAYERS);
+  const [indicatorsOpen, setIndicatorsOpen] = useState(false);
 
-  const series = indicators.data?.series ?? NO_SERIES;
-  const plots = useMemo(() => planIndicators(series, enabled), [series, enabled]);
-  const oscillatorPanes = new Set(plots.filter((p) => p.pane > 0).map((p) => p.pane)).size;
+  const tfs = sortTimeframes(info.timeframes);
+  const pickTf = (i: number) => {
+    if (tfs[i]) navigate(chartPath(info.id, tfs[i]));
+  };
+  useHotkeys({
+    "1": () => pickTf(0),
+    "2": () => pickTf(1),
+    "3": () => pickTf(2),
+    "4": () => pickTf(3),
+    i: () => setIndicatorsOpen((o) => !o),
+  });
 
   const closed = candles.data?.candles ?? NO_CANDLES;
   const forming = candles.data?.forming ?? null;
-  const forecastData = forecast.data ?? null;
-  const shownBar = hover ?? latestBar(closed, forming);
-  const levelList = levels.data?.levels ?? NO_LEVELS;
-  const levelsStale = levels.data?.stale === true;
+  const series = indicators.data?.series ?? NO_SERIES;
+  const plots = useMemo(() => planIndicators(series, selection.enabled), [series, selection.enabled]);
+  const signals = layers.patterns ? (patterns.data ?? NO_SIGNALS) : NO_SIGNALS;
+  const markers = useMemo(() => markerGlyphs(signals, new Set(barsWithForming(closed, forming).bars.map((c) => c.time))), [signals, closed, forming]);
+  const levelData = levels.data;
+  const drawnLevels = useMemo(
+    () => (layers.levels && levelData ? levelsToDraw(levelData.levels, closed, layers.allLevels ? "all" : "key") : NO_LEVELS),
+    [layers.levels, layers.allLevels, levelData, closed],
+  );
+  const levelsStale = levelData?.stale === true;
+  const levelsNote =
+    layers.levels && levelsStale ? (levelData?.as_of !== undefined ? `Levels from ${formatDayIST(levelData.as_of)}` : "Levels from an older session") : null;
+  const latest = useMemo(() => latestBar(closed, forming), [closed, forming]);
+  const canConnect = dataStatus(health.data, health.error).canConnect;
+  const noDataHint = canConnect ? `Connect Fyers — the backfill loads ${tf} candles.` : `Run ingest for ${tf} to load candles.`;
 
   return (
-    <Card className="min-w-0">
-      {catalog.data && catalog.data.length > 0 && (
-        <div className="mb-2">
-          <IndicatorToggles catalog={catalog.data} enabled={enabled} onToggle={toggle} />
-        </div>
-      )}
-      {indicators.isError && <ErrorState error={indicators.error} className="mb-2 p-2 text-xs" />}
-      <QueryView
-        query={candles}
-        isEmpty={(d) => d.candles.length === 0 && d.forming === null}
-        loadingLabel="Loading candles…"
-      >
-        {(data) => (
+    <>
+      <TopBar
+        info={info}
+        tf={tf}
+        last={latest}
+        asOf={closed.at(-1)?.time ?? null}
+        onTimeframe={(t) => navigate(chartPath(info.id, t))}
+        showWatchlist={showWatchlist}
+        showPanel={showPanel}
+        controls={
           <>
-            <ChartLegend
-              tf={tf}
-              bar={shownBar}
-              forecast={forecastData}
-              plots={plots}
-              hasLevels={levelList.length > 0}
-              levelsStale={levelsStale}
+            <IndicatorsMenu
+              entries={selection.entries}
+              enabled={selection.enabled}
+              onToggle={selection.toggle}
+              onPreset={selection.applyPreset}
+              open={indicatorsOpen}
+              onOpenChange={setIndicatorsOpen}
             />
-            {levelsStale && (
-              <p role="status" className="mb-1 px-1 text-xs font-medium text-forming">
-                {levels.data?.as_of !== undefined ? `Levels from ${formatDateIST(levels.data.as_of)}` : "Levels from an older session"}
-                {" — newer session data exists"}
-              </p>
-            )}
-            <ErrorBoundary label="price chart">
-              <PriceChart
-                tf={tf}
-                viewKey={`${instrument}|${tf}`}
-                candles={data.candles}
-                forming={data.forming}
-                signals={patterns.data ?? NO_SIGNALS}
-                levels={levelList}
-                levelsStale={levelsStale}
-                forecast={forecastData}
-                plots={plots}
-                height={PRICE_PANE_HEIGHT + OSCILLATOR_PANE_HEIGHT * oscillatorPanes}
-                label={`${name} ${tf} candlestick chart with patterns, levels and forecast`}
-                onHover={setHover}
-              />
-            </ErrorBoundary>
-            <p className="mt-1 text-[11px] text-ink-faint">
-              Times in IST · source {data.source} · {data.candles.length} closed bars
-              {data.forming && " + forming bar"}
-            </p>
-            {(levels.isError || catalog.isError) && (
-              <p role="status" className="mt-1 text-xs text-ink-muted">
-                Couldn’t load {[levels.isError && "key levels", catalog.isError && "the indicator list"].filter(Boolean).join(" or ")}
-                {" — "}
-                {describeError(levels.error ?? catalog.error).title}
-              </p>
-            )}
+            <LayerControls layers={layers} onLayers={setLayers} filters={filters} onFilters={onFilters} levels={drawnLevels} />
           </>
-        )}
-      </QueryView>
-    </Card>
+        }
+      />
+      <NoticeStrip />
+      <ChartArea
+        viewKey={`${info.id}|${tf}`}
+        tf={tf}
+        label={`${info.name} ${tf} candlestick chart`}
+        candles={candles}
+        signals={signals}
+        markers={markers}
+        levels={drawnLevels}
+        levelsStale={levelsStale}
+        levelsNote={levelsNote}
+        forecast={layers.forecast ? (forecast.data ?? null) : null}
+        plots={plots}
+        empty={{ title: `No ${tf} candles for ${info.name} yet`, hint: noDataHint }}
+        noDataHint={noDataHint}
+      />
+    </>
+  );
+}
+
+function Message({ children }: { children: ReactNode }) {
+  return (
+    <>
+      <NoticeStrip />
+      <div className="flex flex-1 items-center justify-center">{children}</div>
+    </>
   );
 }
 
 export function ChartPage() {
   const { instrument = "", tf = "" } = useParams();
   const instruments = useInstruments();
+  const navigate = useNavigate();
+  const searchRef = useRef<HTMLInputElement>(null);
+  const [layout, setLayout] = usePref("candly.layout", { watchlist: true, panel: true });
   const { filters, update: setFilters } = useSignalFilters();
-  const info = instruments.data?.find((i) => i.id === instrument);
+  const list = instruments.data ?? NO_INSTRUMENTS;
+  const info = list.find((i) => i.id === instrument);
   const valid = info !== undefined && info.timeframes.includes(tf);
 
   useEffect(() => {
     if (valid) writeLastSelection({ instrument, tf });
   }, [valid, instrument, tf]);
 
+  const step = (delta: number) => {
+    const order = watchlistOrder(list);
+    if (order.length === 0) return;
+    const index = order.findIndex((i) => i.id === instrument);
+    const next = order[(index + delta + order.length) % order.length];
+    navigate(chartPath(next.id, next.timeframes.includes(tf) ? tf : defaultTimeframe(next.timeframes)));
+  };
+  useHotkeys({
+    "/": () => {
+      if (searchRef.current) return searchRef.current.focus();
+      setLayout({ watchlist: true });
+      window.setTimeout(() => searchRef.current?.focus());
+    },
+    "[": () => step(-1),
+    "]": () => step(1),
+  });
+
+  let main: ReactNode;
   if (!instruments.data) {
-    if (instruments.isError) return <ErrorState error={instruments.error} className="m-4" />;
-    return <LoadingState label="Loading instruments…" />;
-  }
-  if (!info) {
-    return (
-      <EmptyState className="m-4">
-        Unknown instrument “{instrument}”. <Link to="/chart">Open the default chart</Link>.
-      </EmptyState>
+    main = <Message>{instruments.isError ? <ErrorState error={instruments.error} /> : <LoadingState label="Loading instruments…" />}</Message>;
+  } else if (!info) {
+    main = (
+      <Message>
+        <EmptyState title={`Unknown instrument “${instrument}”`} hint={<Link to="/chart">Open the default chart</Link>} />
+      </Message>
     );
-  }
-  if (!valid) {
-    return (
-      <EmptyState className="m-4">
-        {info.name} has no {tf} data. Available:{" "}
-        {sortTimeframes(info.timeframes).map((t, i) => (
-          <span key={t}>
-            {i > 0 && ", "}
-            <Link to={chartPath(info.id, t)}>{t}</Link>
-          </span>
-        ))}
-      </EmptyState>
+  } else if (!valid) {
+    main = (
+      <Message>
+        <EmptyState
+          title={`${info.name} has no ${tf} chart`}
+          hint={
+            <span className="inline-flex gap-2">
+              Available:
+              {sortTimeframes(info.timeframes).map((t) => (
+                <Link key={t} to={chartPath(info.id, t)}>
+                  {t}
+                </Link>
+              ))}
+            </span>
+          }
+        />
+      </Message>
+    );
+  } else {
+    main = (
+      <Workspace
+        info={info}
+        tf={tf}
+        filters={filters}
+        onFilters={setFilters}
+        showWatchlist={layout.watchlist ? undefined : () => setLayout({ watchlist: true })}
+        showPanel={layout.panel ? undefined : () => setLayout({ panel: true })}
+      />
     );
   }
 
   return (
-    <div className="flex flex-col gap-3 xl:flex-row xl:items-start">
-      <div className="min-w-0 flex-1">
-        <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1">
-          <h1 className="text-lg font-semibold text-ink">
-            {info.name} <span className="text-sm font-normal text-ink-muted">{info.id} · {tf}</span>
-          </h1>
-          {info.expiry && <ExpiryBadge expiry={info.expiry} />}
-        </div>
-        <ChartView instrument={instrument} tf={tf} name={info.name} filters={filters} />
-      </div>
-      <aside aria-label="Why" className="w-full xl:w-[400px] xl:shrink-0">
-        <WhyPanel instrument={instrument} tf={tf} filters={filters} onFiltersChange={setFilters} />
-      </aside>
+    <div className="flex min-h-0 flex-1">
+      {layout.watchlist && list.length > 0 && (
+        <Watchlist instruments={list} current={instrument} tf={valid ? tf : "1D"} searchRef={searchRef} onCollapse={() => setLayout({ watchlist: false })} />
+      )}
+      <section aria-label="Chart" className="flex min-w-0 flex-1 flex-col overflow-y-auto">
+        {main}
+      </section>
+      {valid && layout.panel && <SetupPanel info={info} tf={tf} filters={filters} onCollapse={() => setLayout({ panel: false })} />}
     </div>
   );
 }

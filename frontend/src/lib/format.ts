@@ -60,6 +60,22 @@ export function signTone(value: Num): string {
   return value > 0 ? "text-up" : "text-down";
 }
 
+export type Sentiment = "positive" | "negative" | "neutral" | "unknown";
+
+/** News sentiment −1..1, with a small dead zone so near-zero scores read as neutral. */
+export function sentimentOf(value: number | null): Sentiment {
+  if (value === null) return "unknown";
+  if (value > 0.1) return "positive";
+  if (value < -0.1) return "negative";
+  return "neutral";
+}
+
+/** A pattern's track record in one line: "hit 58% vs base 52% · n 41". */
+export function fmtStats(stats: { hit_rate: number; base_rate: number; n: number } | null): string | null {
+  if (!stats) return null;
+  return `hit ${fmtProb(stats.hit_rate, 0)} vs base ${fmtProb(stats.base_rate, 0)} · n ${fmtInt(stats.n)}`;
+}
+
 export function fmtVolume(x: Num): string {
   if (!isNum(x)) return DASH;
   if (x >= 1e7) return `${(x / 1e7).toFixed(2)} Cr`;

@@ -22,9 +22,21 @@ export function expiryLabel(expiry: ExpiryInfo): string {
   return `${KIND[expiry.kind]} expiry ${formatExpiryDate(expiry.next)} · ${expiry.days_to_expiry}d`;
 }
 
+/** Compact form for tight spaces: "Expiry today" or "Exp Tue 29 Sep". */
+export function expiryShortLabel(expiry: ExpiryInfo): string {
+  return expiry.is_expiry_day ? "Expiry today" : `Exp ${formatExpiryDate(expiry.next)}`;
+}
+
+const SOURCE: Record<NonNullable<ExpiryInfo["source"]>, string> = {
+  exchange: "from the exchange contract list",
+  rules: "estimated from rules",
+};
+
 export function expiryTitle(expiry: ExpiryInfo): string {
   const date = formatExpiryDate(expiry.next);
-  if (expiry.is_expiry_day) return `${KIND[expiry.kind]} expiry today (${date})`;
   const n = expiry.days_to_expiry;
-  return `${KIND[expiry.kind]} expiry on ${date}, ${n} trading day${n === 1 ? "" : "s"} away`;
+  const when = expiry.is_expiry_day
+    ? `${KIND[expiry.kind]} expiry today (${date})`
+    : `${KIND[expiry.kind]} expiry on ${date}, ${n} trading day${n === 1 ? "" : "s"} away`;
+  return expiry.source ? `${when} — ${SOURCE[expiry.source]}` : when;
 }

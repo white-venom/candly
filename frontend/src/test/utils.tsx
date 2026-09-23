@@ -3,6 +3,7 @@ import { render } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { MemoryRouter } from "react-router";
 import { vi } from "vitest";
+import { SizingProvider } from "../components/SizingProvider";
 import { ThemeProvider } from "../components/ThemeProvider";
 import { LocationProbe } from "./LocationProbe";
 
@@ -37,12 +38,14 @@ export function renderWithProviders(ui: ReactNode, { route = "/" }: { route?: st
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
   const result = render(
     <ThemeProvider>
-      <QueryClientProvider client={client}>
-        <MemoryRouter initialEntries={[route]}>
-          {ui}
-          <LocationProbe />
-        </MemoryRouter>
-      </QueryClientProvider>
+      <SizingProvider>
+        <QueryClientProvider client={client}>
+          <MemoryRouter initialEntries={[route]}>
+            {ui}
+            <LocationProbe />
+          </MemoryRouter>
+        </QueryClientProvider>
+      </SizingProvider>
     </ThemeProvider>,
   );
   return { client, ...result };

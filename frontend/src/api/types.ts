@@ -16,10 +16,31 @@ export type Health = {
   markets: { exchange: "NSE" | "BSE" | "MCX"; open: boolean; phase: string }[];
   // Older backends omit it; treat that as "ok".
   ingest?: { status: "ok" | "blocked"; reason: string | null };
+  // Live expiries; optional. `rules` / `exchange` are the two expiry dates (YYYY-MM-DD).
+  expiry_check?: ExpiryCheck;
+  // Fyers first sync; optional.
+  sync?: SyncStatus;
+};
+
+// GET /api/sync/status, POST /api/sync/fyers (JSON) -> 202 SyncStatus, or 409 if already running. progress is 0–1.
+export type SyncStatus = {
+  status: "idle" | "running" | "done" | "error";
+  step: string | null; progress: number | null; message: string | null;
+  started_at: number | null; finished_at: number | null;
+};
+
+export type ExpiryCheck = {
+  status: "ok" | "mismatch" | "unavailable";
+  checked_at: number | null;
+  mismatches: { instrument: string; rules: string; exchange: string }[];
 };
 
 // Wave 2. `next` is an IST calendar date (YYYY-MM-DD); days_to_expiry counts trading days, 0 on the day.
-export type ExpiryInfo = { next: string; kind: "weekly" | "monthly" | "contract"; days_to_expiry: number; is_expiry_day: boolean };
+// `source` (live expiries) is optional.
+export type ExpiryInfo = {
+  next: string; kind: "weekly" | "monthly" | "contract"; days_to_expiry: number; is_expiry_day: boolean;
+  source?: "exchange" | "rules";
+};
 
 // GET /api/instruments -> Instrument[]
 export type Instrument = {

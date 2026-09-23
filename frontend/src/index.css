@@ -72,8 +72,12 @@
 /* Drop Tailwind's default palette so only the tokens above can be used. */
 @theme {
   --color-*: initial;
-  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-sans: Inter, "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
   --font-mono: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  --text-2xs: 0.6875rem;
+  --text-2xs--line-height: 1rem;
+  --text-sm: 0.8125rem;
+  --text-sm--line-height: 1.25rem;
 }
 
 @theme inline {
@@ -105,6 +109,13 @@
   --color-ind-8: var(--ind-8);
 }
 
+/* Focus ring drawn inside the element, for rows and cells that sit flush against a scroll edge. */
+@utility focus-inset {
+  &:focus-visible {
+    outline-offset: -2px;
+  }
+}
+
 @layer base {
   html,
   body {
@@ -115,9 +126,18 @@
   body {
     margin: 0;
     font-family: var(--font-sans);
-    font-size: 14px;
+    font-size: 13px;
     line-height: 1.45;
     -webkit-font-smoothing: antialiased;
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--line) transparent;
+  }
+
+  ::selection {
+    background-color: color-mix(in oklab, var(--accent) 30%, transparent);
   }
 
   :focus-visible {
@@ -132,7 +152,19 @@
 
   input,
   select,
+  textarea,
   button {
     font: inherit;
+    color: inherit;
+  }
+
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  summary {
+    cursor: pointer;
+  }
+
+  select {
+    background-color: var(--surface);
   }
 }

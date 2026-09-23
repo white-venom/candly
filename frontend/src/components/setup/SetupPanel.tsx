@@ -1,0 +1,54 @@
+import { useForecast, useHealth, usePatterns } from "../../api/hooks";
+import type { Instrument } from "../../api/types";
+import { unitLabel } from "../../lib/instruments";
+import { dataStatus, humanizeText } from "../../lib/messages";
+import type { SignalFilters } from "../../lib/signalFilters";
+import { IconButton } from "../ui/Button";
+import { Eyebrow } from "../ui/Chip";
+import { QueryView } from "../ui/States";
+import { PanelNews } from "./PanelNews";
+import { RecentSignals } from "./RecentSignals";
+import { TradeCard } from "./TradeCard";
+import { VerdictCard } from "./VerdictCard";
+import { WhyList } from "./WhyList";
+
+/** The right-hand panel: verdict, trade plan, why, recent signals, news. */
+export function SetupPanel({ info, tf, filters, onCollapse }: { info: Instrument; tf: string; filters: SignalFilters; onCollapse: () => void }) {
+  const forecast = useForecast(info.id, tf);
+  const patterns = usePatterns(info.id, tf, filters);
+  const health = useHealth();
+  const canConnect = dataStatus(health.data, health.error).canConnect;
+
+  return (
+    <aside aria-label="Setup" className="flex w-[340px] shrink-0 flex-col border-l border-line bg-surface">
+      <div className="flex h-12 shrink-0 items-center gap-2 border-b border-line pr-2 pl-4">
+        <h2 className="text-sm font-semibold text-ink">Setup</h2>
+        <span className="text-xs text-ink-faint">
+          {info.symbol} · {tf}
+        </span>
+        <IconButton icon="panelRight" label="Hide setup panel" size="sm" side="bottom-end" onClick={onCollapse} className="ml-auto" />
+      </div>
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        <div className="flex flex-col gap-5 p-4">
+          <QueryView query={forecast} loadingLabel="Loading forecast…" noDataHint="The forecast needs candles first." className="rounded-lg border border-line">
+            {(f) => (
+              <>
+                <VerdictCard forecast={f} tf={tf} canConnect={canConnect} />
+                {f.explanation && (
+                  <section aria-label="In plain words">
+                    <Eyebrow>In plain words</Eyebrow>
+                    <p className="mt-2 text-sm leading-relaxed text-ink-muted">{humanizeText(f.explanation)}</p>
+                  </section>
+                )}
+                {!f.abstain && f.trade && <TradeCard trade={f.trade} units={unitLabel(info)} />}
+                <WhyList drivers={f.drivers} />
+              </>
+            )}
+          </QueryView>
+          <RecentSignals query={patterns} tf={tf} filters={filters} />
+          <PanelNews instrument={info.id} name={info.name} />
+        </div>
+      </div>
+    </aside>
+  );
+}

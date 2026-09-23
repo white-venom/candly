@@ -11,13 +11,13 @@ export class ErrorBoundary extends Component<{ children: ReactNode; label: strin
   render() {
     if (!this.state.error) return this.props.children;
     return (
-      <div role="alert" className="rounded-md border border-danger p-4 text-ink">
-        <p className="font-medium">The {this.props.label} failed to render.</p>
-        <p className="mt-1 text-xs text-ink-faint">{this.state.error.message}</p>
+      <div role="alert" className="flex flex-col items-center justify-center gap-2 p-8 text-center">
+        <p className="text-sm font-medium text-ink">The {this.props.label} failed to render.</p>
+        <p className="max-w-md text-xs text-ink-faint">{this.state.error.message}</p>
         <button
           type="button"
           onClick={() => this.setState({ error: null })}
-          className="mt-2 rounded-md border border-line-strong px-2 py-1 text-xs text-ink-muted hover:text-ink"
+          className="mt-1 h-7 rounded-md border border-line px-2.5 text-xs text-ink-muted hover:bg-raised hover:text-ink"
         >
           Try again
         </button>

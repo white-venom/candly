@@ -17,6 +17,7 @@ import type {
   PatternSignal,
   ScannerRow,
   ScorecardResponse,
+  SyncStatus,
 } from "./types";
 
 const SECOND = 1000;
@@ -26,7 +27,16 @@ export function useHealth() {
   return useQuery({
     queryKey: ["health"],
     queryFn: ({ signal }) => apiGet<Health>("/health", undefined, signal),
-    refetchInterval: 30 * SECOND,
+    // Poll faster while the Fyers first sync runs, so its progress moves.
+    refetchInterval: (query) => (query.state.data?.sync?.status === "running" ? 5 * SECOND : 30 * SECOND),
+  });
+}
+
+export function useStartSync() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: () => apiPost<SyncStatus>("/sync/fyers", {}),
+    onSettled: () => client.invalidateQueries({ queryKey: ["health"] }),
   });
 }
 
@@ -44,6 +54,7 @@ export function useSubmitFyersCode() {
   return useMutation({
     mutationFn: (body: FyersCodeRequest) => apiPost<FyersStatus>("/auth/fyers/code", body),
     onSuccess: async () => {
+      // The backend starts the first sync on a successful login; health carries its progress.
       await Promise.all([
         client.invalidateQueries({ queryKey: ["health"] }),
         client.invalidateQueries({ queryKey: ["fyers-status"] }),

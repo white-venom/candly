@@ -1,8 +1,8 @@
 import { lazy, Suspense } from "react";
 import { Link, Route, Routes, useLocation } from "react-router";
 import { ErrorBoundary } from "./components/ErrorBoundary";
-import { Header } from "./components/Header";
-import { EmptyState, LoadingState } from "./components/States";
+import { AppShell } from "./components/shell/AppShell";
+import { EmptyState, LoadingState } from "./components/ui/States";
 
 // One chunk per page; the chart page also pulls in lightweight-charts, which gets its own chunk (vite.config.ts).
 const ChartPage = lazy(() => import("./pages/ChartPage").then((m) => ({ default: m.ChartPage })));
@@ -13,11 +13,7 @@ const AccuracyPage = lazy(() => import("./pages/AccuracyPage").then((m) => ({ de
 const NewsPage = lazy(() => import("./pages/NewsPage").then((m) => ({ default: m.NewsPage })));
 
 function NotFound() {
-  return (
-    <EmptyState>
-      Page not found. <Link to="/">Go to the chart</Link>.
-    </EmptyState>
-  );
+  return <EmptyState title="Page not found" hint={<Link to="/">Go to the chart</Link>} className="flex-1" />;
 }
 
 export function AppRoutes() {
@@ -25,7 +21,7 @@ export function AppRoutes() {
   const section = useLocation().pathname.split("/")[1];
   return (
     <ErrorBoundary key={section} label="page">
-      <Suspense fallback={<LoadingState label="Loading page…" />}>
+      <Suspense fallback={<LoadingState label="Loading page…" className="flex-1" />}>
         <Routes>
           <Route path="/" element={<ChartRedirect />} />
           <Route path="/chart" element={<ChartRedirect />} />
@@ -44,11 +40,8 @@ export function AppRoutes() {
 
 export default function App() {
   return (
-    <div className="min-h-svh bg-page text-ink">
-      <Header />
-      <main className="mx-auto max-w-[1600px] p-4">
-        <AppRoutes />
-      </main>
-    </div>
+    <AppShell>
+      <AppRoutes />
+    </AppShell>
   );
 }

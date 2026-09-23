@@ -8,8 +8,8 @@ describe("chartTheme", () => {
     const th = chartTheme("dark");
     expect(th.chart.layout?.background).toEqual({ type: ColorType.Solid, color: "#1a1a19" });
     expect(th.chart.layout?.textColor).toBe("#c3c2b7");
-    expect(th.chart.grid?.vertLines?.color).toBe("#2a2a28");
     expect(th.chart.grid?.horzLines?.color).toBe("#2a2a28");
+    expect(th.chart.grid?.vertLines?.visible).toBe(false);
     expect(th.candles).toMatchObject({ upColor: "#26a69a", downColor: "#f06560", wickUpColor: "#26a69a", wickDownColor: "#f06560" });
     expect(th.forming).toEqual({ color: "rgba(240, 180, 41, 0.12)", borderColor: "#f0b429", wickColor: "#f0b429" });
   });
@@ -18,7 +18,7 @@ describe("chartTheme", () => {
     const th = chartTheme("light");
     expect(th.chart.layout?.background).toEqual({ type: ColorType.Solid, color: "#fcfcfb" });
     expect(th.chart.layout?.textColor).toBe("#52514e");
-    expect(th.chart.grid?.vertLines?.color).toBe("#e6e5df");
+    expect(th.chart.grid?.horzLines?.color).toBe("#e6e5df");
     expect(th.candles).toMatchObject({ upColor: "#08756a", downColor: "#c62f2f" });
     expect(th.forming.borderColor).toBe("#8a6200");
   });
@@ -28,7 +28,7 @@ describe("chartTheme", () => {
     const pick = (th: typeof dark) => [
       th.chart.layout?.background,
       th.chart.layout?.textColor,
-      th.chart.grid?.vertLines?.color,
+      th.chart.grid?.horzLines?.color,
       th.chart.rightPriceScale?.borderColor,
       th.candles.upColor,
       th.candles.downColor,
@@ -38,11 +38,12 @@ describe("chartTheme", () => {
       th.ghost.upColor,
       th.ghostAbstain.upColor,
       th.band.p50.color,
-      th.invalidation.color,
-      th.levels.pdh.color,
-      th.levels.pdl.color,
-      th.levels.pivot.color,
-      th.markers.forming.bullish,
+      th.bandFill,
+      th.stop.color,
+      th.level.color,
+      th.level.tagBackground,
+      th.lastPrice.up.tagBackground,
+      th.markers.bullish,
     ];
     const [d, l] = [pick(dark), pick(light)];
     d.forEach((value, i) => expect(value, `entry ${i}`).not.toEqual(l[i]));
@@ -59,21 +60,20 @@ describe("chartTheme", () => {
     expect(ghostAbstain.borderUpColor).toBe(TOKENS.dark.abstain);
   });
 
-  it("dashes the median and the invalidation line", () => {
+  it("keeps the forecast subtle: thin band lines, a dashed median, a faint fill", () => {
     const th = chartTheme("light");
-    expect(th.band.p50).toMatchObject({ color: "#0e6f8c", lineStyle: LineStyle.Dashed });
-    expect(th.band.p10.lineStyle).toBe(LineStyle.Solid);
-    expect(th.band.p90.lineStyle).toBe(LineStyle.Solid);
-    expect(th.invalidation).toEqual({ color: "#b91c1c", lineStyle: LineStyle.Dashed, lineWidth: 2 });
+    expect(th.band.p50).toMatchObject({ color: "#0e6f8c", lineStyle: LineStyle.Dashed, lineWidth: 1 });
+    expect(th.band.p10).toMatchObject({ lineStyle: LineStyle.Solid, lineWidth: 1 });
+    expect(th.bandFill).toBe("rgba(14, 111, 140, 0.1)");
   });
 
-  it("colours levels by role and dims forming markers", () => {
+  it("dashes the stop in the danger colour and draws levels thin, dotted and neutral", () => {
     const th = chartTheme("dark");
-    expect(th.levels.pdh.color).toBe(TOKENS.dark.down);
-    expect(th.levels.s1.color).toBe(TOKENS.dark.up);
-    expect(th.levels.vwap.color).toBe(TOKENS.dark.neutral);
-    expect(th.markers.confirmed.bullish).toBe("#26a69a");
-    expect(th.markers.forming.bullish).toBe("rgba(38, 166, 154, 0.5)");
+    expect(th.stop).toMatchObject({ color: TOKENS.dark.danger, width: 1 });
+    expect(th.stop.dash.length).toBe(2);
+    expect(th.level).toMatchObject({ color: TOKENS.dark.lineStrong, dash: [1, 3], width: 1 });
+    expect(th.levelStale.color).not.toBe(th.level.color);
+    expect(th.markers).toEqual({ bullish: "#26a69a", bearish: "#f06560", neutral: TOKENS.dark.neutral });
   });
 
   it("is pure: same input, equal output, no DOM access", () => {

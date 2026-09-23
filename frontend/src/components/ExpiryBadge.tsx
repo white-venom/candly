@@ -1,12 +1,12 @@
 import type { ExpiryInfo } from "../api/types";
-import { expiryLabel, expiryTitle } from "../lib/expiry";
-import { Badge } from "./ui";
+import { expiryLabel, expiryShortLabel, expiryTitle } from "../lib/expiry";
+import { Chip } from "./ui/Chip";
 
-/** Highlighted on expiry day, subtle otherwise. */
-export function ExpiryBadge({ expiry }: { expiry: ExpiryInfo }) {
+/** Amber on expiry day, quiet otherwise. `compact` drops the kind and day count for tight rows. */
+export function ExpiryBadge({ expiry, compact = false, className }: { expiry: ExpiryInfo; compact?: boolean; className?: string }) {
   return (
-    <Badge tone={expiry.is_expiry_day ? "warn" : "neutral"} title={expiryTitle(expiry)}>
-      {expiryLabel(expiry)}
-    </Badge>
+    <Chip tone={expiry.is_expiry_day ? "warn" : "neutral"} title={expiryTitle(expiry)} className={className}>
+      {compact ? expiryShortLabel(expiry) : expiryLabel(expiry)}
+    </Chip>
   );
 }

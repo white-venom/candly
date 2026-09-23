@@ -45,3 +45,52 @@ export function formatBarTimeIST(unix: number, tf: string): string {
 export function nowUnix(): number {
   return Math.floor(Date.now() / 1000);
 }
+
+// ---- Human formats: "10:15" today, "23 Sep, 10:15" otherwise; never ISO. ----
+
+/** "23 Sep", with the year only when it isn't the current one. */
+export function formatDayIST(unix: number, now = nowUnix()): string {
+  const p = istParts(unix);
+  const day = `${Number(p.day)} ${p.month}`;
+  return p.year === istParts(now).year ? day : `${day} ${p.year}`;
+}
+
+/** "10:15" on the same IST day as `now`, else "23 Sep, 10:15". */
+export function formatWhenIST(unix: number, now = nowUnix()): string {
+  const p = istParts(unix);
+  const n = istParts(now);
+  const time = `${p.hour}:${p.minute}`;
+  if (p.year === n.year && p.month === n.month && p.day === n.day) return time;
+  return `${formatDayIST(unix, now)}, ${time}`;
+}
+
+/** Daily bars show the day only; intraday bars the time (and the day when it isn't today). */
+export function formatBarWhenIST(unix: number, tf: string, now = nowUnix()): string {
+  return tf === "1D" ? formatDayIST(unix, now) : formatWhenIST(unix, now);
+}
+
+/** "just now", "5m ago", "2h ago", "3d ago", then the day. */
+export function relativeTime(unix: number, now = nowUnix()): string {
+  const s = now - unix;
+  if (s < 60) return "just now";
+  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
+  if (s < 7 * 86400) return `${Math.floor(s / 86400)}d ago`;
+  return formatDayIST(unix, now);
+}
+
+/** ISO 8601 with an offset (as the backend writes it) → UNIX seconds, or null. */
+export function isoToUnix(iso: string): number | null {
+  const ms = Date.parse(iso);
+  return Number.isNaN(ms) ? null : Math.floor(ms / 1000);
+}
+
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/** A plain calendar date "2025-10-01" → "1 Oct 2025"; anything else is returned as sent. */
+export function formatIsoDate(date: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
+  if (!m) return date;
+  const month = MONTHS[Number(m[2]) - 1];
+  return month ? `${Number(m[3])} ${month} ${m[1]}` : date;
+}

@@ -2,20 +2,20 @@ import { describe, expect, it, vi } from "vitest";
 import { T0, DAY, candle, candles, forecast } from "../test/fixtures";
 import { chartTheme } from "./chartTheme";
 import { PriceChartController } from "./PriceChartController";
+import type { PriceTag } from "./primitives";
 
 type Fake = Record<string, ReturnType<typeof vi.fn>>;
 
 const lwc = vi.hoisted(() => {
-  const fakePriceLine = () => ({ applyOptions: vi.fn() });
   const fakeSeries = (type: string) => ({
     type,
     applyOptions: vi.fn(),
     setData: vi.fn(),
-    createPriceLine: vi.fn(fakePriceLine),
-    removePriceLine: vi.fn(),
+    attachPrimitive: vi.fn(),
+    priceFormatter: () => ({ format: (p: number) => p.toFixed(2) }),
     priceScale: () => ({ applyOptions: vi.fn() }),
   });
-  const state = { chart: null as unknown as Fake & { series: ReturnType<typeof fakeSeries>[] }, markers: { setMarkers: vi.fn() } };
+  const state = { chart: null as unknown as Fake & { series: ReturnType<typeof fakeSeries>[] } };
   const createChart = vi.fn(() => {
     const series: ReturnType<typeof fakeSeries>[] = [];
     state.chart = {
@@ -42,8 +42,9 @@ const lwc = vi.hoisted(() => {
 vi.mock("lightweight-charts", async (importOriginal) => ({
   ...(await importOriginal<typeof import("lightweight-charts")>()),
   createChart: lwc.createChart,
-  createSeriesMarkers: vi.fn(() => lwc.state.markers),
 }));
+
+type Primitive = { set: ReturnType<typeof vi.fn> } & Record<string, unknown>;
 
 function setup() {
   lwc.createChart.mockClear();
@@ -51,17 +52,21 @@ function setup() {
   const chart = lwc.state.chart;
   // creation order: volume, candles, p10, p50, p90, ghost
   const [volume, candleSeries, p10, p50, p90, ghost] = chart.series;
-  return { controller, chart, volume, candleSeries, p10, p50, p90, ghost };
+  // attach order: band fill, price tags, pattern markers
+  const [bandFill, tags, markers] = candleSeries.attachPrimitive.mock.calls.map(([p]) => {
+    vi.spyOn(p as Primitive, "set");
+    return p as Primitive;
+  });
+  const lastTags = () => (tags.set.mock.lastCall?.[0] ?? []) as PriceTag[];
+  return { controller, chart, volume, candleSeries, p10, p50, p90, ghost, bandFill, tags, markers, lastTags };
 }
 
-describe("PriceChartController theme switching", () => {
-  it("re-colours everything in place on toggle, without recreating the chart or series", () => {
-    const { controller, chart, volume, candleSeries, p50, ghost } = setup();
+describe("PriceChartController", () => {
+  it("re-colours everything in place on a theme switch, without recreating the chart or series", () => {
+    const { controller, chart, volume, candleSeries, p50, ghost, lastTags } = setup();
     controller.setCandles(candles.candles, candle(T0 + DAY, 103, 105));
-    controller.setLevels([{ price: 110, label: "PDH", kind: "pdh" }]);
+    controller.setLevels([{ price: 110, label: "PDH", kinds: ["pdh"] }]);
     controller.setForecast(forecast);
-    const levelLine = candleSeries.createPriceLine.mock.results[0].value;
-    const invalidationLine = candleSeries.createPriceLine.mock.results[1].value;
     const seriesBefore = chart.addSeries.mock.calls.length;
 
     controller.setTheme("light");
@@ -74,48 +79,55 @@ describe("PriceChartController theme switching", () => {
     expect(candleSeries.applyOptions).toHaveBeenLastCalledWith(light.candles);
     expect(ghost.applyOptions).toHaveBeenLastCalledWith(light.ghost);
     expect(p50.applyOptions).toHaveBeenLastCalledWith(light.band.p50);
-    expect(levelLine.applyOptions).toHaveBeenLastCalledWith(light.levels.pdh);
-    expect(invalidationLine.applyOptions).toHaveBeenLastCalledWith(light.invalidation);
+    expect(lastTags().find((t) => t.label === "PDH")?.look).toEqual(light.level);
+    expect(lastTags().find((t) => t.label === "Stop")?.look).toEqual(light.stop);
 
     const candleData = candleSeries.setData.mock.lastCall![0];
     expect(candleData.at(-1)).toMatchObject(light.forming);
     const volumeData = volume.setData.mock.lastCall![0];
     expect(volumeData.at(-1).color).toBe(light.volume.forming);
-    expect(lwc.state.markers.setMarkers).toHaveBeenCalled();
   });
 
-  it("switches ghosts and invalidation to the abstain look when the forecast abstains", () => {
-    const { controller, candleSeries, ghost } = setup();
-    controller.setForecast({ ...forecast, abstain: true });
-    const dark = chartTheme("dark");
-    expect(ghost.applyOptions).toHaveBeenLastCalledWith(dark.ghostAbstain);
-    expect(candleSeries.createPriceLine).toHaveBeenLastCalledWith(
-      expect.objectContaining({ price: forecast.invalidation, title: "Invalidation (abstaining)", ...dark.invalidationAbstain }),
-    );
-  });
-
-  it("draws stale levels dashed and dimmed, and keeps that look across a theme switch", () => {
-    const { controller, candleSeries } = setup();
-    const dark = chartTheme("dark");
-    controller.setLevels([{ price: 110, label: "Prev day high", kind: "pdh" }], true);
-    expect(candleSeries.createPriceLine).toHaveBeenLastCalledWith(expect.objectContaining({ price: 110, ...dark.levelsStale.pdh }));
-    expect(dark.levelsStale.pdh.lineStyle).not.toBe(dark.levels.pdh.lineStyle);
-    expect(dark.levelsStale.pdh.color).not.toBe(dark.levels.pdh.color);
-
-    const line = candleSeries.createPriceLine.mock.results.at(-1)!.value;
-    controller.setTheme("light");
-    expect(line.applyOptions).toHaveBeenLastCalledWith(chartTheme("light").levelsStale.pdh);
-
-    controller.setLevels([{ price: 110, label: "Prev day high", kind: "pdh" }], false);
-    expect(candleSeries.createPriceLine).toHaveBeenLastCalledWith(expect.objectContaining(chartTheme("light").levels.pdh));
-  });
-
-  it("clears the forecast drawing when there is no forecast", () => {
-    const { controller, candleSeries, ghost, p10 } = setup();
+  it("tags levels by name, the stop as Stop, and the last price as a fixed tag", () => {
+    const { controller, lastTags } = setup();
+    controller.setCandles(candles.candles, null);
+    controller.setLevels([{ price: 110, label: "PDH·R1", kinds: ["pdh", "r1"] }]);
     controller.setForecast(forecast);
+    expect(lastTags().map((t) => [t.label, t.price, t.line, t.fixed ?? false])).toEqual([
+      ["PDH·R1", 110, true, false],
+      ["Stop", forecast.trade!.stop, true, true],
+      ["103.00", 103, false, true],
+    ]);
+  });
+
+  it("draws no stop while abstaining, and greys the ghosts", () => {
+    const { controller, ghost, lastTags } = setup();
+    controller.setForecast({ ...forecast, abstain: true });
+    expect(ghost.applyOptions).toHaveBeenLastCalledWith(chartTheme("dark").ghostAbstain);
+    expect(lastTags().some((t) => t.label === "Stop")).toBe(false);
+  });
+
+  it("dims stale levels and keeps that look across a theme switch", () => {
+    const { controller, lastTags } = setup();
+    controller.setLevels([{ price: 110, label: "PDH", kinds: ["pdh"] }], true);
+    expect(lastTags()[0].look).toEqual(chartTheme("dark").levelStale);
+    controller.setTheme("light");
+    expect(lastTags()[0].look).toEqual(chartTheme("light").levelStale);
+    controller.setLevels([{ price: 110, label: "PDH", kinds: ["pdh"] }], false);
+    expect(lastTags()[0].look).toEqual(chartTheme("light").level);
+  });
+
+  it("hands pattern arrows and the band cone to their primitives, and clears them", () => {
+    const { controller, markers, bandFill, ghost, p10 } = setup();
+    controller.setCandles(candles.candles, null);
+    controller.setMarkers([{ time: T0, direction: "bullish", filled: true, stack: 0 }]);
+    expect(markers.set).toHaveBeenLastCalledWith([{ time: T0, direction: "bullish", filled: true, stack: 0 }], expect.any(Map));
+
+    controller.setForecast(forecast);
+    expect(bandFill.set.mock.lastCall![0]).toHaveLength(4);
     controller.setForecast(null);
+    expect(bandFill.set.mock.lastCall![0]).toEqual([]);
     expect(ghost.setData).toHaveBeenLastCalledWith([]);
     expect(p10.setData).toHaveBeenLastCalledWith([]);
-    expect(candleSeries.removePriceLine).toHaveBeenCalledTimes(1);
   });
 });

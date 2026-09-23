@@ -16,15 +16,21 @@ Start the API first (see the repo's CLAUDE.md). Without it every view shows "Bac
 ## Layout
 
 ```
-src/api/        types.ts mirrors docs/CONTRACTS.md §4; client.ts (typed errors); hooks.ts (TanStack Query)
-src/chart/      lightweight-charts v5: chartTheme.ts (pure theme → options), transforms.ts (pure data → series),
-                PriceChartController.ts (creates the chart once, applies data/theme onto it), PriceChart.tsx
-src/components/ header, status pill, Fyers connect, why-panel pieces, SVG charts, shared states
-src/pages/      Chart, Scanner, Scorecard, Accuracy, News
-src/lib/        IST time formatting, colour tokens, theme resolution, formatting helpers
+src/api/                 types.ts mirrors docs/CONTRACTS.md §4; client.ts (typed errors); hooks.ts (TanStack Query)
+src/chart/               lightweight-charts v5: chartTheme.ts (theme → options), transforms.ts (data → series),
+                         levels.ts (key levels, merging), primitives.ts (pattern arrows, band cone, axis tags),
+                         PriceChartController.ts (creates the chart once, applies data/theme onto it), PriceChart.tsx
+src/components/shell/    rail, notice strip (paused / sync / expiry), Fyers connect, settings, shortcuts, page frame
+src/components/workspace/ chart page: watchlist, top bar, indicators menu, layer menus, chart area, legend
+src/components/setup/    right panel: verdict, trade plan, why, recent signals, news
+src/components/ui/, viz/ primitives (buttons, popover, dialog, states, table) and SVG charts
+src/pages/               Chart, Scanner, Scorecard, Accuracy, News
+src/lib/                 messages.ts (every backend reason/error in plain words), IST time, tokens, theme, prefs
 ```
 
-Routes: `/chart/NSE:RELIANCE/1D`, `/scanner?tf=`, `/scorecard?tf=&instrument=&pattern=&certified=1`, `/accuracy?instrument=&tf=&days=`, `/news?instrument=`.
+Routes: `/chart/NSE:RELIANCE/1D`, `/scanner?tf=`, `/scorecard?tf=&instrument=&pattern=&certified=1`, `/accuracy?instrument=&tf=&days=&method=`, `/news?instrument=&sentiment=&event=`.
+
+Keys: `/` search, `1`–`4` timeframe, `[` `]` previous/next instrument, `↑` `↓` watchlist, `i` indicators, `t` theme, `?` help.
 
 ## Time
 

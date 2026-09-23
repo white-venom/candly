@@ -18,10 +18,10 @@ describe("app shell", () => {
     });
     renderWithProviders(<App />, { route });
 
-    expect(await screen.findByRole("heading", { name: "Accuracy — expected vs actual" })).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: "Accuracy", level: 1 })).toBeTruthy();
     expect(await screen.findByRole("img", { name: /Calibration/ })).toBeTruthy();
     expect(await screen.findByRole("img", { name: /Predicted vs actual candles/ })).toBeTruthy();
-    expect(await screen.findByRole("status", { name: "System status" })).toBeTruthy();
+    expect(await screen.findByRole("button", { name: /^Data connection: Live data/ })).toBeTruthy();
     expect(document.documentElement.dataset.theme).toBe(theme);
     expect(errors).not.toHaveBeenCalled();
     expect(warnings).not.toHaveBeenCalled();

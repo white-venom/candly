@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { createContext, useContext } from "react";
 import type { Trade } from "../api/types";
 import { readStorage, writeStorage } from "./storage";
 
@@ -34,13 +34,18 @@ export function readSizing(): Sizing {
   return DEFAULT_SIZING;
 }
 
+export function saveSizing(sizing: Sizing): void {
+  writeStorage(KEY, JSON.stringify(sizing));
+}
+
+/** One shared value, so the settings dialog and the trade card stay in step (SizingProvider owns it). */
+export const SizingContext = createContext<{ sizing: Sizing; update: (next: Sizing) => void }>({
+  sizing: DEFAULT_SIZING,
+  update: () => {},
+});
+
 export function useSizing() {
-  const [sizing, setSizing] = useState<Sizing>(readSizing);
-  const update = (next: Sizing) => {
-    writeStorage(KEY, JSON.stringify(next));
-    setSizing(next);
-  };
-  return { sizing, update };
+  return useContext(SizingContext);
 }
 
 export type PositionSize = {

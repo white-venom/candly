@@ -3,15 +3,18 @@ import clsx from "clsx";
 import type { ReactNode } from "react";
 import { useSearchParams } from "react-router";
 import { useAccuracy, useInstruments, useLedger } from "../api/hooks";
-import type { AccuracyResponse, LedgerEntry, StepGrade } from "../api/types";
-import { CalibrationChart } from "../components/CalibrationChart";
-import { CandleGlyphs } from "../components/CandleGlyphs";
-import { InstrumentOptions } from "../components/InstrumentSelect";
-import { MiniLineChart } from "../components/MiniLineChart";
-import { EmptyState, QueryView } from "../components/States";
-import { Badge, Card, SelectField } from "../components/ui";
+import type { AccuracyResponse, LedgerEntry } from "../api/types";
+import { InstrumentOptions } from "../components/InstrumentOptions";
+import { Page } from "../components/shell/Page";
+import { Chip, Eyebrow } from "../components/ui/Chip";
+import { SelectField } from "../components/ui/Controls";
+import { EmptyState, QueryView } from "../components/ui/States";
+import { Dash, TableFrame, Td, Th } from "../components/ui/Table";
+import { CalibrationChart } from "../components/viz/CalibrationChart";
+import { CandleGlyphs } from "../components/viz/CandleGlyphs";
+import { MiniLineChart } from "../components/viz/MiniLineChart";
 import { fmtInt, fmtNum, fmtPct, fmtProb, humanize, signTone } from "../lib/format";
-import { formatDateTimeIST, nowUnix } from "../lib/time";
+import { formatWhenIST, nowUnix } from "../lib/time";
 import { TIMEFRAMES } from "../lib/timeframes";
 
 const DAY_OPTIONS = [7, 30, 90, 180, 365];
@@ -19,23 +22,34 @@ const DAY_OPTIONS = [7, 30, 90, 180, 365];
 const ALL_METHODS = "all";
 const DEFAULT_METHOD = "analog_v1";
 const METHODS = [
-  { value: "analog_v1", label: "analog_v1 (model)" },
+  { value: "analog_v1", label: "Model (analog_v1)" },
   { value: "baseline_base_rate", label: "Baseline: base rate" },
   { value: "baseline_persistence", label: "Baseline: persistence" },
   { value: "baseline_random_walk", label: "Baseline: random-walk bands" },
   { value: ALL_METHODS, label: "All methods (ledger only)" },
 ];
 
+const NO_GRADES = { title: "No graded forecasts yet", hint: "They appear after the first sessions with live data." };
+
 function readMethod(value: string | null): string {
   return METHODS.find((m) => m.value === value)?.value ?? DEFAULT_METHOD;
 }
 
+function Card({ title, children, className }: { title: string; children: ReactNode; className?: string }) {
+  return (
+    <section aria-label={title} className={clsx("rounded-lg border border-line bg-surface p-4", className)}>
+      <Eyebrow className="mb-3">{title}</Eyebrow>
+      {children}
+    </section>
+  );
+}
+
 function Tile({ label, value, sub }: { label: string; value: ReactNode; sub?: ReactNode }) {
   return (
-    <div className="rounded-lg border border-line bg-surface p-3">
-      <dt className="text-[11px] tracking-wide text-ink-faint uppercase">{label}</dt>
-      <dd className="mt-1 text-xl font-semibold text-ink">{value}</dd>
-      {sub && <dd className="mt-0.5 text-xs text-ink-muted">{sub}</dd>}
+    <div className="rounded-lg border border-line bg-surface px-4 py-3">
+      <dt className="text-2xs font-semibold tracking-wider text-ink-faint uppercase">{label}</dt>
+      <dd className="mt-1 text-xl font-semibold text-ink tabular-nums">{value}</dd>
+      {sub && <dd className="mt-0.5 text-xs text-ink-faint tabular-nums">{sub}</dd>}
     </div>
   );
 }
@@ -49,7 +63,7 @@ function Tiles({ s }: { s: AccuracyResponse["summary"] }) {
         value={fmtNum(s.brier, 4)}
         sub={
           <>
-            baseline {fmtNum(s.brier_baseline, 4)} · skill{" "}
+            base {fmtNum(s.brier_baseline, 4)} · skill{" "}
             <span className={signTone(s.skill)}>
               {s.skill !== null && s.skill > 0 ? "+" : ""}
               {fmtNum(s.skill, 3)}
@@ -57,10 +71,10 @@ function Tiles({ s }: { s: AccuracyResponse["summary"] }) {
           </>
         }
       />
-      <Tile label="ECE" value={fmtNum(s.ece, 3)} sub="calibration error; lower is better" />
-      <Tile label="80% band coverage" value={fmtProb(s.band_coverage_80)} sub="target ≈ 80%" />
+      <Tile label="Calibration error" value={fmtNum(s.ece, 3)} sub="ECE, lower is better" />
+      <Tile label="Band coverage" value={fmtProb(s.band_coverage_80)} sub="closes inside 10–90%, target ≈ 80%" />
       <Tile
-        label="Mean match score"
+        label="Match score"
         value={s.mean_match_score === null ? "—" : `${fmtNum(s.mean_match_score, 1)} / 100`}
         sub={`close error ${fmtNum(s.mean_close_err_atr, 2)} ATR`}
       />
@@ -70,126 +84,122 @@ function Tiles({ s }: { s: AccuracyResponse["summary"] }) {
 }
 
 function ByGroup({ rows }: { rows: AccuracyResponse["by_group"] }) {
-  if (rows.length === 0) return <p className="text-ink-muted">No breakdown yet.</p>;
+  if (rows.length === 0) return <p className="text-xs text-ink-faint">No breakdown yet.</p>;
   const groups = [...new Set(rows.map((r) => r.group_by))];
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-sm tabular-nums">
-        <thead className="border-b border-line-strong text-left text-xs text-ink-muted">
+    <table className="w-full text-sm tabular-nums">
+      <thead className="text-left text-2xs font-semibold tracking-wider text-ink-faint uppercase">
+        <tr>
+          <th scope="col" className="py-1.5 font-semibold">
+            Group
+          </th>
+          <th scope="col" className="py-1.5 text-right font-semibold">
+            n
+          </th>
+          <th scope="col" className="py-1.5 text-right font-semibold">
+            Hit rate
+          </th>
+          <th scope="col" className="py-1.5 text-right font-semibold">
+            Brier
+          </th>
+        </tr>
+      </thead>
+      {groups.map((g) => (
+        <tbody key={g}>
           <tr>
-            <th scope="col" className="px-2 py-1.5 font-medium">Group</th>
-            <th scope="col" className="px-2 py-1.5 text-right font-medium">n</th>
-            <th scope="col" className="px-2 py-1.5 text-right font-medium">Hit rate</th>
-            <th scope="col" className="px-2 py-1.5 text-right font-medium">Brier</th>
+            <th scope="rowgroup" colSpan={4} className="pt-3 pb-1 text-left text-xs font-medium text-ink-muted">
+              By {humanize(g)}
+            </th>
           </tr>
-        </thead>
-        {groups.map((g) => (
-          <tbody key={g}>
-            <tr>
-              <th scope="rowgroup" colSpan={4} className="px-2 pt-3 pb-1 text-left text-[11px] font-medium tracking-wide text-ink-faint uppercase">
-                by {humanize(g)}
-              </th>
-            </tr>
-            {rows
-              .filter((r) => r.group_by === g)
-              .map((r) => (
-                <tr key={`${g}|${r.key}`} className="border-b border-line">
-                  <td className="px-2 py-1 text-ink">{humanize(r.key)}</td>
-                  <td className="px-2 py-1 text-right">{fmtInt(r.n)}</td>
-                  <td className="px-2 py-1 text-right">{fmtProb(r.hit_rate)}</td>
-                  <td className="px-2 py-1 text-right">{fmtNum(r.brier, 4)}</td>
-                </tr>
-              ))}
-          </tbody>
-        ))}
-      </table>
-    </div>
-  );
-}
-
-function StepErrors({ steps }: { steps: StepGrade[] }) {
-  return (
-    <ul className="flex flex-col gap-0.5 text-xs whitespace-nowrap text-ink-muted">
-      {steps.map((s) => (
-        <li key={s.step}>
-          <span className="text-ink">#{s.step}</span> close {fmtPct(s.close_err_pct)} ({fmtNum(s.close_err_atr, 2)} ATR) · H/L{" "}
-          {fmtNum(s.high_err_atr, 2)}/{fmtNum(s.low_err_atr, 2)} ATR · IoU {fmtNum(s.range_iou, 2)}/{fmtNum(s.body_iou, 2)} ·{" "}
-          <span className={s.color_match ? "text-up" : "text-down"}>{s.color_match ? "colour ✓" : "colour ✗"}</span> ·{" "}
-          <span className={s.in_band_80 ? "text-up" : "text-down"}>{s.in_band_80 ? "in band" : "out of band"}</span>
-        </li>
+          {rows
+            .filter((r) => r.group_by === g)
+            .map((r) => (
+              <tr key={`${g}|${r.key}`} className="border-t border-line/60">
+                <td className="py-1.5 text-ink">{humanize(r.key)}</td>
+                <td className="py-1.5 text-right text-ink-muted">{fmtInt(r.n)}</td>
+                <td className="py-1.5 text-right">{fmtProb(r.hit_rate)}</td>
+                <td className="py-1.5 text-right text-ink-muted">{fmtNum(r.brier, 4)}</td>
+              </tr>
+            ))}
+        </tbody>
       ))}
-    </ul>
+    </table>
   );
 }
 
 function LedgerTable({ entries }: { entries: LedgerEntry[] }) {
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-sm tabular-nums">
-        <thead className="border-b border-line-strong text-left text-xs text-ink-muted">
-          <tr>
-            {["Made (IST)", "Instrument", "p(up)", "Status", "Predicted | actual", "Per-step errors", "Match", "Direction", "Brier"].map((h) => (
-              <th key={h} scope="col" className="px-2 py-1.5 font-medium whitespace-nowrap">
-                {h}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {entries.map((e) => (
-            <tr key={e.id} className="border-b border-line align-top">
-              <td className="px-2 py-1.5 whitespace-nowrap text-ink-muted">{formatDateTimeIST(e.made_at)}</td>
-              <td className="px-2 py-1.5 whitespace-nowrap">
-                <span className="text-ink">{e.instrument}</span> <span className="text-ink-faint">{e.tf}</span>
-                <div className="text-xs text-ink-faint">{e.method}</div>
-              </td>
-              <td className="px-2 py-1.5 whitespace-nowrap">
-                {e.abstain ? (
-                  <span className="text-ink-faint">
-                    {fmtProb(e.p_up)} <Badge>abstain</Badge>
+    <TableFrame label="Ledger">
+      <thead>
+        <tr>
+          <Th>Made (IST)</Th>
+          <Th>Instrument</Th>
+          <Th>Method</Th>
+          <Th numeric>p(up)</Th>
+          <Th>Status</Th>
+          <Th title="Per step: predicted (translucent) beside actual (solid)">Predicted | actual</Th>
+          <Th title="Close error per step, in % and ATR">Close error</Th>
+          <Th numeric>Match</Th>
+          <Th>Direction</Th>
+          <Th numeric>Brier</Th>
+        </tr>
+      </thead>
+      <tbody>
+        {entries.map((e) => (
+          <tr key={e.id} className="transition-colors hover:bg-raised/60">
+            <Td className="text-ink-muted">{formatWhenIST(e.made_at)}</Td>
+            <Td>
+              <span className="font-medium text-ink">{e.instrument.split(":").pop()}</span> <span className="text-2xs text-ink-faint">{e.tf}</span>
+            </Td>
+            <Td className="text-xs text-ink-muted">{e.method}</Td>
+            <Td numeric className={e.abstain ? "text-ink-faint" : "text-ink"}>
+              {fmtProb(e.p_up)}
+              {e.abstain && <span className="ml-1.5 text-2xs">abstained</span>}
+            </Td>
+            <Td>
+              <Chip tone={e.status === "graded" ? "accent" : "neutral"}>{e.status === "graded" ? "Graded" : e.status === "void" ? "Void" : "Pending"}</Chip>
+            </Td>
+            <Td className="py-1">
+              <CandleGlyphs predicted={e.predicted} actual={e.actual} />
+            </Td>
+            <Td className="text-xs text-ink-muted">
+              {e.grade ? (
+                e.grade.steps.map((s) => (
+                  <span key={s.step} className="mr-2 inline-block" title={`Step ${s.step}: range overlap ${fmtNum(s.range_iou, 2)}, ${s.in_band_80 ? "inside" : "outside"} the 80% band`}>
+                    <span className={signTone(s.close_err_pct)}>{fmtPct(s.close_err_pct)}</span> <span className="text-ink-faint">{fmtNum(s.close_err_atr, 2)} ATR</span>
                   </span>
-                ) : (
-                  <span className="text-ink">{fmtProb(e.p_up)}</span>
-                )}
-              </td>
-              <td className="px-2 py-1.5">
-                <Badge tone={e.status === "graded" ? "accent" : e.status === "void" ? "danger" : "neutral"}>{e.status}</Badge>
-              </td>
-              <td className="px-2 py-1.5">
-                <CandleGlyphs predicted={e.predicted} actual={e.actual} />
-              </td>
-              <td className="px-2 py-1.5">{e.grade ? <StepErrors steps={e.grade.steps} /> : <span className="text-ink-faint">—</span>}</td>
-              <td className="px-2 py-1.5">{e.grade ? fmtNum(e.grade.match_score, 0) : "—"}</td>
-              <td className="px-2 py-1.5">
-                {e.grade?.direction_hit === true && <span className="text-up">✓ hit</span>}
-                {e.grade?.direction_hit === false && <span className="text-down">✗ miss</span>}
-                {(e.grade === null || e.grade.direction_hit === null) && <span className="text-ink-faint">—</span>}
-              </td>
-              <td className="px-2 py-1.5">{fmtNum(e.grade?.brier, 4)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+                ))
+              ) : (
+                <Dash />
+              )}
+            </Td>
+            <Td numeric>{e.grade ? fmtNum(e.grade.match_score, 0) : <Dash />}</Td>
+            <Td>
+              {e.grade?.direction_hit === true && <span className="text-up">✓ Hit</span>}
+              {e.grade?.direction_hit === false && <span className="text-down">✗ Miss</span>}
+              {(e.grade === null || e.grade.direction_hit === null) && <Dash />}
+            </Td>
+            <Td numeric className="text-ink-muted">
+              {fmtNum(e.grade?.brier, 4)}
+            </Td>
+          </tr>
+        ))}
+      </tbody>
+    </TableFrame>
   );
 }
 
 function Summary({ query }: { query: UseQueryResult<AccuracyResponse> }) {
   return (
-    <QueryView
-      query={query}
-      isEmpty={(a) => a.summary.n_forecasts === 0}
-      empty="No forecasts in this window yet — the ledger fills as bars close."
-      loadingLabel="Loading accuracy…"
-    >
+    <QueryView query={query} isEmpty={(a) => a.summary.n_forecasts === 0} empty={NO_GRADES} loadingLabel="Loading accuracy…" className="rounded-lg border border-line bg-surface py-12">
       {(a) => (
-        <div className={clsx("flex flex-col gap-3", query.isPlaceholderData && "opacity-60")}>
+        <div className={clsx("flex flex-col gap-4", query.isPlaceholderData && "opacity-60")}>
           <Tiles s={a.summary} />
-          <div className="grid gap-3 lg:grid-cols-2">
+          <div className="grid gap-4 lg:grid-cols-2">
             <Card title="Calibration">
               <CalibrationChart bins={a.calibration} />
             </Card>
-            <Card title="Rolling (last 30 graded forecasts)">
+            <Card title="Rolling, last 30 graded">
               <div className="grid gap-3">
                 <MiniLineChart
                   title="Hit rate"
@@ -201,13 +211,9 @@ function Summary({ query }: { query: UseQueryResult<AccuracyResponse> }) {
                   title="Brier score (lower is better)"
                   points={a.rolling.map((r) => ({ time: r.time, value: r.brier }))}
                   format={(v) => fmtNum(v, 3)}
-                  reference={a.summary.brier_baseline !== null ? { value: a.summary.brier_baseline, label: "window baseline" } : undefined}
+                  reference={a.summary.brier_baseline !== null ? { value: a.summary.brier_baseline, label: "baseline" } : undefined}
                 />
-                <MiniLineChart
-                  title="Match score"
-                  points={a.rolling.map((r) => ({ time: r.time, value: r.match_score }))}
-                  format={(v) => fmtNum(v, 0)}
-                />
+                <MiniLineChart title="Match score" points={a.rolling.map((r) => ({ time: r.time, value: r.match_score }))} format={(v) => fmtNum(v, 0)} />
               </div>
             </Card>
           </div>
@@ -220,22 +226,31 @@ function Summary({ query }: { query: UseQueryResult<AccuracyResponse> }) {
   );
 }
 
-type LedgerProps ={ instrument: string | null; tf: string | null; method: string | null; days: number };
-
-function Ledger({ instrument, tf, method, days }: LedgerProps) {
+function Ledger({ instrument, tf, method, days }: { instrument: string | null; tf: string | null; method: string | null; days: number }) {
   const ledger = useLedger({ instrument, tf, method, limit: 100 });
   const since = nowUnix() - days * 86400;
   return (
-    <QueryView query={ledger} isEmpty={(rows) => rows.length === 0} empty="No forecasts in the ledger yet.">
-      {(rows) => {
-        const recent = rows.filter((r) => r.made_at >= since);
-        return recent.length === 0 ? (
-          <EmptyState>No ledger entries in the last {days} days.</EmptyState>
-        ) : (
-          <LedgerTable entries={recent} />
-        );
-      }}
-    </QueryView>
+    <section aria-label="Ledger" className="flex flex-col gap-2">
+      <div className="flex items-baseline gap-3">
+        <Eyebrow>Ledger</Eyebrow>
+        <p className="text-2xs text-ink-faint">Every forecast is written before its outcome exists, then graded against the real candles.</p>
+      </div>
+      <QueryView
+        query={ledger}
+        isEmpty={(rows) => rows.length === 0}
+        empty={{ title: "The ledger is empty", hint: "Forecasts are recorded at each bar close once live data flows." }}
+        className="rounded-lg border border-line bg-surface"
+      >
+        {(rows) => {
+          const recent = rows.filter((r) => r.made_at >= since);
+          return recent.length === 0 ? (
+            <EmptyState title={`No forecasts in the last ${days} days`} className="rounded-lg border border-line bg-surface" />
+          ) : (
+            <LedgerTable entries={recent} />
+          );
+        }}
+      </QueryView>
+    </section>
   );
 }
 
@@ -257,53 +272,52 @@ export function AccuracyPage() {
   };
 
   return (
-    <div className="flex flex-col gap-3">
-      <h1 className="text-lg font-semibold text-ink">Accuracy — expected vs actual</h1>
-      <div role="group" aria-label="Filters" className="flex flex-wrap items-end gap-3">
-        <SelectField label="Instrument" value={instrument ?? ""} onChange={(e) => update("instrument", e.target.value)}>
-          <option value="">All instruments</option>
-          <InstrumentOptions instruments={instruments.data ?? []} />
-        </SelectField>
-        <SelectField label="Timeframe" value={tf ?? ""} onChange={(e) => update("tf", e.target.value)}>
-          <option value="">All timeframes</option>
-          {TIMEFRAMES.map((t) => (
-            <option key={t} value={t}>
-              {t}
-            </option>
-          ))}
-        </SelectField>
-        <SelectField label="Window" value={String(days)} onChange={(e) => update("days", e.target.value)}>
-          {DAY_OPTIONS.map((d) => (
-            <option key={d} value={d}>
-              Last {d} days
-            </option>
-          ))}
-        </SelectField>
-        <SelectField
-          label="Method"
-          value={method}
-          onChange={(e) => update("method", e.target.value === DEFAULT_METHOD ? "" : e.target.value)}
-        >
+    <Page
+      title="Accuracy"
+      description="Forecasts graded against the candles that followed"
+      actions={
+        <SelectField label="Method" value={method} onChange={(e) => update("method", e.target.value === DEFAULT_METHOD ? "" : e.target.value)}>
           {METHODS.map((m) => (
             <option key={m.value} value={m.value}>
               {m.label}
             </option>
           ))}
         </SelectField>
-      </div>
-
+      }
+      toolbar={
+        <>
+          <SelectField label="Instrument" value={instrument ?? ""} onChange={(e) => update("instrument", e.target.value)}>
+            <option value="">All instruments</option>
+            <InstrumentOptions instruments={instruments.data ?? []} />
+          </SelectField>
+          <SelectField label="Timeframe" value={tf ?? ""} onChange={(e) => update("tf", e.target.value)}>
+            <option value="">All timeframes</option>
+            {TIMEFRAMES.map((t) => (
+              <option key={t} value={t}>
+                {t}
+              </option>
+            ))}
+          </SelectField>
+          <SelectField label="Window" value={String(days)} onChange={(e) => update("days", e.target.value)}>
+            {DAY_OPTIONS.map((d) => (
+              <option key={d} value={d}>
+                Last {d} days
+              </option>
+            ))}
+          </SelectField>
+        </>
+      }
+    >
       {oneMethod === null ? (
-        <EmptyState>
-          Accuracy is scored one method at a time, so the baselines never blur the model’s numbers. Pick a method to see its
-          summary; the ledger below lists every method.
-        </EmptyState>
+        <EmptyState
+          title="Accuracy is scored one method at a time"
+          hint="So the baselines never blur the model’s numbers. Pick a method to see its summary; the ledger below lists every method."
+          className="rounded-lg border border-line bg-surface"
+        />
       ) : (
         <Summary query={accuracy} />
       )}
-
-      <Card title="Ledger — predicted vs actual candles">
-        <Ledger instrument={instrument} tf={tf} method={oneMethod} days={days} />
-      </Card>
-    </div>
+      <Ledger instrument={instrument} tf={tf} method={oneMethod} days={days} />
+    </Page>
   );
 }

@@ -42,6 +42,13 @@ describe("ExpiryBadge", () => {
     expect(badge.getAttribute("title")).toBe("Weekly expiry on Tue 29 Sep, 4 trading days away");
   });
 
+  it("says where the date comes from, and has a compact form for tight rows", () => {
+    render(<ExpiryBadge expiry={{ ...weekly, source: "exchange" }} compact />);
+    const badge = screen.getByText("Exp Tue 29 Sep");
+    expect(badge.getAttribute("title")).toBe("Weekly expiry on Tue 29 Sep, 4 trading days away — from the exchange contract list");
+    expect(expiryTitle({ ...weekly, source: "rules" })).toMatch(/— estimated from rules$/);
+  });
+
   it("is highlighted on expiry day", () => {
     render(<ExpiryBadge expiry={{ ...weekly, days_to_expiry: 0, is_expiry_day: true }} />);
     const badge = screen.getByText("Expiry today");
