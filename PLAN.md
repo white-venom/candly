@@ -52,7 +52,7 @@ Starting watchlist *(default; edit `config/watchlist.yaml`)*: Nifty 50, Bank Nif
 
 | Source | Role | Notes |
 |---|---|---|
-| Fyers API v3 | Primary: history and live candles for NSE, BSE, MCX; option chain | History: 100 days per request for intraday, 366 days per request for daily; about 10,000 requests/day (checked 2026-09-23). `cont_flag` for continuous futures (verify). Needs a daily login token. |
+| Fyers API v3 | Primary: history and live candles for NSE, BSE, MCX; option chain | History: 100 days per request for intraday (minute data from 3 Jul 2017), 366 days per request for daily. Rate limits: 10/s, 200/min, 100,000/day; breaching the per-minute cap more than 3 times in a day blocks the account for the rest of that day, so we stay at 8/s and 150/min (checked 2026-09-23). `cont_flag` for continuous futures (verify). Needs a daily login token. |
 | Kotak Neo | Stage B order execution; backup live quotes | Has a history endpoint, but users report 503/429 errors, so it is not our history source. TOTP login. |
 | Yahoo Finance (yfinance) | Dev-only fallback until the Fyers keys arrive | NSE/BSE only. 5m/15m for the last 60 days only, 1h for the last 730 days. Unofficial and may break. Never used for final results. |
 | Free RSS feeds | News (see §7) | |

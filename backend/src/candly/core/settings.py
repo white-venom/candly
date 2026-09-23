@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     config_dir: Path = REPO_ROOT / "config"
     data_source: Literal["auto", "fyers", "yahoo"] = "auto"
     frontend_url: str = "http://localhost:5173"
+    scheduler_enabled: bool = True
 
     fyers_app_id: str = ""
     fyers_secret_key: SecretStr = SecretStr("")

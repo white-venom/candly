@@ -1,6 +1,11 @@
+import os
+
 import pytest
 
 from candly.core.settings import Settings, get_settings
+
+# Tests must never start the background scheduler, even via a TestClient lifespan.
+os.environ["SCHEDULER_ENABLED"] = "false"
 
 _KEY_FIELDS = [
     name
