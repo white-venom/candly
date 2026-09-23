@@ -1,0 +1,133 @@
+# Candlestick pattern thresholds (owner: quant-engineer). Chosen before looking at any results.
+#
+# Units:
+#   *_atr    multiple of ATR(atr_period) measured on the bar BEFORE the pattern's first bar
+#   *_range  fraction of the candle's own high-low range
+#   *_body   multiple of the candle's own real body |close - open|
+#   prior_trend: down | up | null. Measured on closes before the pattern's first bar:
+#       move = close[first-1] - close[first-1-lookback_bars], in ATR units.
+#       down needs move <= -min_move_atr, up needs move >= +min_move_atr.
+# Invalidation: pattern low - buffer_atr * ATR (bullish), pattern high + buffer_atr * ATR (bearish),
+# with ATR taken at the pattern's last bar. Neutral patterns have no invalidation.
+
+atr_period: 14
+buffer_atr: 0.1
+prior_trend:
+  lookback_bars: 5
+  min_move_atr: 1.0
+
+patterns:
+  # --- single bar
+  doji:                     # body tiny vs range; not dragonfly/gravestone
+    min_range_atr: 0.3
+    max_body_range: 0.1
+    max_wick_range: 0.1     # a wick this small makes it dragonfly/gravestone instead
+  dragonfly_doji:           # doji with (almost) no upper wick
+    min_range_atr: 0.3
+    max_body_range: 0.1
+    max_wick_range: 0.1
+  gravestone_doji:          # doji with (almost) no lower wick
+    min_range_atr: 0.3
+    max_body_range: 0.1
+    max_wick_range: 0.1
+  hammer:                   # long lower wick after a decline
+    min_range_atr: 0.5
+    max_body_range: 0.35
+    min_wick_body: 2.0      # lower wick >= 2x body
+    max_other_wick_range: 0.15
+    prior_trend: down
+  hanging_man:              # hammer shape after a rise
+    min_range_atr: 0.5
+    max_body_range: 0.35
+    min_wick_body: 2.0
+    max_other_wick_range: 0.15
+    prior_trend: up
+  inverted_hammer:          # long upper wick after a decline
+    min_range_atr: 0.5
+    max_body_range: 0.35
+    min_wick_body: 2.0      # upper wick >= 2x body
+    max_other_wick_range: 0.15
+    prior_trend: down
+  shooting_star:            # inverted-hammer shape after a rise
+    min_range_atr: 0.5
+    max_body_range: 0.35
+    min_wick_body: 2.0
+    max_other_wick_range: 0.15
+    prior_trend: up
+  bullish_marubozu:
+    min_body_atr: 0.7
+    min_body_range: 0.9
+  bearish_marubozu:
+    min_body_atr: 0.7
+    min_body_range: 0.9
+
+  # --- two bars
+  bullish_engulfing:        # bullish body covers the prior bearish body
+    min_first_body_atr: 0.1
+    min_body_atr: 0.3
+    prior_trend: down
+  bearish_engulfing:
+    min_first_body_atr: 0.1
+    min_body_atr: 0.3
+    prior_trend: up
+  piercing_line:            # opens below the prior close, closes past the prior body's midpoint
+    min_first_body_atr: 0.6
+    min_penetration: 0.5
+    prior_trend: down
+  dark_cloud_cover:
+    min_first_body_atr: 0.6
+    min_penetration: 0.5
+    prior_trend: up
+  bullish_harami:           # small body inside a long bearish body
+    min_first_body_atr: 0.6
+    max_body_ratio: 0.5
+    prior_trend: down
+  bearish_harami:
+    min_first_body_atr: 0.6
+    max_body_ratio: 0.5
+    prior_trend: up
+  tweezer_bottom:           # bearish then bullish bar with matching lows
+    min_range_atr: 0.3
+    max_diff_atr: 0.05
+    prior_trend: down
+  tweezer_top:
+    min_range_atr: 0.3
+    max_diff_atr: 0.05
+    prior_trend: up
+  inside_bar:               # range strictly inside the prior bar's range
+    min_first_range_atr: 0.3
+  outside_bar:              # range strictly beyond the prior bar's range on both sides
+    min_range_atr: 0.3
+
+  # --- three bars
+  morning_star:             # long bearish, small body at/below its close, bullish close past the midpoint
+    min_first_body_atr: 0.6
+    max_star_body_atr: 0.3
+    min_last_body_atr: 0.3
+    min_penetration: 0.5
+    prior_trend: down
+  evening_star:
+    min_first_body_atr: 0.6
+    max_star_body_atr: 0.3
+    min_last_body_atr: 0.3
+    min_penetration: 0.5
+    prior_trend: up
+  three_white_soldiers:     # three rising bullish bars, each opening inside the prior body, closing near its high
+    min_body_atr: 0.4
+    max_close_wick_range: 0.3
+  three_black_crows:
+    min_body_atr: 0.4
+    max_close_wick_range: 0.3
+
+# Context features (features/context.py and features/levels.py).
+context:
+  trend_fast_ema: 20
+  trend_slow_ema: 50
+  trend_slope_bars: 5       # up needs close > slow EMA, fast > slow, and the fast EMA rising over this many bars
+  trend_min_slope_atr: 0.25 # ...by at least this many ATR(14); smaller slopes count as sideways
+  vol_window_days: 252      # trailing window for the ATR percentile, in sessions
+  vol_min_fraction: 0.5     # need at least this share of the window before labelling a regime
+  vol_regime_cuts: [0.3333, 0.6667]   # ATR percentile below the first -> low, above the second -> high
+  near_level_atr: 0.5       # a level counts as "near" within this many ATR of the close
+  swing_bars: 3             # a swing high/low needs this many bars on each side; confirmed only after the right side closes
+  swing_count: 3            # key_levels returns this many recent swing highs and lows
