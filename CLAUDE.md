@@ -77,6 +77,7 @@ Frontend (run inside `frontend/`):
 
 ## Team workflow
 
-- Agents in `.claude/agents/`: backend-engineer, quant-engineer, frontend-engineer, quant-auditor (read-only), reviewer (read-only).
+- Agents in `.claude/agents/`: backend-engineer, quant-engineer, frontend-engineer, quant-auditor (read-only), reviewer (read-only), trader-tester.
+- trader-tester is a 20+ year Indian-markets trader who is also a backend engineer. It writes only acceptance tests (`backend/tests/acceptance/`) and reports (`docs/test-reports/`).
 - Each agent stays inside its own folders. Anything that crosses into another agent's area goes in the agent's report, and the lead (the main session) integrates it.
 - Any change to indicators, patterns, features, labels, the scorecard, forecasts or backtests needs a quant-auditor pass before its results are trusted.
