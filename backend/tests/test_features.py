@@ -1,4 +1,5 @@
 import copy
+import json
 from datetime import date, datetime
 
 import numpy as np
@@ -8,6 +9,7 @@ import pytest
 from candly.core.calendar import IST, get_calendar
 from candly.core.expiry import expiry_info
 from candly.features.context import CONTEXT_COLUMNS, compute_context, session_phases
+from candly.features.expiry import expiry_with_source
 from candly.features.levels import LEVEL_KINDS, key_levels, level_frame, levels_as_of, swing_points
 from candly.patterns import load_pattern_config
 from candly.research.causality import check_causal
@@ -202,6 +204,60 @@ def test_expiry_columns_match_the_expiry_function():
     assert by_day[date(2026, 9, 22)] == 0 and by_day[date(2026, 9, 21)] == 1  # weekly Tuesday
     assert by_day[date(2026, 9, 23)] == 4  # to the monthly on Tue 29 Sep
     assert ctx.loc[days == date(2026, 9, 29), "expiry_day"].item() is True
+
+
+def write_live_expiries(data_dir, instrument: str, expiries: dict[str, str], since: str, last_ok: str):
+    """data/expiries/live.json as data.expiries.refresh_expiries() writes it, for one instrument."""
+    path = data_dir / "expiries" / "live.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    listed = {d: {"kind": kind, "first_seen": since} for d, kind in expiries.items()}
+    record = {"since": since, "last_ok": last_ok, "expiries": listed}
+    path.write_text(json.dumps({"instruments": {instrument: record}, "check": {}}), encoding="utf-8")
+
+
+def test_expiry_answers_follow_the_daily_exchange_refresh(tmp_data_dir):
+    day = date(2026, 9, 23)
+    df = synthetic_candles("1D", "2026-08-20", "2026-09-28", seed=15)
+    ruled = compute_context(df, "1D", "NSE", instrument_id="NSE:NIFTY50")
+    info, source = expiry_with_source("NSE:NIFTY50", day)
+    assert (info.next_expiry, source) == (date(2026, 9, 29), "rules")
+
+    # the exchange lists only a monthly expiry, a day before the rules' date; the memoised rule answers
+    # must not survive the refresh
+    write_live_expiries(tmp_data_dir, "NSE:NIFTY50", {"2026-09-28": "monthly"}, "2026-09-20", "2026-09-28")
+    info, source = expiry_with_source("NSE:NIFTY50", day)
+    assert (info.next_expiry, info.days_to_expiry, source) == (date(2026, 9, 28), 3, "exchange")
+    moved = compute_context(df, "1D", "NSE", instrument_id="NSE:NIFTY50")
+    days = df["ts"].dt.tz_convert(IST).dt.date
+    assert_matches_lookups(moved, days)
+    at = {d: (days == d).to_numpy() for d in (date(2026, 9, 22), date(2026, 9, 28))}
+    assert moved.loc[at[date(2026, 9, 28)], "expiry_day"].item() is True
+    assert ruled.loc[at[date(2026, 9, 28)], "expiry_day"].item() is False
+    assert moved.loc[at[date(2026, 9, 22)], "expiry_day"].item() is False  # the rules' weekly
+    assert ruled.loc[at[date(2026, 9, 22)], "expiry_day"].item() is True
+    before = (days < date(2026, 9, 20)).to_numpy()  # before the first refresh the rules still answer
+    pd.testing.assert_frame_equal(moved[before], ruled[before])
+
+    write_live_expiries(
+        tmp_data_dir,
+        "NSE:NIFTY50",
+        {"2026-09-29": "monthly", "2026-10-27": "monthly"},
+        "2026-09-20",
+        "2026-09-24",
+    )
+    assert expiry_with_source("NSE:NIFTY50", day)[0].next_expiry == date(2026, 9, 29)
+
+    # refreshes stopped on 1 Sep: three days on, the rules take over again mid-way to the listed expiry
+    write_live_expiries(tmp_data_dir, "NSE:NIFTY50", {"2026-09-29": "monthly"}, "2026-08-24", "2026-09-01")
+    assert expiry_with_source("NSE:NIFTY50", date(2026, 9, 4))[1] == "exchange"
+    assert expiry_with_source("NSE:NIFTY50", date(2026, 9, 7))[1] == "rules"
+    assert_matches_lookups(compute_context(df, "1D", "NSE", instrument_id="NSE:NIFTY50"), days)
+
+
+def assert_matches_lookups(ctx: pd.DataFrame, days: pd.Series) -> None:
+    for d, flag, left in zip(days, ctx["expiry_day"], ctx["days_to_expiry"], strict=True):
+        expected = expiry_with_source("NSE:NIFTY50", d)[0]
+        assert flag is expected.is_expiry_day and left == expected.days_to_expiry, d
 
 
 def test_expiry_columns_are_empty_without_an_expiry():

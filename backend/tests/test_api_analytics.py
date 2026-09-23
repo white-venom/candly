@@ -1,3 +1,4 @@
+import json
 from datetime import date
 from types import SimpleNamespace
 
@@ -259,7 +260,13 @@ def test_forecast_is_read_only(client):
 
 
 # seen on Fri 28 Jun 2024: stock F&O's monthly expiry is the last Thursday, 25 Jul, 19 trading days on
-JULY_2024_EXPIRY = {"next": "2024-07-25", "kind": "monthly", "days_to_expiry": 19, "is_expiry_day": False}
+JULY_2024_EXPIRY = {
+    "next": "2024-07-25",
+    "kind": "monthly",
+    "days_to_expiry": 19,
+    "is_expiry_day": False,
+    "source": "rules",
+}
 
 
 def test_scanner(client, monkeypatch):
@@ -288,6 +295,31 @@ def test_scanner(client, monkeypatch):
     sbin = by_id["NSE:SBIN"]
     assert sbin["abstain"] and sbin["abstain_reason"].startswith("stale data") and sbin["score"] == 0
     assert sbin["time"] < int(LAST.timestamp())
+
+
+def test_scanner_expiry_says_where_the_date_came_from(client, tmp_data_dir):
+    # a refresh on 28 Jun 2024 found RELIANCE's July contract expiring a day early
+    live = {
+        "instruments": {
+            "NSE:RELIANCE": {
+                "since": "2024-06-24",
+                "last_ok": "2024-06-28",
+                "expiries": {"2024-07-24": {"kind": "monthly", "first_seen": "2024-06-24"}},
+            }
+        },
+        "check": {},
+    }
+    path = tmp_data_dir / "expiries" / "live.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(live), encoding="utf-8")
+    rows = {r["instrument"]: r for r in client.get("/api/scanner", params={"tf": "1D"}).json()}
+    assert rows["NSE:RELIANCE"]["expiry"] == {
+        **JULY_2024_EXPIRY,
+        "next": "2024-07-24",
+        "days_to_expiry": 18,
+        "source": "exchange",
+    }
+    assert rows["NSE:TCS"]["expiry"] == JULY_2024_EXPIRY
 
 
 def _row(instrument: str, time: int, reason: str | None = None, score: float = 0.1) -> analytics.ScannerRow:

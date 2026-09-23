@@ -14,7 +14,7 @@ from candly.core.instruments import Instrument, UnknownInstrument, get_instrumen
 from candly.core.schema import CANDLE_COLUMNS
 from candly.core.timeframes import validate_tf
 from candly.features.context import compute_context, has_meaningful_volume
-from candly.features.expiry import expiry_on
+from candly.features.expiry import expiry_with_source
 from candly.features.levels import Level, key_levels, levels_as_of, previous_trading_day
 from candly.forecast import Forecast, make_forecast
 from candly.forecast.timing import to_unix
@@ -134,6 +134,7 @@ class ExpiryInfoOut(BaseModel):
     kind: Literal["weekly", "monthly", "contract"]
     days_to_expiry: int
     is_expiry_day: bool
+    source: Literal["exchange", "rules"]  # exchange-listed dates, or config/expiry.yaml rules
 
 
 class TopSignal(BaseModel):
@@ -217,7 +218,7 @@ def _int(x) -> int | None:
 
 
 def _expiry_out(instrument_id: str, now: pd.Timestamp) -> ExpiryInfoOut | None:
-    info = expiry_on(instrument_id, get_calendar().local_date(now))
+    info, source = expiry_with_source(instrument_id, get_calendar().local_date(now))
     if info is None:
         return None
     return ExpiryInfoOut(
@@ -225,6 +226,7 @@ def _expiry_out(instrument_id: str, now: pd.Timestamp) -> ExpiryInfoOut | None:
         kind=info.kind,
         days_to_expiry=int(info.days_to_expiry),
         is_expiry_day=bool(info.is_expiry_day),
+        source=source,
     )
 
 

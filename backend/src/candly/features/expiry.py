@@ -1,8 +1,8 @@
 """Derivatives expiry context per bar, from the published expiry schedule (never from price data).
 
 The value at a bar depends only on that bar's IST date, so it is causal. `candly.data.expiries` is the
-single entry point (NSE/BSE rules via core, MCX contract dates via the symbol master); until it exists,
-`candly.core.expiry` answers for NSE/BSE.
+single entry point: exchange-listed dates from data/expiries/live.json (refreshed daily), else the rules
+in config/expiry.yaml. Without it, `candly.core.expiry` answers from the rules.
 """
 
 from __future__ import annotations
@@ -16,7 +16,9 @@ import numpy as np
 import pandas as pd
 
 from candly.core.calendar import IST, MarketCalendar, get_calendar
+from candly.core.expiry import ExpiryInfo
 from candly.core.instruments import exchange_of
+from candly.core.settings import get_settings
 
 log = logging.getLogger(__name__)
 EXPIRY_COLUMNS = ["expiry_day", "days_to_expiry"]
@@ -25,29 +27,50 @@ _warned: set[str] = set()
 
 def _entry_point() -> Callable:
     try:
-        from candly.data.expiries import expiry_info
+        from candly.data.expiries import expiry_with_source
     except ImportError:
         from candly.core.expiry import expiry_info
-    return expiry_info
+
+        def expiry_with_source(instrument_id: str, d: date):
+            info = expiry_info(instrument_id, d)
+            return info, None if info is None else "rules"
+
+    return expiry_with_source
+
+
+def live_stamp() -> tuple:
+    """Identifies the current data/expiries/live.json: (path, mtime, size), or (path, None) without one.
+    The daily refresh rewrites it, so answers memoised under an older stamp are never reused."""
+    path = get_settings().data_dir / "expiries" / "live.json"
+    try:
+        stat = path.stat()
+    except OSError:
+        return (str(path), None)
+    return (str(path), stat.st_mtime_ns, stat.st_size)
 
 
 @lru_cache(maxsize=200_000)
-def _cached(instrument_id: str, d: date):
+def _cached(instrument_id: str, d: date, stamp: tuple | None) -> tuple[ExpiryInfo | None, str | None]:
     return _entry_point()(instrument_id, d)
 
 
-def expiry_on(instrument_id: str, d: date):
-    """ExpiryInfo on IST date `d`, or None when the instrument has no expiry (or the lookup failed).
-    NSE/BSE answers come from fixed rules and are memoised; MCX answers change as symbol masters arrive."""
+def expiry_with_source(
+    instrument_id: str, d: date, stamp: tuple | None = None
+) -> tuple[ExpiryInfo | None, str | None]:
+    """(ExpiryInfo on IST date `d`, "exchange" | "rules"), or (None, None) when the instrument has no
+    expiry (or the lookup failed). Pass `stamp` from live_stamp() to look up many dates with one stat."""
     try:
-        if exchange_of(instrument_id) == "MCX":
-            return _entry_point()(instrument_id, d)
-        return _cached(instrument_id, d)
-    except Exception as exc:  # a missing symbol master must not break features
+        return _cached(instrument_id, d, live_stamp() if stamp is None else stamp)
+    except Exception as exc:  # unreadable expiry data must not break features
         if instrument_id not in _warned:
             _warned.add(instrument_id)
             log.warning("expiry lookup failed for %s (%s); treated as no expiry", instrument_id, exc)
-        return None
+        return None, None
+
+
+def expiry_on(instrument_id: str, d: date, stamp: tuple | None = None) -> ExpiryInfo | None:
+    """ExpiryInfo on IST date `d`, or None when the instrument has no expiry."""
+    return expiry_with_source(instrument_id, d, stamp)[0]
 
 
 def _trading_days(cal: MarketCalendar, exchange: str, a: date, b: date) -> int:
@@ -56,22 +79,38 @@ def _trading_days(cal: MarketCalendar, exchange: str, a: date, b: date) -> int:
 
 
 def _by_day(instrument_id: str, dates: list[date]) -> dict[date, tuple[bool, int] | None]:
-    """(is expiry day, trading days to the next expiry) per date. One lookup per expiry: every date up to
-    an expiry shares it, and the day counts are walked back from it."""
+    """(is expiry day, trading days to the next expiry) per date, with a few lookups per expiry.
+
+    Dates up to an expiry share it while its source stays the same. The source switches from the rules
+    to exchange dates at the first refresh and back when live data goes stale, at most once between two
+    expiries, so a segment is cut at its first date with a different answer (found by bisection). Day
+    counts are walked back from the expiry."""
     cal = get_calendar()
     exchange = exchange_of(instrument_id)
+    stamp = live_stamp()
+
+    def answer(k: int) -> tuple[date, str | None] | None:
+        info, source = expiry_with_source(instrument_id, dates[k], stamp)
+        return None if info is None else (info.next_expiry, source)
+
     out: dict[date, tuple[bool, int] | None] = {}
     i = 0
     while i < len(dates):
-        info = expiry_on(instrument_id, dates[i])
-        if info is None:
+        first = answer(i)
+        if first is None:
             out[dates[i]] = None
             i += 1
             continue
-        nxt = info.next_expiry
+        nxt = first[0]
         j = i
         while j + 1 < len(dates) and dates[j + 1] <= nxt:
             j += 1
+        if answer(j) != first:
+            lo, hi = i, j
+            while hi - lo > 1:
+                mid = (lo + hi) // 2
+                lo, hi = (mid, hi) if answer(mid) == first else (lo, mid)
+            j = lo
         remaining = _trading_days(cal, exchange, dates[j], nxt)
         for k in range(j, i - 1, -1):
             if k < j:
