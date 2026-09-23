@@ -1,4 +1,6 @@
 import os
+import threading
+import time
 from datetime import UTC, date, datetime
 from urllib.parse import parse_qs, urlparse
 
@@ -16,11 +18,13 @@ from candly.core.instruments import load_watchlist
 from candly.data import clock, expiries
 from candly.data.sources import fyers
 from candly.data.store import save_candles
+from candly.jobs import sync
 from candly.news.models import NewsItem, news_id
 from candly.news.store import NewsStore
 
 cal = get_calendar()
 NOW = pd.Timestamp(datetime(2026, 9, 23, 12, 2), tz=IST).tz_convert("UTC")  # Wednesday, markets open
+REAL_START_SYNC = sync.start_fyers_sync
 
 
 def ist(y, m, d, hh, mm) -> pd.Timestamp:
@@ -40,6 +44,19 @@ def daily(days: list[date]) -> pd.DataFrame:
             "oi": np.nan,
         }
     )
+
+
+@pytest.fixture(autouse=True)
+def sync_starts(monkeypatch):
+    """A successful login starts the Fyers sync; here it is only recorded, never run in the background."""
+    starts: list[bool] = []
+
+    def fake_start() -> bool:
+        starts.append(True)
+        return True
+
+    monkeypatch.setattr(sync, "start_fyers_sync", fake_start)
+    return starts
 
 
 @pytest.fixture
@@ -445,3 +462,118 @@ def test_fyers_callback(fyers_client):
     assert route.call_count == 1
     replay = fyers_client.get("/api/auth/fyers/callback", params={"auth_code": "eyJx", "state": state})
     assert replay.headers["location"].endswith("fyers=error")
+
+
+# --- Fyers data sync ---------------------------------------------------------------------------
+
+IDLE_SYNC = {
+    "status": "idle", "step": None, "progress": 0.0, "message": None,
+    "started_at": None, "finished_at": None, "error": None,
+}
+
+
+def all_on_fyers() -> None:
+    for inst in load_watchlist():
+        bar = daily([date(2026, 9, 22)]).assign(ts=[cal.session_times(inst.exchange, date(2026, 9, 22))[0]])
+        save_candles(inst.id, "1D", bar, source="fyers")
+
+
+def test_health_reports_the_sync(client):
+    assert client.get("/api/health").json()["sync"] == IDLE_SYNC
+
+
+@respx.mock
+def test_code_exchange_starts_the_sync_while_the_store_holds_yahoo_data(fyers_client, sync_starts):
+    respx.post(fyers.VALIDATE_AUTHCODE_URL).mock(return_value=token_ok())
+    save_candles("NSE:RELIANCE", "1D", daily([date(2026, 9, 22)]), source="yahoo")
+    response = fyers_client.post("/api/auth/fyers/code", json={"code": "eyJrawcode"})
+    assert response.status_code == 200 and response.json()["connected"] is True
+    assert sync_starts == [True]
+
+
+@respx.mock
+def test_code_exchange_starts_the_sync_when_fyers_daily_data_is_missing(fyers_client, sync_starts):
+    respx.post(fyers.VALIDATE_AUTHCODE_URL).mock(return_value=token_ok())
+    fyers_client.post("/api/auth/fyers/code", json={"code": "eyJrawcode"})  # empty store
+    assert sync_starts == [True]
+
+
+@respx.mock
+def test_code_exchange_skips_the_sync_once_everything_is_on_fyers(fyers_client, sync_starts):
+    respx.post(fyers.VALIDATE_AUTHCODE_URL).mock(return_value=token_ok())
+    all_on_fyers()
+    assert fyers_client.post("/api/auth/fyers/code", json={"code": "eyJrawcode"}).status_code == 200
+    assert sync_starts == []
+
+
+@respx.mock
+def test_callback_login_starts_the_sync(fyers_client, sync_starts):
+    respx.post(fyers.VALIDATE_AUTHCODE_URL).mock(return_value=token_ok())
+    state = issued_state(fyers_client)
+    fyers_client.get("/api/auth/fyers/callback", params={"s": "ok", "auth_code": "eyJx", "state": state})
+    assert sync_starts == [True]
+
+
+@respx.mock
+def test_a_sync_problem_never_fails_the_login(fyers_client, monkeypatch):
+    respx.post(fyers.VALIDATE_AUTHCODE_URL).mock(return_value=token_ok())
+
+    def broken() -> bool:
+        raise OSError("disk full")
+
+    monkeypatch.setattr(sync, "start_if_needed", broken)
+    response = fyers_client.post("/api/auth/fyers/code", json={"code": "eyJrawcode"})
+    assert response.status_code == 200 and response.json()["connected"] is True
+
+
+def test_sync_status_endpoint(client):
+    body = client.get("/api/sync/status").json()
+    assert {k: body[k] for k in IDLE_SYNC} == IDLE_SYNC
+    assert body["steps"] == list(sync.STEPS) and body["completed_steps"] == []
+    assert body["failures"] == {} and body["scorecards"] == {} and "done" not in body
+
+
+def test_manual_sync_route(fyers_client, monkeypatch):
+    json_type = {"content-type": "application/json"}
+    assert fyers_client.post("/api/sync/fyers", content=b"{}").status_code == 415
+    not_connected = fyers_client.post("/api/sync/fyers", json={})
+    assert not_connected.status_code == 400
+    assert not_connected.json()["detail"] == platform.INGEST_NOT_CONNECTED
+    store_token(expires_in=86400)
+    assert fyers_client.post("/api/sync/fyers", content=b"{", headers=json_type).status_code == 400
+
+    entered, release = threading.Event(), threading.Event()
+
+    def slow(run):
+        entered.set()
+        release.wait(10)
+
+    monkeypatch.setattr(sync, "start_fyers_sync", REAL_START_SYNC)
+    for name in list(sync.STEPS):
+        monkeypatch.setitem(sync.STEPS, name, lambda run: None)
+    monkeypatch.setitem(sync.STEPS, "archive", slow)
+    try:
+        started = fyers_client.post("/api/sync/fyers", json={})
+        assert started.status_code == 202 and started.json()["status"] == "running"
+        assert entered.wait(10)
+        again = fyers_client.post("/api/sync/fyers", content=b"", headers=json_type)
+        assert again.status_code == 409 and again.json()["detail"] == platform.SYNC_RUNNING
+        health = fyers_client.get("/api/health").json()["sync"]
+        assert (health["status"], health["step"]) == ("running", "archive")
+    finally:
+        release.set()
+        deadline = time.monotonic() + 10
+        while sync.is_running() and time.monotonic() < deadline:
+            time.sleep(0.01)
+    assert fyers_client.get("/api/sync/status").json()["status"] == "done"
+
+
+def test_manual_sync_needs_keys_and_fyers_as_the_source(client, monkeypatch):
+    no_keys = client.post("/api/sync/fyers", json={})
+    assert no_keys.status_code == 400 and no_keys.json()["detail"] == platform.INGEST_NO_KEYS
+    monkeypatch.setenv("FYERS_APP_ID", "TESTAPP-100")
+    monkeypatch.setenv("FYERS_SECRET_KEY", "test-secret-key")
+    monkeypatch.setenv("DATA_SOURCE", "yahoo")
+    platform.get_settings.cache_clear()
+    forced = client.post("/api/sync/fyers", json={})
+    assert forced.status_code == 400 and forced.json()["detail"] == platform.SYNC_NOT_FYERS

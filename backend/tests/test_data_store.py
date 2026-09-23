@@ -237,6 +237,14 @@ def test_clean_filters_session_dedupes_and_repairs():
     assert out["high"].iloc[2] == 12.2 and out["low"].iloc[2] == 11.5  # repaired to cover the body
 
 
+def test_clean_drops_placeholder_prices():
+    days = [date(2021, 2, 11), date(2021, 2, 12), date(2021, 2, 15)]
+    df = bars_on(days, "NSE", [(20.0, 21.0, 19.0, 20.5, 0.0), (-1.0, 23.05, -1.0, 23.05, 0.0),
+                               (22.0, 23.0, 21.0, np.nan, 0.0)])
+    out = clean_candles(df, "1D", "NSE", kind="index")
+    assert list(out["ts"]) == [cal.session_times("NSE", date(2021, 2, 11))[0]]
+
+
 def bars_on(days: list[date], exchange: str, rows: list[tuple]) -> pd.DataFrame:
     """Daily bars with explicit (open, high, low, close, volume) per day."""
     o, h, lo, c, v = (list(col) for col in zip(*rows, strict=True))

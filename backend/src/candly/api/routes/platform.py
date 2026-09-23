@@ -1,4 +1,5 @@
-"""Platform routes: health, instruments, candles, news and the Fyers login flow (docs/CONTRACTS.md §4)."""
+"""Platform routes: health, instruments, candles, news, the Fyers login flow and the Fyers data sync
+(docs/CONTRACTS.md §4)."""
 
 import logging
 import secrets
@@ -21,6 +22,7 @@ from candly.data.expiries import expiry_check, expiry_with_source
 from candly.data.live import get_forming
 from candly.data.sources import fyers
 from candly.data.store import candle_source, data_summary, load_candles, series_stats
+from candly.jobs import sync
 from candly.news.store import NewsStore
 
 log = logging.getLogger(__name__)
@@ -32,6 +34,9 @@ LOGIN_STATE_SECONDS = 15 * 60
 INGEST_NOT_CONNECTED = "Fyers not connected — log in to resume data updates"
 INGEST_NO_KEYS = "Fyers keys are not set — add FYERS_APP_ID and FYERS_SECRET_KEY to .env"
 BAD_STATE = "login link expired or not from this app — click Connect Fyers again"
+SYNC_RUNNING = "a Fyers sync is already running"
+SYNC_NOT_FYERS = "DATA_SOURCE is set to yahoo in .env: set it to auto or fyers to sync Fyers data"
+SYNC_HEALTH_FIELDS = ("status", "step", "progress", "message", "started_at", "finished_at", "error")
 _login_states: dict[str, float] = {}
 _state_lock = threading.Lock()
 
@@ -114,6 +119,7 @@ def health() -> dict:
         "markets": markets,
         "ingest": _ingest_status(data_source, settings.has_fyers, fyers_connected),
         "expiry_check": expiry_check(),
+        "sync": {key: value for key, value in sync.get_sync_status().items() if key in SYNC_HEALTH_FIELDS},
     }
 
 
@@ -236,12 +242,25 @@ def fyers_login() -> RedirectResponse:
     return RedirectResponse(url, status_code=307)
 
 
-@router.post("/auth/fyers/code")
-async def fyers_code(request: Request) -> dict:
-    # Requiring JSON makes this a CORS-preflighted request, so other sites can't post a "simple" form here.
+def _require_json(request: Request) -> None:
+    # Requiring JSON makes a POST CORS-preflighted, so other sites can't send a "simple" form request here.
     media_type = request.headers.get("content-type", "").split(";")[0].strip().lower()
     if media_type != "application/json":
         raise HTTPException(status_code=415, detail="Content-Type must be application/json")
+
+
+def _start_sync_after_login() -> None:
+    """Never lets a sync problem fail the login itself."""
+    try:
+        if sync.start_if_needed():
+            log.info("Fyers connected: data sync started in the background")
+    except Exception:
+        log.exception("could not start the Fyers sync after login")
+
+
+@router.post("/auth/fyers/code")
+async def fyers_code(request: Request) -> dict:
+    _require_json(request)
     try:
         body = await request.json()
     except ValueError:
@@ -252,7 +271,9 @@ async def fyers_code(request: Request) -> dict:
     state = fyers.extract_state(code)
     if state is not None and not _take_state(state):
         raise _bad(BAD_STATE)
-    return await run_in_threadpool(_exchange, code)
+    result = await run_in_threadpool(_exchange, code)
+    await run_in_threadpool(_start_sync_after_login)
+    return result
 
 
 @router.get("/auth/fyers/callback")
@@ -265,6 +286,8 @@ def fyers_callback(request: Request) -> RedirectResponse:
             outcome = "connected"
         except HTTPException as exc:
             log.warning("Fyers callback failed: %s", exc.detail)
+        else:
+            _start_sync_after_login()
     else:
         log.warning("Fyers callback with an unknown or expired state; ignored")
     return RedirectResponse(f"{frontend}/?fyers={outcome}", status_code=307)
@@ -273,3 +296,34 @@ def fyers_callback(request: Request) -> RedirectResponse:
 @router.get("/auth/fyers/status")
 def fyers_status() -> dict:
     return fyers.connection_status()
+
+
+# --- Fyers data sync ------------------------------------------------------------------------
+
+
+@router.post("/sync/fyers", status_code=202)
+async def sync_fyers(request: Request) -> dict:
+    """Starts (or resumes) the Fyers sync in the background. The body may be empty or any JSON."""
+    _require_json(request)
+    if (await request.body()).strip():
+        try:
+            await request.json()
+        except ValueError:
+            raise _bad("body must be JSON, e.g. {}") from None
+    if sync.is_running():
+        raise HTTPException(status_code=409, detail=SYNC_RUNNING)
+    settings = get_settings()
+    if not settings.has_fyers:
+        raise _bad(INGEST_NO_KEYS)
+    if settings.resolved_data_source() != "fyers":
+        raise _bad(SYNC_NOT_FYERS)
+    if not (await run_in_threadpool(fyers.connection_status))["connected"]:
+        raise _bad(INGEST_NOT_CONNECTED)
+    if not await run_in_threadpool(sync.start_fyers_sync):
+        raise HTTPException(status_code=409, detail=SYNC_RUNNING)
+    return sync.get_sync_status()
+
+
+@router.get("/sync/status")
+def sync_status() -> dict:
+    return sync.get_sync_status()

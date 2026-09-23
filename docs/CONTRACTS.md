@@ -395,8 +395,12 @@ After the first successful Fyers login, the backend runs `jobs.sync.run_fyers_sy
 The run is resumable, one at a time, and keeps its state in `data/sync/state.json`.
 
 ```ts
-// POST /api/sync/fyers (JSON) -> 202 SyncStatus, or 409 if already running
-// GET  /api/sync/status       -> SyncStatus
+// POST /api/sync/fyers (JSON) -> 202 SyncStatus; 409 already running; 415 not JSON;
+//                                400 no keys / DATA_SOURCE=yahoo / Fyers not connected
+// GET  /api/sync/status       -> SyncStatus & { steps: string[] }
+// Step ids, in order: refresh_expiries, archive, backfill_1d, backfill_5m, build_15m_1h, fill_1d_gaps,
+//                     quality_report, holidays, scorecards. Scheduled ingests pause while a sync runs.
+// A Fyers login starts the sync when any series isn't pure Fyers, Fyers 1D is missing, or a run is unfinished.
 type SyncStatus = { status: "idle" | "running" | "done" | "error"; step: string | null; progress: number | null /* 0-1 */;
                     message: string | null; started_at: number | null; finished_at: number | null };
 // Health gains: sync?: SyncStatus

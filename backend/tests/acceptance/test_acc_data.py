@@ -156,12 +156,19 @@ def test_weekend_bars_are_real_special_sessions(tf):
     ids = stored_ids(tf)
     if not ids:
         pytest.skip(f"no stored {tf} data")
+    per_inst = {}
     for inst in ids:
         loc = local(read_real(inst, tf)["ts"])
-        weekend = set(loc[loc.dt.weekday >= 5].dt.date.astype(str))
-        assert weekend <= WEEKEND_SESSIONS, (
-            f"{inst} {tf}: unexplained weekend bars {sorted(weekend - WEEKEND_SESSIONS)}"
-        )
+        per_inst[inst] = set(loc[loc.dt.weekday >= 5].dt.date.astype(str))
+    # Fyers history carries real Saturday sessions we don't list (e.g. 2012-03-03). A weekend day is real
+    # when it's a known special session or at least 3 instruments traded that day; one stray series isn't.
+    counts: dict[str, int] = {}
+    for days in per_inst.values():
+        for d in days:
+            counts[d] = counts.get(d, 0) + 1
+    real = WEEKEND_SESSIONS | {d for d, n in counts.items() if n >= 3}
+    for inst, weekend in per_inst.items():
+        assert weekend <= real, f"{inst} {tf}: unexplained weekend bars {sorted(weekend - real)}"
 
 
 def test_hourly_bars_sit_on_the_session_grid():

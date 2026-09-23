@@ -57,10 +57,11 @@ def clean_candles(df: pd.DataFrame, tf: str, exchange: str, kind: str | None = N
     out["ts"] = pd.to_datetime(out["ts"], utc=True).astype("datetime64[ns, UTC]")
     out[PRICE_COLUMNS + ["volume", "oi"]] = out[PRICE_COLUMNS + ["volume", "oi"]].astype("float64")
 
-    nan_prices = out[PRICE_COLUMNS].isna().any(axis=1)
-    if nan_prices.any():
-        log.info("%s %s: dropped %d bars with missing prices", exchange, tf, int(nan_prices.sum()))
-        out = out[~nan_prices]
+    # A price <= 0 is a source placeholder, e.g. Fyers INDIAVIX 1D has open = low = -1 on some days.
+    no_price = out[PRICE_COLUMNS].isna().any(axis=1) | (out[PRICE_COLUMNS] <= 0).any(axis=1)
+    if no_price.any():
+        log.info("%s %s: dropped %d bars without a valid price", exchange, tf, int(no_price.sum()))
+        out = out[~no_price]
 
     opens, closes = session_bounds(out["ts"], exchange)
     if is_intraday(tf):

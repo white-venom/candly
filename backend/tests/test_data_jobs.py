@@ -1,3 +1,4 @@
+import json
 import logging
 import threading
 from datetime import datetime
@@ -9,7 +10,7 @@ from candly.core.calendar import IST
 from candly.core.instruments import load_watchlist
 from candly.data import clock
 from candly.data.sources import fyers
-from candly.jobs import scheduler
+from candly.jobs import scheduler, sync
 
 
 def ist(y, m, d, hh, mm, ss=0) -> pd.Timestamp:
@@ -139,6 +140,56 @@ def test_starting_the_scheduler_refreshes_expiries_at_once(monkeypatch):
         assert ran.wait(timeout=10)
     finally:
         scheduler.stop_scheduler()
+
+
+def test_ingest_waits_while_the_fyers_sync_runs(fake_ingest):
+    assert sync._run_lock.acquire(blocking=False)
+    try:
+        assert scheduler.ingest_incremental("5m", ("NSE",)) == {}
+        scheduler.daily_ingest(("MCX",))
+    finally:
+        sync._run_lock.release()
+    assert fake_ingest == []
+    scheduler.daily_ingest(("MCX",))
+    assert fake_ingest == [("1D", ids("MCX"))]
+
+
+@pytest.fixture
+def sync_starts(monkeypatch):
+    starts: list[bool] = []
+    monkeypatch.setattr(sync, "start_fyers_sync", lambda: starts.append(True) or True)
+    return starts
+
+
+def test_scheduler_start_resumes_only_an_unfinished_sync_with_a_live_session(
+    sync_starts, fake_fyers_keys, monkeypatch
+):
+    monkeypatch.setattr(fyers, "connection_status", lambda: {"connected": True, "expires_at": 1})
+    scheduler.resume_fyers_sync()
+    assert sync_starts == []  # no sync yet: the first one starts from a login, never on its own
+
+    path = sync.state_path()
+    path.parent.mkdir(parents=True)
+    interrupted = sync._idle() | {"status": "running", "run_date": "2026-09-23"}
+    path.write_text(json.dumps(interrupted), encoding="utf-8")
+    monkeypatch.setattr(fyers, "connection_status", lambda: {"connected": False, "expires_at": None})
+    scheduler.resume_fyers_sync()
+    assert sync_starts == []  # the next login resumes it instead
+    monkeypatch.setattr(fyers, "connection_status", lambda: {"connected": True, "expires_at": 1})
+    scheduler.resume_fyers_sync()
+    assert sync_starts == [True]
+
+
+def test_scheduler_start_never_contacts_fyers_without_keys(sync_starts, monkeypatch):
+    def unexpected():
+        raise AssertionError("no keys: Fyers must not be contacted")
+
+    path = sync.state_path()
+    path.parent.mkdir(parents=True)
+    path.write_text(json.dumps(sync._idle() | {"status": "error"}), encoding="utf-8")
+    monkeypatch.setattr(fyers, "connection_status", unexpected)
+    scheduler.resume_fyers_sync()
+    assert sync_starts == []
 
 
 def test_news_and_expiry_jobs_never_raise(monkeypatch):

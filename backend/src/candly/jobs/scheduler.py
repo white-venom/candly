@@ -20,6 +20,7 @@ from candly.data import clock
 from candly.data.expiries import refresh_expiries as _refresh_expiries
 from candly.data.ingest import ingest
 from candly.data.sources import SourceError, fyers
+from candly.jobs import sync
 from candly.news.fetch import poll_news as _poll_news
 
 log = logging.getLogger(__name__)
@@ -54,7 +55,11 @@ def _note_resumed() -> None:
 
 
 def ingest_incremental(tf: str, exchanges: tuple[str, ...] | None = None) -> dict[str, int]:
-    """Incremental update of `tf` for every watchlist instrument (optionally only some exchanges)."""
+    """Incremental update of `tf` for every watchlist instrument (optionally only some exchanges).
+    Skipped while the Fyers sync runs: it is fetching the same series, and it archives old ones first."""
+    if sync.is_running():
+        log.debug("ingest %s skipped: the Fyers sync is running", tf)
+        return {}
     ids = [
         i.id
         for i in load_watchlist()
@@ -117,6 +122,15 @@ def refresh_fyers_session() -> None:
         log.warning("Fyers session not refreshed: %s", exc)
 
 
+def resume_fyers_sync() -> None:
+    """At startup: resume a Fyers sync that failed or that the last server stopped in the middle of."""
+    try:
+        if sync.resume_if_unfinished():
+            log.info("unfinished Fyers sync resumed at scheduler start")
+    except Exception:
+        log.exception("could not resume the Fyers sync")
+
+
 def get_scheduler() -> BackgroundScheduler:
     """The process-wide scheduler with the platform jobs registered (not started)."""
     global _scheduler
@@ -166,12 +180,14 @@ def get_scheduler() -> BackgroundScheduler:
 
 
 def start_scheduler() -> BackgroundScheduler:
-    """Starts the jobs, and runs the expiry refresh once right away (then daily at 08:30 IST)."""
+    """Starts the jobs, runs the expiry refresh once right away (then daily at 08:30 IST), and resumes
+    or starts the Fyers sync if needed (a one-off job, so startup never waits on Fyers)."""
     scheduler = get_scheduler()
     if not scheduler.running:
         scheduler.start()
         if scheduler.get_job("refresh_expiries") is not None:
             scheduler.modify_job("refresh_expiries", next_run_time=datetime.now(IST))
+        scheduler.add_job(resume_fyers_sync, id="resume_fyers_sync", replace_existing=True)
         log.info("scheduler started with jobs: %s", [job.id for job in scheduler.get_jobs()])
     return scheduler
 

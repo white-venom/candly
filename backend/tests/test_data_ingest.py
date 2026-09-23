@@ -235,6 +235,24 @@ def test_fyers_derived_timeframes_resample_stored_5m(fake, monkeypatch, fake_fye
     assert series_stats("NSE:RELIANCE", "15m")["bars"] == 50
 
 
+def test_backfill_fetches_one_window_at_a_time(fake):
+    from candly.core.instruments import get_instrument
+
+    inst = get_instrument("NSE:RELIANCE")
+    assert ingest.backfill(inst, "1D", "yahoo", start=date(2024, 9, 1)) == 16
+    starts = [call[3] for call in fake.calls]
+    first = clock.ist_midnight(date(2024, 9, 1))
+    assert starts == [first, first + pd.Timedelta(days=365), first + pd.Timedelta(days=730)]
+    assert ingest.backfill(inst, "1D", "yahoo", start=date(2024, 9, 1)) == 0  # idempotent
+    assert series_stats("NSE:RELIANCE", "1D")["bars"] == 16 and candle_source("NSE:RELIANCE", "1D") == "yahoo"
+
+    fake.calls.clear()
+    ingest.backfill(inst, "5m", "yahoo")
+    assert fake.calls[0][3] == clock.ist_midnight(date(2017, 7, 3))
+    assert fake.calls[1][3] == fake.calls[0][3] + pd.Timedelta(days=396)
+    assert series_stats("NSE:RELIANCE", "5m")["bars"] == 150
+
+
 def test_mid_session_since_snaps_to_the_session_open(fake, monkeypatch, fake_fyers_keys):
     monkeypatch.setattr(fyers, "ensure_token", lambda: None)
     ingest.ingest("1h", instruments=["NSE:RELIANCE"], source="fyers")

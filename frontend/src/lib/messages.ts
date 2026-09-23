@@ -170,6 +170,8 @@ const SYNC_STEPS: Record<string, string> = {
   "5m-backfill": "Downloading 5-minute history",
   resample: "Building 15m/1h",
   "resample-15m-1h": "Building 15m/1h",
+  "build-15m-1h": "Building 15m/1h",
+  "fill-1d-gaps": "Filling gaps in the daily history",
   "gap-fill": "Filling gaps in the daily history",
   "gap-fill-1d": "Filling gaps in the daily history",
   "1d-gap-fill": "Filling gaps in the daily history",

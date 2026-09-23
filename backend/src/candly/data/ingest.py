@@ -38,6 +38,8 @@ BACKFILL_START = {
 }
 DAILY_REFETCH_SESSIONS = 5  # every 1D run re-reads at least this many recent sessions
 MISSING_REFETCH_LIMIT = 10  # most recent missing daily sessions re-fetched per 1D run
+# One fetch-and-save per window during a full backfill: whole multiples of Fyers' per-request maximum.
+BACKFILL_WINDOW = {"1D": pd.Timedelta(days=365), "5m": pd.Timedelta(days=396)}
 
 
 @dataclass
@@ -146,6 +148,14 @@ def _ingest_series(inst: Instrument, tf: str, source: str, since: pd.Timestamp |
     return count
 
 
+def rebuild_from_5m(inst: Instrument, tf: str, start: pd.Timestamp | None = None) -> int:
+    """Resample the stored 5m bars from `start` (default: all of them) into closed `tf` bars and store
+    them as Fyers data. `start` must be a session open, so the first bucket is complete."""
+    base = load_candles(inst.id, "5m", start=start)
+    derived = closed_only(resample_candles(base, tf, inst.exchange), inst.exchange, tf, clock.utc_now())
+    return save_candles(inst.id, tf, derived, source="fyers")
+
+
 def _ingest_derived(inst: Instrument, tf: str, since: pd.Timestamp | None) -> int:
     """Fyers 15m/1h: bring 5m up to date, then resample the stored 5m bars (no extra API calls)."""
     _ingest_series(inst, "5m", "fyers", since)
@@ -156,9 +166,22 @@ def _ingest_derived(inst: Instrument, tf: str, since: pd.Timestamp | None) -> in
         start = None
     else:
         start = _session_open_on_or_before(inst.exchange, last)
-    base = load_candles(inst.id, "5m", start=start)
-    derived = closed_only(resample_candles(base, tf, inst.exchange), inst.exchange, tf, clock.utc_now())
-    return save_candles(inst.id, tf, derived, source="fyers")
+    return rebuild_from_5m(inst, tf, start)
+
+
+def backfill(inst: Instrument, tf: str, source: str, start: date | None = None) -> int:
+    """Fetch and store `tf` from `start` (default BACKFILL_START) up to now, one window at a time, so years
+    of 5m bars never sit in memory at once. Idempotent: stored bars are upserted."""
+    window_start = clock.ist_midnight(start or BACKFILL_START[tf])
+    now = clock.utc_now()
+    count = 0
+    while window_start < now:
+        window_end = min(window_start + BACKFILL_WINDOW[tf], now)
+        count += save_candles(
+            inst.id, tf, fetch_candles(source, inst, tf, window_start, window_end), source=source
+        )
+        window_start = window_end
+    return count
 
 
 def _instruments(instruments: Iterable[str | Instrument] | None) -> list[Instrument]:

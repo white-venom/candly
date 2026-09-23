@@ -180,7 +180,8 @@ def _count_changes(existing: pd.DataFrame, incoming: pd.DataFrame) -> int:
     return int(added.sum() + ((~added) & ~same).sum())
 
 
-def _replace(tmp: str, path: Path) -> None:
+def replace_file(tmp: str, path: Path) -> None:
+    """os.replace, retried while Windows briefly holds the target open."""
     for attempt in range(5):
         try:
             os.replace(tmp, path)
@@ -204,7 +205,7 @@ def _write_atomic(path: Path, df: pd.DataFrame, sources: set[str]) -> None:
             pq.write_table(table, fh)
             fh.flush()
             os.fsync(fh.fileno())  # the data must be on disk before the rename makes it the series
-        _replace(tmp, path)
+        replace_file(tmp, path)
     except BaseException:
         Path(tmp).unlink(missing_ok=True)
         raise
@@ -277,7 +278,7 @@ def archive_source(source: str) -> list[Path]:
                 continue
             target = target_root / path.relative_to(candles_dir)
             target.parent.mkdir(parents=True, exist_ok=True)
-            _replace(str(path), target)
+            replace_file(str(path), target)
         moved.append(target)
         log.info("archived %s -> %s", path, target)
     return moved
