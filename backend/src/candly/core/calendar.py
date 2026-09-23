@@ -209,8 +209,11 @@ def get_calendar() -> MarketCalendar:
 
 
 def reload_calendar() -> None:
-    """Drop cached calendars (and expiry rules built on them) after holidays change on disk."""
+    """Drop cached calendars, and the expiry rules and per-day expiry answers built on them, after
+    holidays change on disk."""
     get_calendar.cache_clear()
     from candly.core.expiry import get_expiry_rules
+    from candly.features.expiry import clear_cache
 
     get_expiry_rules.cache_clear()
+    clear_cache()

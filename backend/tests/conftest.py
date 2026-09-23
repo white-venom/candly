@@ -3,6 +3,7 @@ import socket
 
 import pytest
 
+from candly.core.calendar import reload_calendar
 from candly.core.settings import Settings, get_settings
 
 # Tests must never start the background scheduler, even via a TestClient lifespan.
@@ -47,8 +48,11 @@ def tmp_data_dir(tmp_path, monkeypatch):
     data_dir = tmp_path / "data"
     monkeypatch.setenv("DATA_DIR", str(data_dir))
     get_settings.cache_clear()
+    # The real data/derived/holidays_observed.json must never leak into a test's calendar.
+    reload_calendar()
     yield data_dir
     get_settings.cache_clear()
+    reload_calendar()
 
 
 @pytest.fixture(autouse=True)

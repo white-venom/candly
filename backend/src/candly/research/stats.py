@@ -69,20 +69,77 @@ def wilson_interval(hits, n, level: float = 0.95) -> tuple[np.ndarray, np.ndarra
     return low, high
 
 
-def expected_calibration_error(p, y, bins: int, binning: str = "quantile") -> float | None:
-    """sum over bins of (bin share) * |mean forecast - observed rate|.
-
-    "quantile" bins hold equal numbers of forecasts (sorted by p); "uniform" bins split [0, 1] evenly.
-    """
-    p, y = np.asarray(p, float), np.asarray(y, float)
-    if p.size == 0:
-        return None
+def _calibration_bins(p: np.ndarray, bins: int, binning: str) -> list[np.ndarray]:
+    """Non-empty bins of forecast positions. "quantile" bins hold equal numbers of forecasts (sorted
+    by p); "uniform" bins split [0, 1] evenly. The bins depend on p only, never on outcomes."""
     if binning == "quantile":
         groups = np.array_split(np.argsort(p, kind="stable"), min(bins, p.size))
     else:
         idx = np.clip((p * bins).astype(int), 0, bins - 1)
         groups = [np.flatnonzero(idx == b) for b in range(bins)]
-    return float(sum(g.size / p.size * abs(p[g].mean() - y[g].mean()) for g in groups if g.size))
+    return [g for g in groups if g.size]
+
+
+def expected_calibration_error(p, y, bins: int, binning: str = "quantile") -> float | None:
+    """sum over bins of (bin share) * |mean forecast - observed rate|."""
+    p, y = np.asarray(p, float), np.asarray(y, float)
+    if p.size == 0:
+        return None
+    groups = _calibration_bins(p, bins, binning)
+    return float(sum(g.size / p.size * abs(p[g].mean() - y[g].mean()) for g in groups))
+
+
+_SIM_CHUNK = 4_000_000  # random draws per block, to bound memory
+
+
+def calibration_self_consistency(
+    p, y, bins: int, binning: str = "quantile", sims: int = 2000, seed: int = 0
+) -> tuple[float | None, float | None]:
+    """(observed ECE, p-value) of the calibration self-consistency test.
+
+    Outcomes are simulated `sims` times from the forecasts themselves, y* ~ Bernoulli(p), and the ECE
+    of each simulated set is computed with the same bins. The p-value is the share of simulated ECEs at
+    least as large as the observed one: how often a perfectly calibrated forecaster issuing these very
+    probabilities would look at least this miscalibrated. (None, None) without forecasts.
+    """
+    p, y = np.asarray(p, float), np.asarray(y, float)
+    if p.size == 0:
+        return None, None
+    rng = np.random.default_rng(seed)
+    observed = 0.0
+    simulated = np.zeros(sims)
+    for g in _calibration_bins(p, bins, binning):
+        pg, share = p[g], g.size / p.size
+        observed += share * abs(pg.mean() - y[g].mean())
+        rate = np.empty(sims)
+        block = max(1, _SIM_CHUNK // pg.size)
+        for lo in range(0, sims, block):
+            hi = min(sims, lo + block)
+            rate[lo:hi] = (rng.random((hi - lo, pg.size)) < pg).mean(axis=1)
+        simulated += share * np.abs(pg.mean() - rate)
+    return float(observed), float((simulated >= observed - 1e-12).mean())
+
+
+def clustered_bootstrap_skill_ci(
+    brier, baseline, cluster, level: float = 0.95, resamples: int = 2000, seed: int = 0
+) -> tuple[float, float] | None:
+    """Percentile CI for the Brier skill 1 - sum(brier) / sum(baseline), resampling whole clusters
+    (dates, with every instrument's forecasts of a date together) with replacement."""
+    brier, baseline = np.asarray(brier, float), np.asarray(baseline, float)
+    if brier.size == 0:
+        return None
+    _, inverse = np.unique(np.asarray(cluster), return_inverse=True)
+    b, b0 = np.bincount(inverse, weights=brier), np.bincount(inverse, weights=baseline)
+    k = b.size
+    counts = np.random.default_rng(seed).multinomial(k, np.full(k, 1.0 / k), size=resamples)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        skill = 1.0 - (counts @ b) / (counts @ b0)
+    skill = skill[np.isfinite(skill)]
+    if skill.size == 0:
+        return None
+    tail = (1.0 - level) / 2.0
+    lo, hi = np.quantile(skill, [tail, 1.0 - tail])
+    return float(lo), float(hi)
 
 
 def benjamini_hochberg(pvalues) -> np.ndarray:

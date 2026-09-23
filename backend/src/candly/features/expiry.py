@@ -54,6 +54,13 @@ def _cached(instrument_id: str, d: date, stamp: tuple | None) -> tuple[ExpiryInf
     return _entry_point()(instrument_id, d)
 
 
+def clear_cache() -> None:
+    """Forget memoised expiry answers. Rule-based expiries shift around holidays, so this runs whenever
+    the calendar is reloaded (candly.core.calendar.reload_calendar)."""
+    _cached.cache_clear()
+    _warned.clear()
+
+
 def expiry_with_source(
     instrument_id: str, d: date, stamp: tuple | None = None
 ) -> tuple[ExpiryInfo | None, str | None]:

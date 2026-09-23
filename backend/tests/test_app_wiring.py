@@ -90,14 +90,15 @@ def test_daily_pipeline_order(monkeypatch):
     assert [c[0] for c in calls] == ["ingest", "forecast", "explain", "grade", "alerts"]
 
 
-def test_nightly_scorecards_survive_one_failure(monkeypatch):
+def test_nightly_scorecards_build_every_exchange_and_survive_one_failure(monkeypatch):
     built = []
 
-    def fake_rebuild(tf):
-        if tf == "1h":
+    def fake_rebuild(tf, *, exchange):
+        if (tf, exchange) == ("1h", "BSE"):
             raise RuntimeError("boom")
-        built.append(tf)
+        built.append((tf, exchange))
 
     monkeypatch.setattr(pipeline, "rebuild_scorecard", fake_rebuild)
     nightly_scorecards()
-    assert built == ["1D", "15m", "5m"]
+    every = [(tf, ex) for tf in ("1D", "1h", "15m", "5m") for ex in ("NSE", "BSE", "MCX")]
+    assert built == [b for b in every if b != ("1h", "BSE")]

@@ -17,7 +17,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from candly.core.calendar import IST, reload_calendar
-from candly.core.instruments import Instrument, load_watchlist
+from candly.core.instruments import EXCHANGES, Instrument, load_watchlist
 from candly.core.settings import get_settings
 from candly.data import clock
 from candly.data.expiries import refresh_expiries
@@ -256,20 +256,23 @@ def _step_holidays(run: _Run) -> None:
 
 
 def _step_scorecards(run: _Run) -> None:
+    """One scorecard per timeframe and exchange; results are keyed "<tf> <exchange>", e.g. "1D MCX"."""
     results = run.state["scorecards"]
-    for i, tf in enumerate(SCORECARD_TFS):
-        if results.get(tf) == "ok":
+    builds = [(tf, exchange) for tf in SCORECARD_TFS for exchange in EXCHANGES]
+    for i, (tf, exchange) in enumerate(builds):
+        key = f"{tf} {exchange}"
+        if results.get(key) == "ok":
             continue
-        run.report(i / len(SCORECARD_TFS), f"building the {tf} scorecard")
+        run.report(i / len(builds), f"building the {tf} {exchange} scorecard")
         try:
             from candly.research.scorecard import build_scorecard
 
-            build_scorecard(tf)
+            build_scorecard(tf, exchange=exchange)
         except Exception as exc:
-            log.exception("%s scorecard build failed", tf)
-            results[tf] = f"failed: {exc}"
+            log.exception("%s %s scorecard build failed", tf, exchange)
+            results[key] = f"failed: {exc}"
         else:
-            results[tf] = "ok"
+            results[key] = "ok"
 
 
 # Run order. Tests swap entries with monkeypatch.setitem.

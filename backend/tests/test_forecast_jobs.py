@@ -3,6 +3,7 @@ import pandas as pd
 from candly.core.calendar import get_calendar
 from candly.core.schema import empty_candles
 from candly.data import clock
+from candly.forecast import jobs
 from candly.forecast.jobs import grade_pending_job, rebuild_scorecard, run_forecast_cycle
 from candly.ledger import Ledger
 from candly.research.synthetic import synthetic_candles
@@ -61,5 +62,36 @@ def test_stale_forecasts_are_not_recorded(tmp_path, tmp_data_dir, no_keys):
 
 def test_rebuild_scorecard_job(tmp_data_dir, no_keys):
     summary = rebuild_scorecard("1D", list(FULL), load=loader(CUT))
-    assert summary["tf"] == "1D" and summary["n_tests"] > 0
+    assert summary["tf"] == "1D" and summary["exchange"] == "NSE" and summary["n_tests"] > 0
     assert (tmp_data_dir / "derived" / "scorecard_1D.parquet").exists()
+
+    gold = {"MCX:GOLD": synthetic_candles("1D", "2012-01-01", "2024-06-28", exchange="MCX", seed=83)}
+
+    def load_gold(instrument_id, tf, start=None, end=None):
+        return gold.get(instrument_id, empty_candles())
+
+    mcx = rebuild_scorecard("1D", exchange="MCX", load=load_gold)
+    assert mcx["exchange"] == "MCX" and mcx["n_tests"] > 0
+    assert (tmp_data_dir / "derived" / "scorecard_1D_MCX.parquet").exists()
+
+
+def test_each_instrument_is_forecast_with_its_own_exchanges_scorecard(tmp_path, tmp_data_dir, monkeypatch):
+    gold = synthetic_candles("1D", "2012-01-01", "2024-06-28", exchange="MCX", seed=84)
+    frames = {**FULL, "MCX:GOLD": gold}
+    asked, used = [], {}
+    monkeypatch.setattr(jobs, "load_scorecard", lambda tf, exchange: asked.append(exchange) or exchange)
+    real = jobs.make_forecast
+
+    def spy(instrument_id, tf, candles, card, **kwargs):
+        used[instrument_id] = card
+        return real(instrument_id, tf, candles, None, **kwargs)
+
+    monkeypatch.setattr(jobs, "make_forecast", spy)
+
+    def load(instrument_id, tf, start=None, end=None):
+        df = frames[instrument_id]
+        return df[df["ts"] <= CUT].reset_index(drop=True)
+
+    run_forecast_cycle("1D", [*FULL, "MCX:GOLD"], load=load, ledger=Ledger(tmp_path / "l.sqlite"), now=NOW)
+    assert asked == ["NSE", "MCX"]  # one load per exchange
+    assert used == {"NSE:RELIANCE": "NSE", "NSE:SBIN": "NSE", "MCX:GOLD": "MCX"}

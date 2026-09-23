@@ -44,6 +44,11 @@ abstain:
   fallback_stop_atr: 1.0           # no pattern invalidation -> stop this many ATR beyond the reference close
   intraday_within_session: true    # intraday calls whose horizon crosses the session close abstain
   require_edge_over_costs: true    # abstain when the expected move doesn't clear the round-trip cost
+  # Added 2026-09-23 after quant audit #2 (live gate was too weak):
+  validation_min_clusters: 30      # a validated bucket needs >= 30 independent (de-duplicated) validation clusters
+  validation_max_p: 0.10           # ... and a one-sided cluster-robust p-value below this on validation
+  same_exchange_validation: true   # never validate a call with another exchange's statistics
+  min_reward_risk: 1.0             # no directional call with reward:risk below this
 
 scorecard:
   context_buckets: [trend, vol_regime, expiry]   # expiry = on an expiry day or not (instruments with F&O)
@@ -58,8 +63,14 @@ forecast:
 
 go_no_go_1:
   slice: {tf: 1D, exchange: NSE, kinds: [equity, index], exclude: [NSE:INDIAVIX]}
+  # Revised 2026-09-23 after quant audit #2, BEFORE running evaluate, but AFTER seeing that the 1D
+  # scorecard certified 0 buckets (so criterion 1 already fails and these changes cannot rescue it).
+  population: pattern_bars   # score only bars with an active pattern, as live forecasting does
   require_certified_buckets: 1
   require_brier_skill_above: 0.0
-  require_ece_below: 0.03
+  brier_skill_ci: date_clustered_bootstrap   # 95% CI reported alongside the point estimate
+  calibration_test: self_consistency         # the fixed ECE < 0.03 bar had ~no power at our sample sizes
+  calibration_min_p: 0.05    # fail if observed ECE is above the 95th pct of ECEs a calibrated forecaster makes
+  min_scored: 500
   ece_bins: 10
   ece_binning: quantile      # equal-count bins; p_up sits in a narrow range, equal-width bins say little

@@ -8,7 +8,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from candly.api.routes import analytics
-from candly.core.calendar import get_calendar
+from candly.core.calendar import get_calendar, reload_calendar
 from candly.core.schema import empty_candles
 from candly.data import clock
 from candly.forecast.jobs import run_forecast_cycle
@@ -68,9 +68,11 @@ def forming(monkeypatch):
 def client(tmp_data_dir, no_keys, monkeypatch, forming):
     monkeypatch.setattr(analytics, "_load_candles", lambda i, tf: load(i, tf))
     monkeypatch.setattr(analytics, "_now", lambda: NOW)
+    reload_calendar()  # one cached while DATA_DIR pointed at the real data would carry its observed holidays
     app = FastAPI()
     app.include_router(analytics.router, prefix="/api")
-    return TestClient(app)
+    yield TestClient(app)
+    reload_calendar()
 
 
 def test_app_mounts_analytics_routes():
@@ -194,7 +196,7 @@ def test_patterns_can_be_filtered(client, monkeypatch):
     assert len(directional) == 40 and all(s["direction"] != "neutral" for s in directional)
     assert client.get("/api/patterns", params={**params, "certified_only": "true"}).json() == []
 
-    monkeypatch.setattr(analytics, "load_scorecard", lambda tf: CertifyingCard("bullish_engulfing"))
+    monkeypatch.setattr(analytics, "load_scorecard", lambda tf, exchange: CertifyingCard("bullish_engulfing"))
     certified = client.get("/api/patterns", params={**params, "certified_only": "true", "limit": 3}).json()
     assert len(certified) == 3
     assert all(s["pattern"] == "bullish_engulfing" and s["stats"]["certified"] for s in certified)
@@ -403,8 +405,40 @@ def test_scorecard_route(client):
     assert only["rows"] and {(r["instrument"], r["pattern"]) for r in only["rows"]} == {("ALL", "doji")}
     certified = client.get("/api/scorecard", params={"tf": "1D", "certified_only": "true"}).json()
     assert all(r["certified"] for r in certified["rows"])
+    assert body["meta"]["exchange"] == "NSE"
 
     sigs = client.get("/api/patterns", params={"instrument": "NSE:RELIANCE", "tf": "1D", "limit": 5}).json()
+    assert any(s["stats"] is not None for s in sigs)
+
+
+def test_scorecards_and_stats_stay_on_their_own_exchange(client, monkeypatch):
+    gold = synthetic_candles("1D", "2012-01-01", "2024-06-28", exchange="MCX", seed=74)
+    frames = {**FRAMES, ("MCX:GOLD", "1D"): gold}
+
+    def load_all(instrument_id, tf, start=None, end=None):
+        return frames.get((instrument_id, tf), empty_candles())
+
+    monkeypatch.setattr(analytics, "_load_candles", lambda i, tf: load_all(i, tf))
+    build_scorecard("1D", ["NSE:RELIANCE", "NSE:TCS"], load=load_all)
+
+    def scorecard(**params):
+        return client.get("/api/scorecard", params={"tf": "1D", **params})
+
+    assert scorecard(exchange="MCX").status_code == 503
+    assert scorecard(instrument="MCX:GOLD").status_code == 503  # the instrument's own exchange
+    # before MCX has a scorecard, an MCX signal carries no stats, never the NSE rows
+    sigs = client.get("/api/patterns", params={"instrument": "MCX:GOLD", "tf": "1D", "limit": 20}).json()
+    assert sigs and all(s["stats"] is None for s in sigs)
+
+    build_scorecard("1D", ["MCX:GOLD"], load=load_all)
+    mcx = scorecard(exchange="MCX").json()
+    assert mcx["meta"]["exchange"] == "MCX" and {r["instrument"] for r in mcx["rows"]} == {"MCX:GOLD", "ALL"}
+    assert scorecard(instrument="MCX:GOLD").json()["meta"]["exchange"] == "MCX"
+    assert scorecard().json()["meta"]["exchange"] == "NSE"
+    assert scorecard(instrument="ALL").json()["meta"]["exchange"] == "NSE"
+    assert scorecard(exchange="NYSE").status_code == 400
+    assert scorecard(exchange="NSE", instrument="MCX:GOLD").status_code == 400
+    sigs = client.get("/api/patterns", params={"instrument": "MCX:GOLD", "tf": "1D", "limit": 20}).json()
     assert any(s["stats"] is not None for s in sigs)
 
 

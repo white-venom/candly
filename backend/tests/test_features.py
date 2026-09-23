@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from candly.core.calendar import IST, get_calendar
+from candly.core.calendar import IST, get_calendar, reload_calendar
 from candly.core.expiry import expiry_info
 from candly.features.context import CONTEXT_COLUMNS, compute_context, session_phases
 from candly.features.expiry import expiry_with_source
@@ -252,6 +252,21 @@ def test_expiry_answers_follow_the_daily_exchange_refresh(tmp_data_dir):
     assert expiry_with_source("NSE:NIFTY50", date(2026, 9, 4))[1] == "exchange"
     assert expiry_with_source("NSE:NIFTY50", date(2026, 9, 7))[1] == "rules"
     assert_matches_lookups(compute_context(df, "1D", "NSE", instrument_id="NSE:NIFTY50"), days)
+
+
+def test_reloading_the_calendar_forgets_memoised_expiry_answers(tmp_data_dir):
+    day = date(2024, 4, 8)
+    reload_calendar()
+    assert expiry_with_source("NSE:NIFTY50", day)[0].next_expiry == date(2024, 4, 11)
+    path = tmp_data_dir / "derived" / "holidays_observed.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"NSE": ["2024-04-11"]}), encoding="utf-8")  # Id-ul-Fitr
+    try:
+        reload_calendar()
+        assert expiry_with_source("NSE:NIFTY50", day)[0].next_expiry == date(2024, 4, 10)
+    finally:
+        path.unlink()
+        reload_calendar()
 
 
 def assert_matches_lookups(ctx: pd.DataFrame, days: pd.Series) -> None:

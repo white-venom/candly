@@ -432,7 +432,19 @@ type SyncStatus = { status: "idle" | "running" | "done" | "error"; step: string 
   - `target` = p50 of the last step.
 
   Position size is computed in the UI from the user's own capital and risk-% settings, as `qty = floor(capital × risk% / |entry − stop|)`.
-- New abstain reasons: "unvalidated bucket", "horizon crosses session close", "edge below costs".
+- New abstain reasons: "unvalidated bucket", "horizon crosses session close", "edge below costs", "reward below risk".
+- Scorecards are built **per exchange** and never cross exchanges.
+  - Files in `data/derived`:
+    - NSE: `scorecard_{tf}.parquet/.json`, `analogs_{tf}`, `validation_{tf}`, `validation_base_{tf}`.
+    - BSE and MCX: the same names with `_BSE` / `_MCX` added.
+  - `build_scorecard(tf, instruments=None, load=None, *, exchange=None, persist=True)` and `load_scorecard(tf, exchange="NSE")`.
+  - `GET /api/scorecard` takes an optional `exchange` (default: the instrument's exchange, else NSE). It returns 400 on an unknown exchange or a mismatch. `meta` gains `exchange`.
+- `research.evaluate` output includes:
+  - `population`, `n_in_population`
+  - `skill_ci`, `ci_level`
+  - `calibration_p`, `calibration_sims`
+  - `bootstrap_resamples`, `seed`
+  - `gates` (certified_buckets, brier_skill, calibration) and `gate_details`
 - Every abstain reason is `"<reason>"` or `"<reason>: <detail>"`. Match on the prefix, never on the full string.
 - Research hooks:
   - `make_forecast(..., bucket_gate=True)`. Validation-period replays pass `bucket_gate=False`, because gating on validation stats while scoring that period would leak.

@@ -10,7 +10,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from candly.core.calendar import get_calendar
-from candly.core.instruments import Instrument, UnknownInstrument, get_instrument, load_watchlist
+from candly.core.instruments import EXCHANGES, Instrument, UnknownInstrument, get_instrument, load_watchlist
 from candly.core.schema import CANDLE_COLUMNS
 from candly.core.timeframes import validate_tf
 from candly.features.context import compute_context, has_meaningful_volume
@@ -323,7 +323,7 @@ def patterns(
     found = detect_patterns(df, tf, forming_bar=forming_bar)
     if directional_only:
         found = found[found["direction"] != "neutral"]
-    card = load_scorecard(tf)
+    card = load_scorecard(tf, inst.exchange)
     if found.empty or (certified_only and card is None):
         return []
     found = found.iloc[::-1]
@@ -413,12 +413,12 @@ def levels(instrument: str, tf: str) -> LevelsResponse:
 @router.get("/forecast", response_model=Forecast)
 def forecast(instrument: str, tf: str, steps: int | None = None) -> Forecast:
     tf = _tf(tf)
-    _instrument(instrument)
+    inst = _instrument(instrument)
     if steps is not None and not 1 <= steps <= 10:
         raise HTTPException(400, "steps must be between 1 and 10")
     df = _candles(instrument, tf)
     try:
-        fc = make_forecast(instrument, tf, df, load_scorecard(tf), steps, now=_now())
+        fc = make_forecast(instrument, tf, df, load_scorecard(tf, inst.exchange), steps, now=_now())
     except ValueError as exc:
         raise HTTPException(503, str(exc)) from None
     if not fc.abstain:
@@ -486,12 +486,15 @@ def _mark_stale(rows: list[ScannerRow], now: pd.Timestamp) -> list[ScannerRow]:
 @router.get("/scanner", response_model=list[ScannerRow])
 def scanner(tf: str = "1D") -> list[ScannerRow]:
     tf = _tf(tf)
-    card = load_scorecard(tf)
+    cards = {}
     now = _now()
     rows = []
     for inst in load_watchlist():
         if tf not in inst.timeframes or not inst.tradable:
             continue
+        if inst.exchange not in cards:
+            cards[inst.exchange] = load_scorecard(tf, inst.exchange)
+        card = cards[inst.exchange]
         try:
             df = _load_candles(inst.id, tf)
         except ImportError:
@@ -539,14 +542,33 @@ def scanner(tf: str = "1D") -> list[ScannerRow]:
     return sorted(_mark_stale(rows, now), key=lambda r: r.score, reverse=True)
 
 
+def _scorecard_exchange(exchange: str | None, instrument: str | None) -> str:
+    """The build to read: `exchange`, else the instrument's own exchange, else NSE."""
+    own = instrument.split(":", 1)[0] if instrument else None
+    own = own if own in EXCHANGES else None
+    if exchange is None:
+        return own or "NSE"
+    if exchange not in EXCHANGES:
+        raise HTTPException(400, f"exchange must be one of {', '.join(EXCHANGES)}")
+    if own is not None and own != exchange:
+        raise HTTPException(400, f"{instrument} is not on {exchange}; its stats are in the {own} scorecard")
+    return exchange
+
+
 @router.get("/scorecard", response_model=ScorecardResponse)
 def scorecard(
-    tf: str = "1D", instrument: str | None = None, pattern: str | None = None, certified_only: bool = False
+    tf: str = "1D",
+    instrument: str | None = None,
+    pattern: str | None = None,
+    certified_only: bool = False,
+    exchange: str | None = None,
 ) -> ScorecardResponse:
+    """One exchange's scorecard: `exchange`, else the exchange of `instrument`, else NSE."""
     tf = _tf(tf)
-    card = load_scorecard(tf)
+    exchange = _scorecard_exchange(exchange, instrument)
+    card = load_scorecard(tf, exchange)
     if card is None:
-        raise HTTPException(503, f"no {tf} scorecard yet; run rebuild_scorecard")
+        raise HTTPException(503, f"no {tf} {exchange} scorecard yet; run rebuild_scorecard")
     rows = card.rows
     if instrument:
         rows = rows[rows["instrument"] == instrument]

@@ -9,7 +9,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 from candly import llm
 from candly.alerts.jobs import register_alert_jobs, run_alert_checks
 from candly.core.calendar import IST
-from candly.core.instruments import load_watchlist
+from candly.core.instruments import EXCHANGES, load_watchlist
 from candly.data import clock
 from candly.forecast.jobs import grade_pending_job, rebuild_scorecard, run_forecast_cycle
 from candly.jobs.scheduler import INTRADAY_TFS, exchanges_with_closed_bar, ingest_incremental
@@ -61,11 +61,13 @@ def tag_news() -> None:
 
 
 def nightly_scorecards() -> None:
+    """Every timeframe's scorecard for each exchange (built separately: stats never mix exchanges)."""
     for tf in SCORECARD_TFS:
-        try:
-            rebuild_scorecard(tf)
-        except Exception:
-            log.exception("scorecard rebuild failed for %s", tf)
+        for exchange in EXCHANGES:
+            try:
+                rebuild_scorecard(tf, exchange=exchange)
+            except Exception:
+                log.exception("scorecard rebuild failed for %s %s", tf, exchange)
 
 
 def register_pipeline_jobs(scheduler: BackgroundScheduler) -> None:

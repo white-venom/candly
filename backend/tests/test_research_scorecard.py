@@ -5,16 +5,38 @@ import json
 import numpy as np
 import pandas as pd
 import pytest
+from scorecard_helpers import bucket_base, bucket_events, gate_kwargs, validation_card
 
+from candly.core.calendar import IST, reload_calendar
+from candly.core.instruments import get_instrument
 from candly.core.settings import get_settings
 from candly.patterns import detect_patterns
 from candly.research import scorecard as scorecard_module
-from candly.research.config import HASHED_CONFIGS, load_research_config
-from candly.research.scorecard import ROW_COLUMNS, build_scorecard, default_instruments, load_scorecard
+from candly.research.config import HASHED_CONFIGS, config_hashes, load_research_config
+from candly.research.costs import round_trip_cost
+from candly.research.labels import forward_labels
+from candly.research.scorecard import (
+    ROW_COLUMNS,
+    Scorecard,
+    build_scorecard,
+    default_instruments,
+    exchange_universe,
+    load_scorecard,
+    scorecard_paths,
+    validation_columns,
+)
 from candly.research.synthetic import bar_times, plant_marubozu_edge, synthetic_candles
 
 IDS = ["NSE:RELIANCE", "NSE:TCS"]
 KEY = ["pattern", "context", "horizon_bars"]
+
+
+@pytest.fixture(autouse=True)
+def calendar_of_this_data_dir(tmp_data_dir):
+    """A calendar cached while DATA_DIR pointed at the real data would carry its observed holidays."""
+    reload_calendar()
+    yield
+    reload_calendar()
 
 
 def make_loader(frames: dict[str, pd.DataFrame]):
@@ -75,10 +97,13 @@ def test_scorecard_on_random_data(tmp_data_dir, no_keys, random_frames):
     assert both["base_rate"] == pytest.approx((one["n"] * one["base_rate"]).sum() / one["n"].sum())
 
     derived = tmp_data_dir / "derived"
-    assert (derived / "scorecard_1D.parquet").exists() and (derived / "analogs_1D.parquet").exists()
+    for name in ("scorecard", "analogs", "validation", "validation_base"):
+        assert (derived / f"{name}_1D.parquet").exists(), name
     meta = json.loads((derived / "scorecard_1D.json").read_text())
+    assert meta["exchange"] == "NSE"
     assert set(meta) == {
         "tf",
+        "exchange",
         "built_at",
         "train_end",
         "holdout_start",
@@ -94,8 +119,29 @@ def test_scorecard_on_random_data(tmp_data_dir, no_keys, random_frames):
     loaded = load_scorecard("1D")
     assert loaded is not None and loaded.meta == card.meta
     pd.testing.assert_frame_equal(loaded.rows, rows)
+    pd.testing.assert_frame_equal(loaded.validation, card.validation)
+    pd.testing.assert_frame_equal(loaded.validation_base, card.validation_base)
     stats = loaded.stats_for("inside_bar", "NSE:TCS", "up", 1, cfg.min_samples)
     assert stats is not None and stats.horizon_bars == 1
+
+    v = card.validation
+    assert list(v.columns) == validation_columns(cfg) and len(v)
+    assert (v["start"] >= cfg.train_end_utc("1D").value).all()
+    assert ((v["up_1"] + v["down_1"])[v["up_1"].notna()] <= 1).all()  # a flat close is neither
+    assert set(card.validation_base["context"]) >= {"all", "trend=up", "expiry=no"}
+
+
+def test_config_hashes_cover_every_input_and_the_observed_holidays(tmp_data_dir, no_keys):
+    config_dir = get_settings().config_dir
+    assert {"expiry.yaml", "markets.yaml", "watchlist.yaml"} <= set(HASHED_CONFIGS)
+    before = config_hashes()
+    assert before == {n: hashlib.sha256((config_dir / n).read_bytes()).hexdigest() for n in HASHED_CONFIGS}
+    holidays = tmp_data_dir / "derived" / "holidays_observed.json"
+    holidays.parent.mkdir(parents=True)
+    holidays.write_text('{"NSE": ["2024-01-22"]}', encoding="utf-8")
+    after = config_hashes()
+    assert after["holidays_observed.json"] == hashlib.sha256(holidays.read_bytes()).hexdigest()
+    assert {k: v for k, v in after.items() if k != "holidays_observed.json"} == before
 
 
 def test_expiry_buckets_only_cover_instruments_with_expiries(tmp_data_dir, no_keys, random_frames):
@@ -164,8 +210,9 @@ def test_planted_edge_is_found_and_certified(tmp_data_dir, no_keys):
     rows = card.rows
     row = pooled(rows).loc[("bullish_marubozu", "all", 1)]
     assert row["n"] >= 30 and row["hit_rate"] > 0.75
-    # both instruments carry the signal on the same days, so each day is one cluster
-    assert row["n_clusters"] == row["n"] // 2
+    # both instruments carry the signal on the same days (one may miss a day: a marubozu too small for
+    # its ATR), so a day's events form one cluster
+    assert row["n"] // 2 <= row["n_clusters"] <= row["n"] // 2 + 1
     assert row["q_value"] < 0.01 and row["expectancy_after_cost_pct"] > 0
     assert row["validation_n"] >= 30 and row["validation_hit_rate"] > 0.75
     assert row["certified"]
@@ -179,6 +226,64 @@ def test_planted_edge_is_found_and_certified(tmp_data_dir, no_keys):
         carriers |= set(found.loc[found["ts"].isin(planted), "pattern"])
     others = rows[rows["certified"] & ~rows["pattern"].isin(carriers)]
     assert others.empty, others[["pattern", "context", "instrument", "horizon_bars"]]
+
+    bullish = card.validate_bucket(["bullish_marubozu"], IDS[0], "all", 1, True, **gate_kwargs())
+    assert bullish.validated and bullish.instrument == IDS[0] and bullish.p_value < 0.001
+    assert bullish.hit_rate > 0.7 > 0.6 > bullish.base_rate
+    assert not card.validate_bucket(["bullish_marubozu"], IDS[0], "all", 1, False, **gate_kwargs()).validated
+
+
+def check(card: Scorecard, patterns=("hammer",), context="trend=down", horizon=1, bullish=True, **extra):
+    """card.validate_bucket for RELIANCE with the research.yaml gate settings."""
+    return card.validate_bucket(list(patterns), IDS[0], context, horizon, bullish, **gate_kwargs(), **extra)
+
+
+def test_a_null_bucket_rarely_passes_validation_and_a_real_edge_does():
+    cfg = load_research_config()
+    rng = np.random.default_rng(0)
+    passed = {0.5: [], 0.7: []}
+    for _ in range(300):
+        for rate, out in passed.items():
+            events = bucket_events((rng.uniform(size=120) < rate).astype(float))
+            out.append(check(validation_card(events, bucket_base(IDS, 0.5)), horizon=3).validated)
+    assert np.mean(passed[0.5]) < cfg.validation_max_p + 0.04  # a null bucket passes ~max_p of the time
+    assert np.mean(passed[0.7]) > 0.95
+
+
+def test_validation_counts_each_event_once_and_needs_independent_clusters():
+    ups = (np.arange(200) % 10 < 7).astype(float)  # 70% up
+    both = pd.concat([bucket_events(ups), bucket_events(ups, pattern="bullish_engulfing")], ignore_index=True)
+    card = validation_card(both, bucket_base(IDS, 0.5))
+    one = check(card)
+    assert check(card, ["hammer", "bullish_engulfing"]) == one  # an event carrying both counts once
+    assert one.n == one.n_clusters == 200 and one.validated and one.p_value < 0.001
+    assert one.hit_rate == pytest.approx(0.7) and one.base_rate == pytest.approx(0.5)
+
+    # the same 200 events with 10-day outcome windows overlap in chains: too few independent clusters
+    v = check(validation_card(bucket_events(ups, window_days=10), bucket_base(IDS, 0.5)))
+    assert not v.validated and v.instrument is None and v.n == 200 and v.n_clusters < 30
+
+    # the bucket is compared with its own base rate, in the call's direction, with no 1 - rate flip
+    assert not check(validation_card(both, bucket_base(IDS, 0.75))).validated
+    flat = validation_card(bucket_events(ups).assign(down_1=0.0), bucket_base(IDS, 0.5))
+    short = check(flat, bullish=False)
+    assert short.hit_rate == 0.0 and not short.validated  # flat closes are not moves the call's way
+    assert check(card, context="trend=up").n == 0
+
+
+def test_thin_own_evidence_falls_back_to_the_same_exchange_pool_only():
+    rng = np.random.default_rng(3)
+    own = bucket_events((rng.uniform(size=10) < 0.2).astype(float))
+    peer = bucket_events(np.ones(150), instrument="NSE:TCS", first="2021-01-01")
+    v = check(validation_card(pd.concat([own, peer], ignore_index=True), bucket_base(IDS, 0.5)))
+    assert v.validated and v.instrument == "ALL" and v.n == 160
+
+    mixed = pd.concat([own, peer.assign(instrument="BSE:SENSEX")], ignore_index=True)
+    card = validation_card(mixed, bucket_base([IDS[0], "BSE:SENSEX"], 0.5), exchange=None)
+    v = check(card)
+    assert not v.validated and v.instrument is None and v.n == 10
+    loose = check(card, same_exchange=False)
+    assert loose.validated and loose.instrument == "ALL"
 
 
 def regime_candles(seed: int, drift: float = 0.3, block: int = 120) -> pd.DataFrame:
@@ -212,6 +317,65 @@ def test_default_universe_is_the_go_no_go_slice(tmp_data_dir, no_keys):
     assert "BSE:SENSEX" not in ids and not any(i.startswith("MCX:") for i in ids)
     with pytest.raises(ValueError, match="one exchange"):
         build_scorecard("1D", ["NSE:RELIANCE", "BSE:SENSEX"], load=make_loader({}), persist=False)
+
+
+def test_each_exchange_has_its_own_scorecard(tmp_data_dir, no_keys, random_frames):
+    assert exchange_universe("1D", "NSE") == default_instruments("1D")
+    assert exchange_universe("1D", "BSE") == ["BSE:SENSEX"]
+    assert exchange_universe("1D", "MCX") == ["MCX:CRUDEOIL", "MCX:NATURALGAS", "MCX:GOLD", "MCX:SILVER"]
+    mcx = {
+        i: synthetic_candles("1D", "2012-01-01", "2025-09-30", exchange="MCX", seed=60 + k)
+        for k, i in enumerate(("MCX:GOLD", "MCX:SILVER"))
+    }
+    frames = {**random_frames, **mcx}
+    nse = build_scorecard("1D", IDS, load=make_loader(frames))
+    gold = build_scorecard("1D", list(mcx), load=make_loader(frames))
+    assert (nse.meta.exchange, gold.meta.exchange) == ("NSE", "MCX")
+    assert set(gold.rows["instrument"]) == {*mcx, "ALL"} and set(gold.validation["instrument"]) == set(mcx)
+    assert scorecard_paths("1D", "MCX")["rows"].name == "scorecard_1D_MCX.parquet"
+    assert scorecard_paths("1D")["rows"].name == "scorecard_1D.parquet"
+    assert load_scorecard("1D", "MCX").meta == gold.meta and load_scorecard("1D").meta == nse.meta
+    assert load_scorecard("1D", "BSE") is None
+    with pytest.raises(ValueError, match="not on MCX"):
+        build_scorecard("1D", IDS, load=make_loader(frames), exchange="MCX", persist=False)
+
+    # stats and validation never come from another exchange's rows or events
+    cfg = load_research_config()
+    assert gold.stats_for("inside_bar", "MCX:GOLD", "up", 1, cfg.min_samples) is not None
+    assert gold.stats_for("inside_bar", "NSE:RELIANCE", "up", 1, cfg.min_samples) is None
+    v = gold.validate_bucket(["inside_bar"], "NSE:RELIANCE", "all", 1, True, **gate_kwargs())
+    assert v.n == 0 and not v.validated
+
+
+def test_intraday_events_stay_inside_the_session(tmp_data_dir, no_keys, monkeypatch):
+    cfg = load_research_config()
+    df = synthetic_candles("15m", "2022-10-01", "2023-02-28", seed=95, vol=0.003)
+    inst = get_instrument("NSE:RELIANCE")
+    day = df["ts"].dt.tz_convert(IST).dt.date
+    labels = forward_labels(df, cfg.horizons)
+    pos = pd.Index(df["ts"])
+
+    def same_session(events: pd.DataFrame, h: int) -> np.ndarray:
+        i = pos.get_indexer(pd.to_datetime(events["start"], utc=True))
+        return (day.shift(-h).to_numpy()[i] == day.to_numpy()[i])
+
+    gated = scorecard_module._prepare_instrument(inst, "15m", df, cfg).events
+    for h in cfg.horizons:
+        crossing = ~same_session(gated, h)
+        assert crossing.any() and gated.loc[crossing, f"up_{h}"].isna().all()
+        assert gated.loc[~crossing, f"up_{h}"].notna().any()
+
+    loose = dataclasses.replace(cfg, intraday_within_session=False)
+    events = scorecard_module._prepare_instrument(inst, "15m", df, loose).events
+    events = events[pos.get_indexer(pd.to_datetime(events["start"], utc=True)) < len(df) - 1]
+    i = pos.get_indexer(pd.to_datetime(events["start"], utc=True))
+    trade = labels["trade_ret_1"].to_numpy()[i]
+    same = same_session(events, 1)
+    intraday, multi_day = round_trip_cost("equity", "intraday"), round_trip_cost("equity", "multi_day")
+    # the last bar of a session is not a same-day trade at h=1, although its entry and exit bar match
+    assert (~same).any() and events.loc[~same, "up_1"].notna().all()
+    np.testing.assert_allclose(events["net_long_1"].to_numpy()[same], trade[same] - intraday)
+    np.testing.assert_allclose(events["net_long_1"].to_numpy()[~same], trade[~same] - multi_day)
 
 
 def test_load_scorecard_missing(tmp_data_dir, no_keys):

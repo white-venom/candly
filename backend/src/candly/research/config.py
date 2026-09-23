@@ -15,7 +15,15 @@ from candly.core.calendar import IST
 from candly.core.settings import get_settings
 from candly.core.timeframes import is_intraday, validate_tf
 
-HASHED_CONFIGS = ("research.yaml", "patterns.yaml", "costs.yaml")
+HASHED_CONFIGS = (
+    "research.yaml",
+    "patterns.yaml",
+    "costs.yaml",
+    "expiry.yaml",
+    "markets.yaml",
+    "watchlist.yaml",
+)
+HOLIDAYS_FILE = "holidays_observed.json"  # in the derived dir, written by candly.data.holidays
 CONTEXT_BUCKETS = ("trend", "vol_regime", "expiry")
 
 
@@ -36,9 +44,13 @@ class GoNoGoSlice:
 @dataclass(frozen=True)
 class GoNoGo:
     slice: GoNoGoSlice
+    population: str
     require_certified_buckets: int
     require_brier_skill_above: float
-    require_ece_below: float
+    brier_skill_ci: str
+    calibration_test: str
+    calibration_min_p: float
+    min_scored: int
     ece_bins: int
     ece_binning: str
 
@@ -69,6 +81,10 @@ class ResearchConfig:
     fallback_stop_atr: float
     intraday_within_session: bool
     require_edge_over_costs: bool
+    validation_min_clusters: int
+    validation_max_p: float
+    same_exchange_validation: bool
+    min_reward_risk: float
     context_buckets: tuple[str, ...]
     confidence: dict[str, ConfidenceRule]
     forecast_steps: int
@@ -110,8 +126,45 @@ def _read_yaml(path: Path) -> dict:
     return yaml.safe_load(path.read_text(encoding="utf-8"))
 
 
+# Every key research.yaml may hold, per section. A key the code doesn't read is an error, so a
+# pre-registered setting can never be silently ignored.
+KNOWN_KEYS: dict[str, set[str]] = {
+    "": {
+        "holdout", "train_end", "walk_forward", "horizons_bars", "stats", "analog", "abstain",
+        "scorecard", "confidence", "forecast", "go_no_go_1",
+    },
+    "holdout": {"start"},
+    "walk_forward": {"test_window_months", "purge_bars", "embargo_bars"},
+    "stats": {
+        "min_samples", "fdr_alpha", "bh_family", "ci_level", "prior_strength", "test", "min_clusters",
+        "bucket_null",
+    },
+    "analog": {"bucket", "patterns", "no_pattern", "effective_n"},
+    "abstain": {
+        "min_analogs", "min_edge", "require_validated_bucket", "fallback_stop_atr", "intraday_within_session",
+        "require_edge_over_costs", "validation_min_clusters", "validation_max_p", "same_exchange_validation",
+        "min_reward_risk",
+    },
+    "scorecard": {"context_buckets"},
+    "forecast": {"steps", "bands"},
+    "go_no_go_1": {
+        "slice", "population", "require_certified_buckets", "require_brier_skill_above", "brier_skill_ci",
+        "calibration_test", "calibration_min_p", "min_scored", "ece_bins", "ece_binning",
+    },
+    "go_no_go_1.slice": {"tf", "exchange", "kinds", "exclude"},
+}
+
+
+def _check_keys(section: dict, name: str) -> dict:
+    unknown = sorted(set(section) - KNOWN_KEYS[name])
+    if unknown:
+        raise ValueError(f"research.yaml {name or 'top level'} has unknown keys {unknown}")
+    return section
+
+
 def _go_no_go(raw: dict) -> GoNoGo:
-    s = raw["slice"]
+    _check_keys(raw, "go_no_go_1")
+    s = _check_keys(raw["slice"], "go_no_go_1.slice")
     return GoNoGo(
         slice=GoNoGoSlice(
             tf=validate_tf(str(s["tf"])),
@@ -119,9 +172,17 @@ def _go_no_go(raw: dict) -> GoNoGo:
             kinds=tuple(str(k) for k in s["kinds"]),
             exclude=tuple(str(x) for x in s.get("exclude") or ()),
         ),
+        population=_choice(str(raw["population"]), ("pattern_bars", "all_bars"), "go_no_go_1.population"),
         require_certified_buckets=int(raw["require_certified_buckets"]),
         require_brier_skill_above=float(raw["require_brier_skill_above"]),
-        require_ece_below=float(raw["require_ece_below"]),
+        brier_skill_ci=_choice(
+            str(raw["brier_skill_ci"]), ("date_clustered_bootstrap",), "go_no_go_1.brier_skill_ci"
+        ),
+        calibration_test=_choice(
+            str(raw["calibration_test"]), ("self_consistency",), "go_no_go_1.calibration_test"
+        ),
+        calibration_min_p=float(raw["calibration_min_p"]),
+        min_scored=int(raw["min_scored"]),
         ece_bins=int(raw["ece_bins"]),
         ece_binning=_choice(str(raw["ece_binning"]), ("quantile", "uniform"), "go_no_go_1.ece_binning"),
     )
@@ -129,7 +190,9 @@ def _go_no_go(raw: dict) -> GoNoGo:
 
 @lru_cache(maxsize=8)
 def _research_cached(path: str, mtime: float) -> ResearchConfig:
-    raw = _read_yaml(Path(path))
+    raw = _check_keys(_read_yaml(Path(path)), "")
+    for name in ("holdout", "walk_forward", "stats", "analog", "abstain", "scorecard", "forecast"):
+        _check_keys(raw[name], name)
     wf, stats, abstain, fc = raw["walk_forward"], raw["stats"], raw["abstain"], raw["forecast"]
     analog, confidence = raw["analog"], raw["confidence"]
     train_end = {str(k): _date(v) for k, v in raw["train_end"].items()}
@@ -177,6 +240,10 @@ def _research_cached(path: str, mtime: float) -> ResearchConfig:
         fallback_stop_atr=float(abstain["fallback_stop_atr"]),
         intraday_within_session=bool(abstain["intraday_within_session"]),
         require_edge_over_costs=bool(abstain["require_edge_over_costs"]),
+        validation_min_clusters=int(abstain["validation_min_clusters"]),
+        validation_max_p=float(abstain["validation_max_p"]),
+        same_exchange_validation=bool(abstain["same_exchange_validation"]),
+        min_reward_risk=float(abstain["min_reward_risk"]),
         context_buckets=buckets,
         confidence={k: rules[k] for k in ("high", "medium") if k in rules},
         forecast_steps=int(fc["steps"]),
@@ -200,7 +267,17 @@ def load_costs_config(path: Path | None = None) -> dict:
     return _costs_cached(str(path), path.stat().st_mtime)
 
 
+def _sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
 def config_hashes(config_dir: Path | None = None) -> dict[str, str]:
-    """sha256 of each config file a scorecard depends on, so a build can be traced to its protocol."""
-    config_dir = config_dir or get_settings().config_dir
-    return {name: hashlib.sha256((config_dir / name).read_bytes()).hexdigest() for name in HASHED_CONFIGS}
+    """sha256 of each file a scorecard depends on, so a build can be traced to its protocol: the
+    HASHED_CONFIGS, plus the derived holidays file (it moves the calendar) when there is one."""
+    settings = get_settings()
+    config_dir = config_dir or settings.config_dir
+    out = {name: _sha256(config_dir / name) for name in HASHED_CONFIGS}
+    holidays = settings.derived_dir / HOLIDAYS_FILE
+    if holidays.exists():
+        out[HOLIDAYS_FILE] = _sha256(holidays)
+    return out

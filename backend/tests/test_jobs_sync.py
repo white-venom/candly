@@ -71,6 +71,7 @@ def fake_steps(monkeypatch):
 
 @pytest.fixture
 def fresh_calendar():
+    reload_calendar()  # a calendar cached while DATA_DIR pointed at the real data holds its observed holidays
     yield
     reload_calendar()  # drop a calendar built from a test's holidays file
 
@@ -212,16 +213,17 @@ def test_a_failing_scorecard_is_recorded_per_timeframe(connected, fake_steps, mo
     monkeypatch.setitem(sync.STEPS, "scorecards", sync._step_scorecards)
     built: list[str] = []
 
-    def fake_build(tf):
-        built.append(tf)
-        if tf == "1h":
+    def fake_build(tf, *, exchange):
+        built.append(f"{tf} {exchange}")
+        if (tf, exchange) == ("1h", "MCX"):
             raise ValueError("no events")
 
     monkeypatch.setattr(scorecard, "build_scorecard", fake_build)
     state = sync.run_fyers_sync()
-    assert built == ["1D", "1h", "15m", "5m"]
+    every = [f"{tf} {ex}" for tf in ("1D", "1h", "15m", "5m") for ex in ("NSE", "BSE", "MCX")]
+    assert built == every
     assert state["status"] == "done"
-    assert state["scorecards"] == {"1D": "ok", "1h": "failed: no events", "15m": "ok", "5m": "ok"}
+    assert state["scorecards"] == {key: "failed: no events" if key == "1h MCX" else "ok" for key in every}
 
 
 def test_only_one_sync_runs_at_a_time(connected, fake_steps, monkeypatch):
@@ -308,6 +310,17 @@ def test_holiday_step_writes_the_file_and_reloads_the_calendar(
     assert get_calendar().is_trading_day("BSE", date(2024, 1, 26))
 
 
+def test_a_holiday_is_a_day_no_instrument_of_the_exchange_traded(connected, fresh_calendar):
+    days = [date(2024, 1, d) for d in (15, 16, 17, 18, 19, 22, 23, 24, 25, 29)]
+    save_candles("NSE:NIFTY50", "1D", daily("NSE", [d for d in days if d.day != 17]), source="fyers")
+    save_candles("NSE:TCS", "1D", daily("NSE", [d for d in days if d.day not in (22, 23)]), source="fyers")
+    save_candles("NSE:INFY", "1D", daily("NSE", [date(2024, 1, 26)]), source="yahoo")  # Yahoo: left out
+    save_candles("MCX:GOLD", "1D", daily("MCX", [date(2024, 1, 22), date(2024, 1, 24)]), source="fyers")
+    observed = derive_observed_holidays()
+    # the 17th is missing only in NIFTY and the 22nd-23rd only in TCS: gaps, not holidays
+    assert observed == {"NSE": ["2024-01-26"], "BSE": [], "MCX": ["2024-01-23"]}
+
+
 def test_holidays_keep_an_exchange_whose_reference_has_no_fyers_data(connected, fresh_calendar):
     holidays_path().parent.mkdir(parents=True)
     holidays_path().write_text(json.dumps({"MCX": ["2024-03-08"]}), encoding="utf-8")
@@ -346,7 +359,7 @@ def test_full_sync_with_the_real_steps(connected, monkeypatch, fresh_calendar):
     expiries = {"downloads": {"NSE_FO": "ok", "MCX_COM": "failed: 503"}}
     monkeypatch.setattr(sync, "refresh_expiries", lambda: expiries)
     built: list[str] = []
-    monkeypatch.setattr(scorecard, "build_scorecard", built.append)
+    monkeypatch.setattr(scorecard, "build_scorecard", lambda tf, exchange: built.append(f"{tf} {exchange}"))
     save_candles("NSE:RELIANCE", "1D", daily("NSE", [date(2026, 9, 1)]), source="yahoo")
     save_candles("NSE:RELIANCE", "1h", bars([pd.Timestamp("2026-09-01 03:45", tz="UTC")]), source="yahoo")
 
@@ -374,6 +387,6 @@ def test_full_sync_with_the_real_steps(connected, monkeypatch, fresh_calendar):
     assert state["summary"]["quality"]["instruments_with_data"] == 18
     observed = json.loads(holidays_path().read_text(encoding="utf-8"))
     assert observed["NSE"] == ["2026-09-14"]  # Ganesh Chaturthi
-    assert built == ["1D", "1h", "15m", "5m"]
+    assert built == [f"{tf} {ex}" for tf in ("1D", "1h", "15m", "5m") for ex in ("NSE", "BSE", "MCX")]
     assert state["scorecards"] == dict.fromkeys(built, "ok")
     assert not sync.sync_needed()

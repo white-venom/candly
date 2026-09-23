@@ -201,6 +201,14 @@ Results are broken down by instrument, timeframe, pattern, session phase and vol
 - **Gaps and circuit limits:** fills happen at the next available price, never at a price that didn't trade.
 - **Pre-registration:** what we test and how we judge it is written in `config/research.yaml` *before* looking at results. Any later change is recorded here with a reason.
 - **Paper trading** (a forward test through the ledger) comes before any real money.
+- **Revision log**
+  - **2026-09-23, after quant audit #2, before running `evaluate`.** The first real scorecards, on Fyers data 2005–2025 pre-holdout, certified **0 buckets on 1D** (1,551 tests), 0 on 1h and 15m, and 1 on 5m. So go/no-go #1 criterion 1 fails.
+  - The evaluation was then revised, knowing that result:
+    - it scores only bars with an active pattern, matching live behaviour;
+    - the fixed ECE < 0.03 bar was replaced by a calibration self-consistency test, because the audit showed the old bar had almost no power at our sample size;
+    - it reports a date-clustered bootstrap CI for Brier skill.
+  - The live gate was tightened: validated buckets need ≥ 30 validation clusters and one-sided p < 0.10, validation stays within the same exchange, and every call needs a minimum reward:risk of 1.0.
+  - None of these changes can turn the failed criterion into a pass.
 
 ## 13. Output and UX
 
@@ -306,11 +314,11 @@ Claude prices as listed on 2026-09-23: Haiku 4.5 at $1/$5 and Opus 5 at $5/$25 p
 
 That is about 14–18 weeks to a working alerts tool, and 5–6 months before trusting it with real money.
 
-**Go/no-go #1 (NSE daily)** passes only if all three hold:
+**Go/no-go #1 (NSE daily)** passes only if all three hold (criteria revised 2026-09-23, see §12):
 
 - at least one certified pattern/context bucket,
-- the analog forecast's Brier skill against the base rate is above 0 on validation,
-- calibration error (ECE) is below 0.03.
+- the analog forecast's Brier skill against the base rate is above 0 on validation (pattern bars only, with a date-clustered 95% CI),
+- calibration passes a self-consistency test (p ≥ 0.05, at least 500 scored forecasts).
 
 If it fails, we stop and rethink before building on it. Likely pivots: forecast ranges and volatility (which are forecastable) instead of direction, or drop patterns in favour of regime and trend signals.
 

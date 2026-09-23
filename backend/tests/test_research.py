@@ -14,7 +14,9 @@ from candly.research.stats import (
     benjamini_hochberg,
     beta_interval,
     beta_posterior,
+    calibration_self_consistency,
     cluster_robust_z,
+    clustered_bootstrap_skill_ci,
     expected_calibration_error,
     overlap_cluster_ids,
     wilson_interval,
@@ -103,14 +105,38 @@ def test_config_parses_every_section():
     gng = cfg.go_no_go_1
     assert gng.slice.tf == "1D" and gng.slice.exchange == "NSE" and "NSE:INDIAVIX" in gng.slice.exclude
     assert gng.ece_bins > 1 and gng.ece_binning == "quantile"
+    assert gng.population == "pattern_bars" and gng.brier_skill_ci == "date_clustered_bootstrap"
+    assert gng.calibration_test == "self_consistency" and 0 < gng.calibration_min_p < 1
+    assert gng.min_scored > 0
+    assert cfg.validation_min_clusters >= cfg.min_samples and 0 < cfg.validation_max_p < 1
+    assert cfg.same_exchange_validation and cfg.min_reward_risk > 0
+
+
+def _variant(tmp_path, old: str, new: str):
+    raw = (get_settings().config_dir / "research.yaml").read_text(encoding="utf-8")
+    assert old in raw
+    path = tmp_path / "research.yaml"
+    path.write_text(raw.replace(old, new), encoding="utf-8")
+    return path
 
 
 def test_config_rejects_unknown_context_buckets(tmp_path):
-    raw = (get_settings().config_dir / "research.yaml").read_text(encoding="utf-8")
-    bad = tmp_path / "research.yaml"
-    bad.write_text(raw.replace("[trend, vol_regime, expiry]", "[trend, weekday]"), encoding="utf-8")
     with pytest.raises(ValueError, match="weekday"):
-        load_research_config(bad)
+        load_research_config(_variant(tmp_path, "[trend, vol_regime, expiry]", "[trend, weekday]"))
+
+
+@pytest.mark.parametrize(
+    "old,new,match",
+    [
+        ("  min_scored: 500", "  min_scored: 500\n  require_ece_below: 0.03", "require_ece_below"),
+        ("  min_reward_risk: 1.0", "  min_reward_risk: 1.0\n  max_drawdown: 0.2", "max_drawdown"),
+        ("population: pattern_bars", "population: every_other_bar", "every_other_bar"),
+        ("calibration_test: self_consistency", "calibration_test: hosmer_lemeshow", "hosmer_lemeshow"),
+    ],
+)
+def test_config_rejects_unknown_names(tmp_path, old, new, match):
+    with pytest.raises(ValueError, match=match):
+        load_research_config(_variant(tmp_path, old, new))
 
 
 def test_walk_forward_folds_respect_protocol():
@@ -188,6 +214,64 @@ def test_quantile_ece_known_value():
         0.5 * abs(0.25 - 0.25) + 0.5 * abs(0.75 - 0.75)
     )
     assert expected_calibration_error([], [], 10) is None
+
+
+def test_calibration_self_consistency_reports_the_observed_ece():
+    rng = np.random.default_rng(1)
+    p = rng.uniform(0.3, 0.7, 400)
+    y = (rng.uniform(size=400) < p).astype(float)
+    ece, pvalue = calibration_self_consistency(p, y, 10, "quantile", sims=2000, seed=3)
+    assert ece == pytest.approx(expected_calibration_error(p, y, 10, "quantile"))
+    assert 0.0 <= pvalue <= 1.0
+    assert calibration_self_consistency(p, y, 10, "quantile", sims=2000, seed=3) == (ece, pvalue)
+    assert calibration_self_consistency([], [], 10) == (None, None)
+
+
+def test_a_calibrated_forecaster_passes_the_self_consistency_test_about_95_percent_of_the_time():
+    min_p = load_research_config().go_no_go_1.calibration_min_p
+    rng = np.random.default_rng(7)
+    passed = []
+    for trial in range(200):
+        p = rng.uniform(0.35, 0.65, 500)
+        y = (rng.uniform(size=p.size) < p).astype(float)
+        _, pvalue = calibration_self_consistency(p, y, 10, "quantile", sims=2000, seed=trial)
+        passed.append(pvalue >= min_p)
+    assert 0.90 <= np.mean(passed) <= 0.99
+
+
+def test_an_overconfident_forecaster_fails_the_self_consistency_test():
+    min_p = load_research_config().go_no_go_1.calibration_min_p
+    rng = np.random.default_rng(8)
+    for trial in range(20):
+        truth = rng.uniform(0.4, 0.6, 1000)
+        p = 0.5 + 3.0 * (truth - 0.5)  # stretches a 40-60% truth to 20-80% claims
+        y = (rng.uniform(size=truth.size) < truth).astype(float)
+        ece, pvalue = calibration_self_consistency(p, y, 10, "quantile", sims=2000, seed=trial)
+        assert pvalue < min_p, (trial, ece, pvalue)
+
+
+def test_date_clustered_bootstrap_ci_for_brier_skill():
+    rng = np.random.default_rng(4)
+    n = 600
+    y = (rng.uniform(size=n) < 0.5).astype(float)
+    leans_right = rng.uniform(size=n) < 0.7  # a skilled forecaster: leans the right way 70% of the time
+    p = np.where(leans_right == (y == 1), 0.6, 0.4)
+    brier, baseline = (p - y) ** 2, (0.5 - y) ** 2
+    dates = np.arange(n)
+    skill = 1 - brier.sum() / baseline.sum()
+    lo, hi = clustered_bootstrap_skill_ci(brier, baseline, dates, 0.95, resamples=2000, seed=0)
+    assert lo < skill < hi and lo > 0
+    assert clustered_bootstrap_skill_ci(brier, baseline, dates, 0.95, seed=0) == (lo, hi)
+    # the same forecasts for a second instrument on the same dates add no independent evidence
+    twins = clustered_bootstrap_skill_ci(
+        np.r_[brier, brier], np.r_[baseline, baseline], np.r_[dates, dates], 0.95, seed=0
+    )
+    assert twins == pytest.approx((lo, hi))
+    naive = clustered_bootstrap_skill_ci(
+        np.r_[brier, brier], np.r_[baseline, baseline], np.arange(2 * n), 0.95, seed=0
+    )
+    assert naive[1] - naive[0] < 0.8 * (hi - lo)
+    assert clustered_bootstrap_skill_ci([], [], [], 0.95) is None
 
 
 def test_wilson_interval_known_value():

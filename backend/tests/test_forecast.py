@@ -4,8 +4,9 @@ from datetime import datetime, timedelta
 import numpy as np
 import pandas as pd
 import pytest
+from scorecard_helpers import bucket_base, bucket_events, validation_card
 
-from candly.core.calendar import IST, get_calendar
+from candly.core.calendar import IST, get_calendar, reload_calendar
 from candly.features.context import compute_context
 from candly.forecast import analog, baseline_forecasts, make_forecast
 from candly.forecast.analog import confidence_label, ghost_path
@@ -41,6 +42,15 @@ FORECAST_KEYS = {
     "explanation",
 }
 cal = get_calendar()
+
+
+@pytest.fixture(autouse=True)
+def calendar_of_this_data_dir(tmp_data_dir):
+    """A calendar cached while DATA_DIR pointed at the real data would carry its observed holidays and
+    change the synthetic bar grids."""
+    reload_calendar()
+    yield
+    reload_calendar()
 
 
 def just_after_close(df: pd.DataFrame, exchange: str = "NSE", tf: str = "1D") -> pd.Timestamp:
@@ -177,10 +187,12 @@ def test_unclosed_bar_is_ignored(random_daily):
     assert fc.ref_time == int(random_daily["ts"].iloc[-2].timestamp())
 
 
-def planted(end: str = "2024-06-28", every: int = 15) -> pd.DataFrame:
-    df = synthetic_candles("1D", "2012-01-01", end, seed=41, plain=True)
+def planted(end: str = "2024-06-28", every: int = 15, follow_bars: int = 3) -> pd.DataFrame:
+    """Ends on a planted bullish marubozu, the only pattern on that bar."""
+    df = synthetic_candles("1D", "2012-01-01", end, seed=42, plain=True)
     last_signal = max(range(60, len(df), every))
-    return plant_marubozu_edge(df, every=every, p_follow=0.9, seed=3).iloc[: last_signal + 1]
+    edge = plant_marubozu_edge(df, every=every, p_follow=0.9, seed=3, follow_bars=follow_bars)
+    return edge.iloc[: last_signal + 1]
 
 
 def _meta() -> ScorecardMeta:
@@ -196,37 +208,15 @@ def _meta() -> ScorecardMeta:
     )
 
 
-def validation_card(rows: list[dict]) -> Scorecard:
-    """Scorecard rows carrying only what the validated-bucket gate reads."""
-    return Scorecard(_meta(), pd.DataFrame(rows))
+PEERS = ["NSE:RELIANCE", "NSE:TCS", "BSE:SENSEX"]
 
 
-def bucket_row(context: str, hit: float, base: float, n: int = 200, **overrides) -> dict:
-    """A scorecard row whose train statistics are neutral; only its validation rates vary."""
-    row = {
-        "pattern": "bullish_marubozu",
-        "label": "Bullish marubozu",
-        "direction": "bullish",
-        "instrument": "NSE:RELIANCE",
-        "context": context,
-        "horizon_bars": 1,
-        "n": 500,
-        "hits": 250,
-        "n_clusters": 500,
-        "hit_rate": 0.5,
-        "base_rate": 0.5,
-        "ci_low": 0.45,
-        "ci_high": 0.55,
-        "p_value": 0.5,
-        "q_value": 0.9,
-        "posterior": 0.5,
-        "expectancy_after_cost_pct": 0.0,
-        "validation_n": n,
-        "validation_hit_rate": hit,
-        "validation_base_rate": base,
-        "certified": False,
-    }
-    return {**row, **overrides}
+def held_up(trend: str, hit: float = 0.8, n: int = 200, exchange: str | None = "NSE", **events) -> Scorecard:
+    """A scorecard whose validation events of the bullish marubozu in `trend` closed up a share `hit` of
+    the time, against a 50% base rate."""
+    ups = (np.arange(n) % 100 < round(100 * hit)).astype(float)
+    frame = bucket_events(ups, pattern="bullish_marubozu", trend=trend, **events)
+    return validation_card(frame, bucket_base(PEERS, 0.5, trend), exchange=exchange)
 
 
 def with_config(monkeypatch, **changes):
@@ -238,12 +228,11 @@ def with_config(monkeypatch, **changes):
 def test_planted_edge_gives_a_confident_bullish_call():
     df = planted()
     now = just_after_close(df)
-    unvalidated = make_forecast("NSE:RELIANCE", "1D", df, None, steps=1, now=now)
+    unvalidated = make_forecast("NSE:RELIANCE", "1D", df, None, now=now)
     assert unvalidated.abstain and unvalidated.abstain_reason == "unvalidated bucket: no scorecard"
     assert unvalidated.trade is None and unvalidated.invalidation is None and unvalidated.ghost_candles
 
-    card = validation_card([bucket_row(f"trend={unvalidated.context.trend}", hit=0.8, base=0.5)])
-    fc = make_forecast("NSE:RELIANCE", "1D", df, card, steps=1, now=now)
+    fc = make_forecast("NSE:RELIANCE", "1D", df, held_up(unvalidated.context.trend), now=now)
     assert fc.context.patterns and "bullish_marubozu" in fc.context.patterns
     assert not fc.abstain, fc.abstain_reason
     assert fc.p_up > fc.base_rate + 0.2
@@ -255,40 +244,55 @@ def test_planted_edge_gives_a_confident_bullish_call():
     assert trade.entry == fc.ref_close and trade.stop == fc.invalidation
     assert trade.target == fc.bands[-1].p50 > trade.entry
     assert trade.reward_risk == pytest.approx((trade.target - trade.entry) / (trade.entry - trade.stop))
+    assert trade.reward_risk >= load_research_config().min_reward_risk
 
 
 def test_directional_calls_need_a_bucket_that_held_up_in_validation():
     df = planted()
     now = just_after_close(df)
-    trend = make_forecast("NSE:RELIANCE", "1D", df, None, steps=1, now=now).context.trend
-    ctx = f"trend={trend}"
+    trend = make_forecast("NSE:RELIANCE", "1D", df, None, now=now).context.trend
 
-    def reason(rows):
-        return make_forecast("NSE:RELIANCE", "1D", df, validation_card(rows), steps=1, now=now).abstain_reason
+    def reason(card):
+        return make_forecast("NSE:RELIANCE", "1D", df, card, now=now).abstain_reason
 
-    failed = reason([bucket_row(ctx, hit=0.45, base=0.5)])
-    assert failed.startswith("unvalidated bucket:") and "NSE:RELIANCE" in failed and "n=200" in failed
-    assert reason([bucket_row("trend=elsewhere", hit=0.8, base=0.5)]).startswith("unvalidated bucket:")
-    assert reason([bucket_row(ctx, hit=0.8, base=0.5, horizon_bars=3)]).startswith("unvalidated bucket:")
-    too_few = reason([bucket_row(ctx, hit=0.8, base=0.5, n=10)])
-    assert too_few.startswith("unvalidated bucket:") and "10 validation events" in too_few
-    # the instrument's own rows are too thin, so the pooled ALL rows decide
-    thin_own = bucket_row(ctx, hit=0.3, base=0.5, n=10)
-    assert reason([thin_own, bucket_row(ctx, hit=0.7, base=0.5, instrument="ALL")]) is None
-    assert reason([thin_own, bucket_row(ctx, hit=0.4, base=0.5, instrument="ALL")]).startswith(
-        "unvalidated bucket:"
-    )
-    # a bearish row that failed in validation backs a bullish call; one that worked does not
-    bearish = {"pattern": "bullish_marubozu", "direction": "bearish"}
-    assert reason([bucket_row(ctx, hit=0.3, base=0.5, **bearish)]) is None
-    assert reason([bucket_row(ctx, hit=0.7, base=0.5, **bearish)]).startswith("unvalidated bucket:")
+    assert reason(held_up(trend)) is None
+    failed = reason(held_up(trend, hit=0.45))
+    assert failed.startswith("unvalidated bucket:") and "(NSE:RELIANCE)" in failed
+    assert "n=200 in 200 clusters, one-sided p=" in failed
+    assert reason(held_up("elsewhere")).startswith("unvalidated bucket:")
+    too_few = reason(held_up(trend, n=20))
+    assert too_few.startswith("unvalidated bucket:")
+    assert "20 independent validation clusters (20 events)" in too_few
+    # overlapping outcome windows are one cluster, however many events they hold
+    chained = reason(held_up(trend, window_days=30))
+    assert chained.startswith("unvalidated bucket:") and "(200 events), fewer than" in chained
+
+    # the instrument's own events are too thin, so the pooled events of its exchange decide
+    own = bucket_events(np.r_[np.ones(3), np.zeros(7)], pattern="bullish_marubozu", trend=trend)
+    peers = bucket_events(np.ones(100), "NSE:TCS", "bullish_marubozu", trend, first="2021-01-01")
+    base = bucket_base(PEERS, 0.5, trend)
+    assert reason(validation_card(pd.concat([own, peers]), base)) is None
+    elsewhere = pd.concat([own, peers.assign(instrument="BSE:SENSEX")])
+    assert reason(validation_card(elsewhere, base, exchange=None)).startswith("unvalidated bucket:")
+    assert reason(held_up(trend, exchange="MCX")) == "unvalidated bucket: the scorecard is MCX's, not NSE's"
+    # events that closed down never back a bullish call, whatever their pattern's direction
+    fell = bucket_events(np.zeros(200), pattern="bullish_marubozu", trend=trend, direction="bearish")
+    assert reason(validation_card(fell, base)).startswith("unvalidated bucket:")
+
+
+def test_the_structural_bucket_gate_holds_in_validation_replays():
+    df = planted()
+    now = just_after_close(df)
+    replay = make_forecast("NSE:RELIANCE", "1D", df, None, now=now, bucket_gate=False)
+    assert not replay.abstain, replay.abstain_reason  # no validation statistics are read
+    odd = make_forecast("NSE:RELIANCE", "1D", df, None, steps=2, now=now, bucket_gate=False)
+    assert odd.abstain_reason == "unvalidated bucket: 2 bars is not a scorecard horizon [1, 3, 5]"
 
 
 def test_edge_below_costs_abstains(monkeypatch):
     df = planted()
     now = just_after_close(df)
-    trend = make_forecast("NSE:RELIANCE", "1D", df, None, steps=1, now=now).context.trend
-    card = validation_card([bucket_row(f"trend={trend}", hit=0.8, base=0.5)])
+    trend = make_forecast("NSE:RELIANCE", "1D", df, None, now=now).context.trend
     seen = []
 
     def huge(kind, holding, side="long", **_):
@@ -296,11 +300,58 @@ def test_edge_below_costs_abstains(monkeypatch):
         return 0.5
 
     monkeypatch.setattr(analog, "round_trip_cost", huge)
-    fc = make_forecast("NSE:RELIANCE", "1D", df, card, steps=1, now=now)
+    fc = make_forecast("NSE:RELIANCE", "1D", df, held_up(trend), now=now)
     assert fc.abstain and fc.abstain_reason.startswith("edge below costs:")
     assert "50.00% round trip (equity, multi-day)" in fc.abstain_reason
     assert fc.trade is None and fc.invalidation is None
     assert seen == [("equity", "multi_day", "long")]
+
+
+def test_the_cost_hurdle_is_measured_from_the_next_open(monkeypatch):
+    steps = load_research_config().forecast_steps
+    df = planted().copy()
+    marubozu = detect_patterns(df, "1D").query("pattern == 'bullish_marubozu'")
+    nxt = pd.Index(df["ts"]).get_indexer(marubozu["ts"]) + 1
+    nxt = nxt[nxt < len(df)]
+    # the bar after each marubozu gaps up by half of its move, so a trade entered at its open catches less
+    close = df["close"].to_numpy()
+    gap_open = close[nxt - 1] + 0.5 * (close[nxt] - close[nxt - 1])
+    df.loc[nxt, "open"] = gap_open
+    df.loc[nxt, "high"] = np.maximum(df.loc[nxt, "high"], gap_open)
+    df.loc[nxt, "low"] = np.minimum(df.loc[nxt, "low"], gap_open)
+    now = just_after_close(df)
+    trend = make_forecast("NSE:RELIANCE", "1D", df, None, now=now).context.trend
+    monkeypatch.setattr(analog, "round_trip_cost", lambda *a, **k: 0.5)
+    fc = make_forecast("NSE:RELIANCE", "1D", df, held_up(trend), now=now)
+
+    ctx = compute_context(df, "1D", "NSE")
+    ref = len(df) - 1
+    atr = ctx["atr14"].to_numpy()
+    found = detect_patterns(df, "1D")
+    active = found.loc[found["pattern"].isin(fc.context.patterns), "ts"]
+    analogs = np.zeros(len(df), bool)
+    analogs[pd.Index(df["ts"]).get_indexer(active)] = True
+    analogs &= (ctx["trend"] == trend).to_numpy() & (atr > 0) & (np.arange(len(df)) + steps <= ref)
+    paths = forward_paths(df, ctx["atr14"], steps)[analogs]
+    assert len(paths) == fc.n_analogs
+    entry = fc.ref_close + paths[:, 0, 0] * atr[ref]
+    from_open = float(np.median((paths[:, -1, 3] - paths[:, 0, 0]) * atr[ref] / entry))
+    assert f"median move {100 * from_open:.2f}% the call's way from the next open" in fc.abstain_reason
+    assert fc.expected_move_pct > 100 * from_open + 0.2  # measured from the reference close it looks bigger
+
+
+def test_calls_whose_reward_is_below_the_risk_abstain(monkeypatch):
+    df = planted(follow_bars=1)  # one bar of follow-through: the target sits closer than the stop
+    now = just_after_close(df)
+    trend = make_forecast("NSE:RELIANCE", "1D", df, None, steps=1, now=now).context.trend
+    fc = make_forecast("NSE:RELIANCE", "1D", df, held_up(trend), steps=1, now=now)
+    assert fc.abstain and fc.abstain_reason.startswith("reward below risk: R:R ")
+    assert fc.trade is None and fc.invalidation is None
+    rr = float(fc.abstain_reason.removeprefix("reward below risk: R:R "))
+    assert 0 < rr < load_research_config().min_reward_risk
+    with_config(monkeypatch, min_reward_risk=rr - 0.01)
+    called = make_forecast("NSE:RELIANCE", "1D", df, held_up(trend), steps=1, now=now)
+    assert not called.abstain and called.trade.reward_risk == pytest.approx(rr, abs=0.005)
 
 
 def regime_daily(seed: int = 7) -> pd.DataFrame:
@@ -321,6 +372,8 @@ def test_a_bar_without_a_pattern_is_unvalidated_and_otherwise_gets_the_fallback_
     now = just_after_close(cut)
     gated = make_forecast("NSE:RELIANCE", "1D", cut, None, now=now)
     assert gated.abstain_reason == "unvalidated bucket: trend=up, any bar is not a scorecard bucket"
+    replay = make_forecast("NSE:RELIANCE", "1D", cut, None, now=now, bucket_gate=False)
+    assert replay.abstain_reason == gated.abstain_reason  # structural: on in validation replays too
 
     cfg = with_config(monkeypatch, require_validated_bucket=False, require_edge_over_costs=False)
     fc = make_forecast("NSE:RELIANCE", "1D", cut, None, now=now)

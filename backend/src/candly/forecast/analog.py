@@ -13,12 +13,19 @@ n / steps analogs (analog.effective_n); the abstain rule still counts all n anal
 A directional call (abstain=false) passes every gate in research.yaml `abstain`, in this order:
 - intraday_within_session: on intraday timeframes the last target bar closes by the reference day's
   session close ("horizon crosses session close").
-- require_validated_bucket: in the scorecard's validation period, the analog bucket (the active
-  patterns in the reference bar's trend bucket, at this horizon) moved the call's way more often than
-  its base rate. No scorecard, or no pattern on the reference bar, is never validated ("unvalidated
-  bucket").
-- require_edge_over_costs: the median path's move the call's way clears the round-trip cost for the
-  instrument kind and holding type ("edge below costs").
+- require_validated_bucket ("unvalidated bucket"), in two parts:
+  - structural, always on: the reference bar has an active pattern and the horizon is a scorecard
+    horizon, so the analog bucket (the active patterns in the reference bar's trend bucket) is a
+    scorecard bucket at all;
+  - statistical, off in validation-period replays (`bucket_gate=False`), whose statistics come from
+    the period being scored: in the scorecard of the instrument's own exchange
+    (abstain.same_exchange_validation), the bucket's de-duplicated validation events form at least
+    abstain.validation_min_clusters clusters and beat their bucket base rate with a one-sided
+    cluster-robust p-value below abstain.validation_max_p (Scorecard.validate_bucket).
+- require_edge_over_costs: the analogs' median trade return the call's way, entered at the next bar's
+  open and exited at the last step's close (as the scorecard's expectancy measures trades), clears the
+  round-trip cost for the instrument kind and holding type ("edge below costs").
+- min_reward_risk: the trade's reward:risk is at least this ("reward below risk").
 Its stop is the tightest active-pattern invalidation in the call's direction, else fallback_stop_atr
 ATR beyond the reference close, and never closer than patterns.yaml min_stop_atr ATR.
 """
@@ -126,8 +133,9 @@ def make_forecast(
 
     `check_stale=False` skips the calendar's stale-data abstention; only a historical replay
     (research.evaluate) should pass it, because the calendar has no pre-2026 holidays.
-    `bucket_gate=False` skips abstain.require_validated_bucket; a replay of the validation period must
-    pass it, because the scorecard's validation statistics come from that same period."""
+    `bucket_gate=False` skips the statistical part of abstain.require_validated_bucket (its structural
+    part stays on); a replay of the validation period must pass it, because the scorecard's validation
+    statistics come from that same period."""
     cfg = load_research_config()
     steps = int(steps or cfg.forecast_steps)
     now = pd.Timestamp.now(tz="UTC") if now is None else pd.Timestamp(now).tz_convert("UTC")
@@ -299,7 +307,7 @@ class _AnalogRun:
                 **fields,
             )
         bullish = edge > 0
-        reason = self._call_gates(bullish, times, expected_move)
+        reason = self._call_gates(bullish, times, paths)
         if reason is not None:
             return self._forecast(abstain_reason=reason, **fields)
         stop = self._stop(bullish)
@@ -311,6 +319,8 @@ class _AnalogRun:
             target=target,
             reward_risk=sign * (target - self.ref_close) / abs(self.ref_close - stop),
         )
+        if trade.reward_risk < cfg.min_reward_risk:
+            return self._forecast(abstain_reason=f"reward below risk: R:R {trade.reward_risk:.2f}", **fields)
         return self._forecast(
             abstain=False,
             confidence=confidence_label(float(lo), float(hi), self.base, edge, cfg),
@@ -344,51 +354,73 @@ class _AnalogRun:
         _, close = cal.session_times(self.exchange, cal.local_date(self.ref_ts))
         return cal.bar_close_time(self.exchange, times[-1], self.tf) > close
 
-    def _call_gates(
-        self, bullish: bool, times: list[pd.Timestamp], expected_move: float | None
-    ) -> str | None:
-        """The abstain reason of the first research.yaml `abstain` gate the call fails, else None."""
+    def _call_gates(self, bullish: bool, times: list[pd.Timestamp], paths: np.ndarray) -> str | None:
+        """The abstain reason of the first research.yaml `abstain` gate the call fails before its trade
+        is drawn up, else None."""
         cfg = self.cfg
         crosses = self._crosses_session_close(times)
         if cfg.intraday_within_session and crosses:
             last = times[-1].isoformat() if times else "none"
             return f"horizon crosses session close: last target bar {last} ends after this session"
-        if cfg.require_validated_bucket and self.bucket_gate:
-            reason = self._unvalidated(bullish)
+        if cfg.require_validated_bucket:
+            reason = self._not_a_bucket() or (self._unvalidated(bullish) if self.bucket_gate else None)
             if reason is not None:
                 return f"unvalidated bucket: {reason}"
         if cfg.require_edge_over_costs:
             holding = "intraday" if is_intraday(self.tf) and not crosses else "multi_day"
             kind = get_instrument(self.instrument_id).kind
             cost = round_trip_cost(kind, holding, side="long" if bullish else "short")
-            move = (1.0 if bullish else -1.0) * (expected_move or 0.0)
+            move = (1.0 if bullish else -1.0) * self._median_trade_return(paths)
             if move < cost:
                 return (
-                    f"edge below costs: median move {100 * move:.2f}% the call's way vs "
+                    f"edge below costs: median move {100 * move:.2f}% the call's way from the next open vs "
                     f"{100 * cost:.2f}% round trip ({kind}, {holding.replace('_', '-')})"
                 )
         return None
 
-    def _unvalidated(self, bullish: bool) -> str | None:
+    def _median_trade_return(self, paths: np.ndarray) -> float:
+        """Median over the analogs of a long entered at the next bar's open and exited at the last step's
+        close, as a return on the entry price."""
+        first_open, last_close = paths[:, 0, 0], paths[:, -1, 3]
+        entry = self.ref_close + first_open * self.atr
+        return float(np.median((last_close - first_open) * self.atr / entry))
+
+    def _not_a_bucket(self) -> str | None:
+        """The structural part of the validated-bucket gate, on in every replay."""
         if self.active.empty:
             return f"{self._bucket_label()} is not a scorecard bucket"
+        if self.steps not in self.cfg.horizons:
+            return f"{self.steps} bars is not a scorecard horizon {list(self.cfg.horizons)}"
+        return None
+
+    def _unvalidated(self, bullish: bool) -> str | None:
+        """The statistical part of the validated-bucket gate, which reads validation-span statistics."""
+        cfg = self.cfg
         if self.scorecard is None:
             return "no scorecard"
-        min_n = self.cfg.min_samples
+        card_exchange = self.scorecard.meta.exchange
+        if cfg.same_exchange_validation and card_exchange not in (None, self.exchange):
+            return f"the scorecard is {card_exchange}'s, not {self.exchange}'s"
         v = self.scorecard.validate_bucket(
             self.active["pattern"],
             self.instrument_id,
-            f"{self.cfg.analog_bucket}={self.bucket}",
+            f"{cfg.analog_bucket}={self.bucket}",
             self.steps,
             bullish,
-            min_n,
+            min_clusters=cfg.validation_min_clusters,
+            max_p=cfg.validation_max_p,
+            same_exchange=cfg.same_exchange_validation,
         )
         if v.instrument is None:
-            return f"{self._bucket_label()} has {v.n} validation events, fewer than {min_n}"
+            return (
+                f"{self._bucket_label()} has {v.n_clusters} independent validation clusters ({v.n} events), "
+                f"fewer than {cfg.validation_min_clusters}"
+            )
         if not v.validated:
             return (
                 f"{self._bucket_label()} ({v.instrument}) moved the call's way {_pct(v.hit_rate)} of the "
-                f"time in validation vs a base rate of {_pct(v.base_rate)}, n={v.n}"
+                f"time in validation vs a base rate of {_pct(v.base_rate)}, n={v.n} in {v.n_clusters} "
+                f"clusters, one-sided p={v.p_value:.3f} (needs < {cfg.validation_max_p})"
             )
         return None
 

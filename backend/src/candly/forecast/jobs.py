@@ -7,7 +7,7 @@ from collections.abc import Callable, Iterable
 
 import pandas as pd
 
-from candly.core.instruments import load_watchlist
+from candly.core.instruments import exchange_of, load_watchlist
 from candly.core.timeframes import validate_tf
 from candly.data import clock
 from candly.forecast.analog import make_forecast
@@ -52,7 +52,17 @@ def run_forecast_cycle(
     )
     load = load or _default_loader()
     ledger = ledger or Ledger()
-    card = scorecard if scorecard is not None else load_scorecard(tf)
+    cards: dict[str, Scorecard | None] = {}
+
+    def card_for(instrument_id: str) -> Scorecard | None:
+        """`scorecard` if given, else the persisted build of the instrument's own exchange."""
+        if scorecard is not None:
+            return scorecard
+        exchange = exchange_of(instrument_id)
+        if exchange not in cards:
+            cards[exchange] = load_scorecard(tf, exchange)
+        return cards[exchange]
+
     counts = dict.fromkeys(
         ("recorded", "abstained", "not_recorded", "no_data", "duplicates", "late", "errors"), 0
     )
@@ -62,7 +72,7 @@ def run_forecast_cycle(
             if candles is None or candles.empty:
                 counts["no_data"] += 1
                 continue
-            forecast = make_forecast(instrument_id, tf, candles, card, now=now)
+            forecast = make_forecast(instrument_id, tf, candles, card_for(instrument_id), now=now)
             if forecast.abstain and (forecast.abstain_reason or "").startswith(NOT_RECORDED):
                 counts["not_recorded"] += 1
                 continue
@@ -95,11 +105,17 @@ def grade_pending_job(
 
 
 def rebuild_scorecard(
-    tf: str, instruments: Iterable[str] | None = None, *, load: Loader | None = None
+    tf: str,
+    instruments: Iterable[str] | None = None,
+    *,
+    load: Loader | None = None,
+    exchange: str | None = None,
 ) -> dict:
-    card = build_scorecard(tf, instruments, load=load)
+    """Build and persist one exchange's scorecard (NSE by default; see build_scorecard)."""
+    card = build_scorecard(tf, instruments, load=load, exchange=exchange)
     summary = {
         "tf": tf,
+        "exchange": card.meta.exchange,
         "n_tests": card.meta.n_tests,
         "certified": int(card.rows["certified"].sum()) if len(card.rows) else 0,
         "train_end": card.meta.train_end,

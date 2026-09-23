@@ -8,9 +8,23 @@ bars matched to its target times; void when one never appeared), against the bas
 The period is the validation span [train_end, holdout) by default. The holdout can only be replayed with
 `allow_holdout=True`, which only an official go/no-go run may pass.
 
-abstain.require_validated_bucket gates calls on the scorecard's validation statistics, which come from
-the validation span itself, so a validation replay runs without that gate (gating on them would keep
-only the buckets that did well in the very period being scored). A holdout replay keeps it.
+abstain.require_validated_bucket has a structural part (the reference bar must carry a pattern, so the
+call's bucket is a scorecard bucket), which stays on in every replay, and a statistical part that reads
+the scorecard's validation statistics. Those come from the validation span itself, so a validation
+replay runs without the statistical part (gating on them would keep only the buckets that did well in
+the very period being scored). A holdout replay keeps both.
+
+Scoring (research.yaml go_no_go_1):
+- population: with "pattern_bars", only forecasts whose reference bar carries a confirmed pattern are
+  scored, for every method alike, as live forecasting only calls such bars. Every replayed bar is still
+  counted in n_forecasts, n_abstained, n_void and n_unresolved.
+- Brier skill against the base-rate baseline, with a percentile CI from a date-clustered bootstrap:
+  whole IST dates are resampled, all instruments' forecasts of a date together.
+- Calibration self-consistency: outcomes are simulated from the forecaster's own p, y ~ Bernoulli(p),
+  and the p-value is the share of simulated ECEs at least as large as the observed one. The calibration
+  gate passes when that p-value is at least calibration_min_p and at least min_scored forecasts were
+  scored.
+Both resamplings are seeded, so an evaluation is reproducible.
 """
 
 from __future__ import annotations
@@ -22,20 +36,24 @@ from typing import Literal
 import numpy as np
 import pandas as pd
 
-from candly.core.calendar import get_calendar
+from candly.core.calendar import IST, get_calendar
 from candly.core.instruments import exchange_of
 from candly.core.timeframes import validate_tf
 from candly.forecast import METHOD, Forecast, baseline_forecasts, make_forecast
 from candly.forecast.jobs import NOT_RECORDED
 from candly.indicators.functions import atr as atr_fn
 from candly.ledger.grading import brier_baseline, grade, match_bars, outcome_up, target_times
+from candly.patterns import detect_patterns
 from candly.research.config import ResearchConfig, load_research_config
 from candly.research.data import CandleLoader, load_research_candles
 from candly.research.scorecard import Scorecard, build_scorecard, default_instruments
-from candly.research.stats import expected_calibration_error
+from candly.research.stats import calibration_self_consistency, clustered_bootstrap_skill_ci
 
 METHODS = (METHOD, "baseline_base_rate", "baseline_persistence", "baseline_random_walk")
 Period = Literal["validation", "holdout"]
+CALIBRATION_SIMS = 2000
+BOOTSTRAP_RESAMPLES = 2000
+SEED = 20260923
 
 
 @dataclass
@@ -46,23 +64,32 @@ class Evaluation:
     start: str
     end: str | None
     instruments: list[str]
+    population: str  # go_no_go_1.population: which recorded forecasts are scored
     n_forecasts: int  # recorded the way the forecast job records them
     n_not_recorded: int  # no forecast possible (not enough history); the forecast job records none
     n_abstained: int
     n_graded: int
     n_void: int  # a target bar never appeared in the data
     n_unresolved: int  # target bars fall after the last available bar
-    n_scored: int  # graded and not abstained: the forecasts behind brier, skill, ece and hit_rate
+    n_in_population: int  # recorded forecasts whose reference bar is in the population
+    n_scored: int  # graded, not abstained and in the population: the forecasts behind every score
     brier: float | None
     brier_baseline: float | None
     skill: float | None
+    skill_ci: tuple[float, float] | None  # date-clustered bootstrap percentile CI at stats.ci_level
+    ci_level: float
     ece: float | None
     ece_bins: int
     ece_binning: str
+    calibration_p: float | None  # self-consistency p-value: share of simulated ECEs >= the observed one
+    calibration_sims: int
+    bootstrap_resamples: int
+    seed: int
     hit_rate: float | None
-    band_coverage_80: float | None
+    band_coverage_80: float | None  # graded forecasts in the population, abstained ones included
     n_certified: int | None
     gates: dict[str, bool] = field(default_factory=dict)
+    gate_details: dict[str, dict] = field(default_factory=dict)  # per gate: its numbers, bar and pass
     records: pd.DataFrame = field(default_factory=pd.DataFrame, repr=False)
 
 
@@ -77,10 +104,11 @@ def _forecast(
     return next((fc for fc in baselines if fc.method == method), None)
 
 
-def _grade_record(fc: Forecast, df: pd.DataFrame, atr_at_ref: float) -> dict:
+def _grade_record(fc: Forecast, df: pd.DataFrame, atr_at_ref: float, patterns: list[str]) -> dict:
     rec = {
         "instrument": fc.instrument,
         "ref_time": pd.Timestamp(fc.ref_time, unit="s", tz="UTC"),
+        "patterns": patterns,
         "p_up": fc.p_up,
         "base_rate": fc.base_rate,
         "abstain": fc.abstain,
@@ -117,6 +145,13 @@ def _grade_record(fc: Forecast, df: pd.DataFrame, atr_at_ref: float) -> dict:
     }
 
 
+def _active_patterns(df: pd.DataFrame, tf: str) -> pd.Series:
+    """Confirmed patterns per bar open time. Detection is causal (each bar's patterns use bars up to it
+    only), so this equals what a forecast made on that bar sees."""
+    found = detect_patterns(df, tf)
+    return found.groupby("ts")["pattern"].agg(list)
+
+
 def _replay(
     instrument_id: str,
     tf: str,
@@ -134,6 +169,7 @@ def _replay(
     ts = df["ts"]
     in_period = (ts >= start) & (ts < end) if end is not None else ts >= start
     atr = atr_fn(df, 14).to_numpy()
+    active = _active_patterns(df, tf)
     records, skipped = [], 0
     for i in np.flatnonzero(in_period.to_numpy()):
         now = cal.bar_close_time(exchange, ts.iloc[i], tf) + pd.Timedelta(seconds=1)
@@ -141,7 +177,7 @@ def _replay(
         if fc is None or (fc.abstain and (fc.abstain_reason or "").startswith(NOT_RECORDED)):
             skipped += 1
             continue
-        records.append(_grade_record(fc, df, float(atr[i])))
+        records.append(_grade_record(fc, df, float(atr[i]), list(active.get(ts.iloc[i], []))))
     return records, skipped
 
 
@@ -150,27 +186,86 @@ def _mean(values: pd.Series) -> float | None:
     return float(values.astype(float).mean()) if len(values) else None
 
 
-def _summarise(records: pd.DataFrame, cfg: ResearchConfig) -> dict:
+def in_population(records: pd.DataFrame, population: str) -> pd.Series:
     if records.empty:
-        return dict.fromkeys(
-            ("brier", "brier_baseline", "skill", "ece", "hit_rate", "band_coverage_80"), None
-        ) | {"n_scored": 0}
-    graded = records[records["status"] == "graded"]
-    scored = graded[~graded["abstain"] & graded["p_up"].notna() & graded["base_rate"].notna()]
-    brier, baseline = _mean(scored["brier"]), _mean(scored["brier_baseline"])
+        return pd.Series(dtype=bool)
+    if population == "pattern_bars":
+        return records["patterns"].map(len).gt(0)
+    return pd.Series(True, index=records.index)
+
+
+def _summarise(records: pd.DataFrame, cfg: ResearchConfig) -> dict:
     gng = cfg.go_no_go_1
+    scores = ("brier", "brier_baseline", "skill", "skill_ci", "ece", "calibration_p", "hit_rate")
+    empty = dict.fromkeys((*scores, "band_coverage_80"), None)
+    if records.empty:
+        return empty | {"n_scored": 0}
+    graded = records[(records["status"] == "graded") & records["in_population"]]
+    scored = graded[~graded["abstain"] & graded["p_up"].notna() & graded["base_rate"].notna()]
+    if scored.empty:
+        band_steps = int(graded["band_steps"].sum())
+        coverage = float(graded["band_hits"].sum()) / band_steps if band_steps else None
+        return empty | {"n_scored": 0, "band_coverage_80": coverage}
+    brier, baseline = _mean(scored["brier"]), _mean(scored["brier_baseline"])
+    dates = scored["ref_time"].dt.tz_convert(IST).dt.date
+    ece, calibration_p = calibration_self_consistency(
+        scored["p_up"].to_numpy(float),
+        scored["y"].to_numpy(float),
+        gng.ece_bins,
+        gng.ece_binning,
+        sims=CALIBRATION_SIMS,
+        seed=SEED,
+    )
     band_steps = int(graded["band_steps"].sum())
     return {
         "n_scored": len(scored),
         "brier": brier,
         "brier_baseline": baseline,
         "skill": (1.0 - brier / baseline) if brier is not None and baseline else None,
-        "ece": expected_calibration_error(
-            scored["p_up"].to_numpy(float), scored["y"].to_numpy(float), gng.ece_bins, gng.ece_binning
+        "skill_ci": clustered_bootstrap_skill_ci(
+            scored["brier"].to_numpy(float),
+            scored["brier_baseline"].to_numpy(float),
+            dates.to_numpy(),
+            cfg.ci_level,
+            resamples=BOOTSTRAP_RESAMPLES,
+            seed=SEED,
         ),
+        "ece": ece,
+        "calibration_p": calibration_p,
         "hit_rate": _mean(scored["direction_hit"]),
         "band_coverage_80": float(graded["band_hits"].sum()) / band_steps if band_steps else None,
     }
+
+
+def _gates(summary: dict, n_certified: int | None, cfg: ResearchConfig) -> tuple[dict, dict]:
+    gng = cfg.go_no_go_1
+    skill, p = summary["skill"], summary["calibration_p"]
+    details = {
+        "certified_buckets": {
+            "value": n_certified,
+            "required": gng.require_certified_buckets,
+            "pass": n_certified is not None and n_certified >= gng.require_certified_buckets,
+        },
+        "brier_skill": {
+            "value": skill,
+            "ci": summary["skill_ci"],
+            "ci_level": cfg.ci_level,
+            "ci_method": gng.brier_skill_ci,
+            "above": gng.require_brier_skill_above,
+            "pass": skill is not None and skill > gng.require_brier_skill_above,
+        },
+        "calibration": {
+            "test": gng.calibration_test,
+            "ece": summary["ece"],
+            "p_value": p,
+            "min_p": gng.calibration_min_p,
+            "n_scored": summary["n_scored"],
+            "min_scored": gng.min_scored,
+            "sims": CALIBRATION_SIMS,
+            "pass": p is not None and p >= gng.calibration_min_p and summary["n_scored"] >= gng.min_scored,
+        },
+    }
+    return {name: d["pass"] for name, d in details.items()}, details
 
 
 def evaluate_forecasts(
@@ -197,6 +292,7 @@ def evaluate_forecasts(
     if period == "holdout" and not allow_holdout:
         raise PermissionError("the holdout is locked; an official go/no-go run passes allow_holdout=True")
     cfg = load_research_config()
+    gng = cfg.go_no_go_1
     ids = list(instruments) if instruments is not None else default_instruments(tf)
     start = cfg.train_end_utc(tf) if period == "validation" else cfg.holdout_start_utc
     end = cfg.holdout_start_utc if period == "validation" else None
@@ -216,15 +312,12 @@ def evaluate_forecasts(
         rows.extend(records)
         not_recorded += skipped
     records = pd.DataFrame(rows)
+    if not records.empty:
+        records["in_population"] = in_population(records, gng.population)
     summary = _summarise(records, cfg)
     status = records["status"] if not records.empty else pd.Series(dtype=object)
     n_certified = int(card.rows["certified"].sum()) if card is not None and len(card.rows) else None
-    gng = cfg.go_no_go_1
-    gates = {
-        "certified_buckets": n_certified is not None and n_certified >= gng.require_certified_buckets,
-        "brier_skill": summary["skill"] is not None and summary["skill"] > gng.require_brier_skill_above,
-        "ece": summary["ece"] is not None and summary["ece"] < gng.require_ece_below,
-    }
+    gates, details = _gates(summary, n_certified, cfg)
     return Evaluation(
         tf=tf,
         method=method,
@@ -232,16 +325,23 @@ def evaluate_forecasts(
         start=start.isoformat(),
         end=end.isoformat() if end is not None else None,
         instruments=ids,
+        population=gng.population,
         n_forecasts=len(records),
         n_not_recorded=not_recorded,
         n_abstained=int(records["abstain"].sum()) if not records.empty else 0,
         n_graded=int((status == "graded").sum()),
         n_void=int((status == "void").sum()),
         n_unresolved=int((status == "unresolved").sum()),
+        n_in_population=int(records["in_population"].sum()) if not records.empty else 0,
+        ci_level=cfg.ci_level,
         ece_bins=gng.ece_bins,
         ece_binning=gng.ece_binning,
+        calibration_sims=CALIBRATION_SIMS,
+        bootstrap_resamples=BOOTSTRAP_RESAMPLES,
+        seed=SEED,
         n_certified=n_certified,
         gates=gates,
+        gate_details=details,
         records=records,
         **summary,
     )
