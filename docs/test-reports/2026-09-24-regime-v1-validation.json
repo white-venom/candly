@@ -1,0 +1,931 @@
+{
+  "model": "regime_v1",
+  "period": "validation",
+  "generated_at": "2026-09-24T06:22:32.218042+00:00",
+  "pivot_sha256": "92e098c668be2324a6f532acfba298503d8088e78d4db6b53efd4e1c2b2e5075",
+  "config_hashes": {
+    "pivot.yaml": "92e098c668be2324a6f532acfba298503d8088e78d4db6b53efd4e1c2b2e5075",
+    "research.yaml": "642e412d15a156732d7a5d726bbf1eb699497b253e24222d6750eb89015bc7d5",
+    "costs.yaml": "c07fd90cd49a8eb68b5e1bf4ad07fb12aae5e6f697531854f51e4b303b2d791c",
+    "watchlist.yaml": "0be3a783d10a75d3dd72002306efd0a0da844e146f19d33b27610156d9bfb0a6"
+  },
+  "hyperparameters": {
+    "lightgbm": {
+      "objective": "binary",
+      "learning_rate": 0.03,
+      "num_leaves": 7,
+      "max_depth": 3,
+      "min_data_in_leaf": 1000,
+      "bagging_fraction": 0.5,
+      "bagging_freq": 1,
+      "feature_fraction": 0.7,
+      "lambda_l2": 10.0,
+      "seed": 20260924,
+      "deterministic": true,
+      "force_row_wise": true,
+      "num_threads": 4,
+      "verbosity": -1
+    },
+    "num_boost_round": 200,
+    "calibration": {
+      "method": "isotonic",
+      "inner_windows": 6
+    },
+    "prob_clip": [
+      0.01,
+      0.99
+    ],
+    "min_train_rows": 2000,
+    "features": [
+      "ret_5",
+      "ret_20",
+      "ret_60",
+      "ret_120",
+      "ret_250",
+      "ret_5_vol",
+      "ret_20_vol",
+      "ret_60_vol",
+      "ret_120_vol",
+      "ret_250_vol",
+      "ret_250_skip20",
+      "close_ema20_atr",
+      "close_ema50_atr",
+      "close_ema200_atr",
+      "ema20_ema50_atr",
+      "ema50_ema200_atr",
+      "ema20_slope_atr",
+      "ema50_slope_atr",
+      "ema200_slope_atr",
+      "adx14",
+      "di_diff14",
+      "natr14",
+      "natr14_pctile_250",
+      "vol_20",
+      "vol_ratio_20_60",
+      "dist_high_250_atr",
+      "dist_low_250_atr",
+      "range_pos_250",
+      "mkt_ret_5",
+      "mkt_ret_20",
+      "mkt_ret_60",
+      "mkt_close_ema200_atr",
+      "mkt_ema50_ema200_atr",
+      "mkt_dist_high_250_atr",
+      "rel_ret_60",
+      "vix",
+      "vix_chg_20"
+    ],
+    "required_features": [
+      "ret_5",
+      "ret_20",
+      "ret_60",
+      "ret_120",
+      "ret_250",
+      "ret_5_vol",
+      "ret_20_vol",
+      "ret_60_vol",
+      "ret_120_vol",
+      "ret_250_vol",
+      "ret_250_skip20",
+      "close_ema20_atr",
+      "close_ema50_atr",
+      "close_ema200_atr",
+      "ema20_ema50_atr",
+      "ema50_ema200_atr",
+      "ema20_slope_atr",
+      "ema50_slope_atr",
+      "ema200_slope_atr",
+      "adx14",
+      "di_diff14",
+      "natr14",
+      "natr14_pctile_250",
+      "vol_20",
+      "vol_ratio_20_60",
+      "dist_high_250_atr",
+      "dist_low_250_atr",
+      "range_pos_250",
+      "mkt_ret_5",
+      "mkt_ret_20",
+      "mkt_ret_60",
+      "mkt_close_ema200_atr",
+      "mkt_ema50_ema200_atr",
+      "mkt_dist_high_250_atr",
+      "rel_ret_60"
+    ]
+  },
+  "protocol": {
+    "walk_forward": {
+      "retrain_every_months": 6,
+      "expanding": true,
+      "gap_bars": {
+        "5": 20,
+        "20": 30
+      }
+    },
+    "base_rate": "per instrument, up-rate of the model's own training rows",
+    "resampling": "blocks of h consecutive trading days, all instruments together",
+    "bootstrap_resamples": 2000,
+    "calibration_sims": 2000,
+    "ece_bins": 10,
+    "ece_binning": "quantile",
+    "ci_level": 0.95,
+    "top_decile": "top 10% of |p_up - 0.5|, traded in the called direction, next open to close[t+h]",
+    "costs_holding": "multi_day",
+    "seed": 20260924
+  },
+  "caveats": [
+    "Universe is today's watchlist large caps (survivorship bias): results are an upper bound.",
+    "The pre-registered calibration gate simulates independent outcomes; overlapping labels and same-day cross-instrument correlation make it reject calibrated forecasts more often than 5%. calibration_clustered (block-clustered Wald test of intercept 0, slope 1) and calibration_p_thinned are diagnostics only and do not change the gate."
+  ],
+  "pass_rule": "at least one horizon passes every check",
+  "n_hypotheses": 2,
+  "fdr_alpha": 0.1,
+  "horizons": {
+    "5": {
+      "horizon": 5,
+      "period": "validation",
+      "start": "2018-12-31T18:30:00+00:00",
+      "end": "2025-09-30T18:30:00+00:00",
+      "instruments": [
+        "NSE:AXISBANK",
+        "NSE:BANKNIFTY",
+        "NSE:BHARTIARTL",
+        "NSE:HDFCBANK",
+        "NSE:ICICIBANK",
+        "NSE:INFY",
+        "NSE:ITC",
+        "NSE:LT",
+        "NSE:NIFTY50",
+        "NSE:RELIANCE",
+        "NSE:SBIN",
+        "NSE:TCS"
+      ],
+      "gap_bars": 20,
+      "n_folds": 14,
+      "n_rows": 20099,
+      "n_no_features": 0,
+      "n_flat": 14,
+      "n_unresolved": 60,
+      "n_unfitted": 0,
+      "n_scored": 20025,
+      "n_dates": 1670,
+      "n_blocks": 335,
+      "methods": {
+        "regime_v1": {
+          "brier": 0.254792191981069,
+          "brier_base_rate": 0.2481584046695955,
+          "skill": -0.026732067851201302,
+          "skill_ci": [
+            -0.04599782519033323,
+            -0.008167003662366322
+          ],
+          "skill_ci_method": "block bootstrap, blocks of 5 trading days",
+          "skill_ci_by_date": [
+            -0.03673509633653845,
+            -0.01673135741017868
+          ],
+          "skill_p_one_sided": 0.999,
+          "ece": 0.050777600710875614,
+          "calibration_p": 0.0,
+          "calibration_p_thinned": 0.0,
+          "ece_thinned": 0.05784190614042066,
+          "n_thinned": 4005,
+          "calibration_clustered": {
+            "intercept": -0.011498232718592342,
+            "slope": -0.060846497284871015,
+            "wald": 51.987695370498045,
+            "df": 2,
+            "p_value": 5.1406186424584405e-12,
+            "n_clusters": 335
+          },
+          "mean_p_up": 0.5552185822816385,
+          "up_rate": 0.5437203495630462,
+          "hit_rate": 0.5438701622971286,
+          "top_decile": {
+            "n": 2003,
+            "n_long": 1968,
+            "n_short": 35,
+            "conviction_threshold": 0.08303057659274023,
+            "mean_p_up": 0.703935293957953,
+            "hit_rate": 0.54618072890664,
+            "base_hit_rate": 0.543900842718591,
+            "hit_vs_base_z": 0.07593707275071199,
+            "hit_vs_base_p": 0.4697345811031709,
+            "n_clusters": 153,
+            "mean_gross_return": 0.002545557859943468,
+            "mean_cost": 0.0028242816655017467,
+            "expectancy": -0.0002787238055582773,
+            "expectancy_ci": [
+              -0.00866246311850856,
+              0.008055085367083872
+            ]
+          },
+          "skill_vs": {
+            "base_rate": {
+              "skill": -0.026732067851201302,
+              "ci": [
+                -0.04599782519033323,
+                -0.008167003662366322
+              ]
+            },
+            "trend_rule_ema200": {
+              "skill": -0.026640394204993756,
+              "ci": [
+                -0.04596659821652309,
+                -0.008086927933092406
+              ]
+            },
+            "momentum_sign_20d": {
+              "skill": -0.025495192847369674,
+              "ci": [
+                -0.045028351946411305,
+                -0.006707980044800564
+              ]
+            }
+          },
+          "gates": {
+            "brier_skill_ci_lower": {
+              "value": -0.04599782519033323,
+              "above": 0.0,
+              "ci": [
+                -0.04599782519033323,
+                -0.008167003662366322
+              ],
+              "pass": false
+            },
+            "calibration": {
+              "p_value": 0.0,
+              "min_p": 0.05,
+              "pass": false
+            },
+            "min_scored": {
+              "value": 20025,
+              "required": 500,
+              "pass": true
+            },
+            "top_decile_expectancy_after_costs": {
+              "value": -0.0002787238055582773,
+              "required_positive": true,
+              "pass": false
+            }
+          },
+          "pass": false
+        },
+        "base_rate": {
+          "brier": 0.2481584046695955,
+          "brier_base_rate": 0.2481584046695955,
+          "skill": 0.0,
+          "skill_ci": [
+            0.0,
+            0.0
+          ],
+          "skill_ci_method": "block bootstrap, blocks of 5 trading days",
+          "skill_ci_by_date": [
+            0.0,
+            0.0
+          ],
+          "skill_p_one_sided": 1.0,
+          "ece": 0.01900296318737829,
+          "calibration_p": 0.0,
+          "calibration_p_thinned": 0.3365,
+          "ece_thinned": 0.021571211708690353,
+          "n_thinned": 4005,
+          "calibration_clustered": {
+            "intercept": 0.0009773375297095815,
+            "slope": 0.31587441602161614,
+            "wald": 4.335506975056534,
+            "df": 2,
+            "p_value": 0.1144344066839358,
+            "n_clusters": 335
+          },
+          "mean_p_up": 0.5427430120333366,
+          "up_rate": 0.5437203495630462,
+          "hit_rate": 0.5437203495630462,
+          "top_decile": {
+            "n": 2039,
+            "n_long": 2039,
+            "n_short": 0,
+            "conviction_threshold": 0.05875781948168002,
+            "mean_p_up": 0.5691298466682284,
+            "hit_rate": 0.558116723884257,
+            "base_hit_rate": 0.5691298466682284,
+            "hit_vs_base_z": -0.5198768849562356,
+            "hit_vs_base_p": 0.6984253064087783,
+            "n_clusters": 335,
+            "mean_gross_return": 0.0007909886694264871,
+            "mean_cost": 0.0014351880000000004,
+            "expectancy": -0.0006441993305735131,
+            "expectancy_ci": [
+              -0.0035599859102569457,
+              0.002240615406208558
+            ]
+          },
+          "gates": {
+            "brier_skill_ci_lower": {
+              "value": 0.0,
+              "above": 0.0,
+              "ci": [
+                0.0,
+                0.0
+              ],
+              "pass": false
+            },
+            "calibration": {
+              "p_value": 0.0,
+              "min_p": 0.05,
+              "pass": false
+            },
+            "min_scored": {
+              "value": 20025,
+              "required": 500,
+              "pass": true
+            },
+            "top_decile_expectancy_after_costs": {
+              "value": -0.0006441993305735131,
+              "required_positive": true,
+              "pass": false
+            }
+          },
+          "pass": false
+        },
+        "trend_rule_ema200": {
+          "brier": 0.24818056392411297,
+          "brier_base_rate": 0.2481584046695955,
+          "skill": -8.929479759900438e-05,
+          "skill_ci": [
+            -0.001197961517549478,
+            0.0009926494651563695
+          ],
+          "skill_ci_method": "block bootstrap, blocks of 5 trading days",
+          "skill_ci_by_date": [
+            -0.0008102335205884936,
+            0.0005806681388307616
+          ],
+          "skill_p_one_sided": 0.5755,
+          "ece": 0.015274910888634289,
+          "calibration_p": 0.0045,
+          "calibration_p_thinned": 0.879,
+          "ece_thinned": 0.014486665183004191,
+          "n_thinned": 4005,
+          "calibration_clustered": {
+            "intercept": -0.0005175446865580863,
+            "slope": 0.3769783499760071,
+            "wald": 6.209159533668546,
+            "df": 2,
+            "p_value": 0.04484335926707109,
+            "n_clusters": 335
+          },
+          "mean_p_up": 0.5442378942496042,
+          "up_rate": 0.5437203495630462,
+          "hit_rate": 0.5431210986267166,
+          "top_decile": {
+            "n": 2053,
+            "n_long": 2053,
+            "n_short": 0,
+            "conviction_threshold": 0.06745362563237778,
+            "mean_p_up": 0.5813012186791965,
+            "hit_rate": 0.5586945932781295,
+            "base_hit_rate": 0.5628592105841311,
+            "hit_vs_base_z": -0.20745776373095756,
+            "hit_vs_base_p": 0.5821738126269478,
+            "n_clusters": 334,
+            "mean_gross_return": 0.0016952581945573668,
+            "mean_cost": 0.002095963676570872,
+            "expectancy": -0.0004007054820135051,
+            "expectancy_ci": [
+              -0.0026609032423735436,
+              0.0018202359128020082
+            ]
+          },
+          "gates": {
+            "brier_skill_ci_lower": {
+              "value": -0.001197961517549478,
+              "above": 0.0,
+              "ci": [
+                -0.001197961517549478,
+                0.0009926494651563695
+              ],
+              "pass": false
+            },
+            "calibration": {
+              "p_value": 0.0045,
+              "min_p": 0.05,
+              "pass": false
+            },
+            "min_scored": {
+              "value": 20025,
+              "required": 500,
+              "pass": true
+            },
+            "top_decile_expectancy_after_costs": {
+              "value": -0.0004007054820135051,
+              "required_positive": true,
+              "pass": false
+            }
+          },
+          "pass": false
+        },
+        "momentum_sign_20d": {
+          "brier": 0.2484577146321067,
+          "brier_base_rate": 0.2481584046695955,
+          "skill": -0.0012061246239463141,
+          "skill_ci": [
+            -0.0028302105368142095,
+            0.0003100543824957046
+          ],
+          "skill_ci_method": "block bootstrap, blocks of 5 trading days",
+          "skill_ci_by_date": [
+            -0.0022360663201835434,
+            -0.00015937118052503107
+          ],
+          "skill_p_one_sided": 0.9365,
+          "ece": 0.02023659327199868,
+          "calibration_p": 0.0,
+          "calibration_p_thinned": 0.104,
+          "ece_thinned": 0.025931864050499444,
+          "n_thinned": 4005,
+          "calibration_clustered": {
+            "intercept": 0.0003390584306328346,
+            "slope": 0.11774223669301398,
+            "wald": 12.675006566257881,
+            "df": 2,
+            "p_value": 0.0017687127035469243,
+            "n_clusters": 335
+          },
+          "mean_p_up": 0.5433812911324134,
+          "up_rate": 0.5437203495630462,
+          "hit_rate": 0.5433707865168539,
+          "top_decile": {
+            "n": 2035,
+            "n_long": 2035,
+            "n_short": 0,
+            "conviction_threshold": 0.06959813628421663,
+            "mean_p_up": 0.5833274048968727,
+            "hit_rate": 0.5503685503685504,
+            "base_hit_rate": 0.5589389817912299,
+            "hit_vs_base_z": -0.4182876200866673,
+            "hit_vs_base_p": 0.6621315800216448,
+            "n_clusters": 299,
+            "mean_gross_return": 0.000604006042425053,
+            "mean_cost": 0.0021471701169533167,
+            "expectancy": -0.0015431640745282636,
+            "expectancy_ci": [
+              -0.003899676035912573,
+              0.000726801561132529
+            ]
+          },
+          "gates": {
+            "brier_skill_ci_lower": {
+              "value": -0.0028302105368142095,
+              "above": 0.0,
+              "ci": [
+                -0.0028302105368142095,
+                0.0003100543824957046
+              ],
+              "pass": false
+            },
+            "calibration": {
+              "p_value": 0.0,
+              "min_p": 0.05,
+              "pass": false
+            },
+            "min_scored": {
+              "value": 20025,
+              "required": 500,
+              "pass": true
+            },
+            "top_decile_expectancy_after_costs": {
+              "value": -0.0015431640745282636,
+              "required_positive": true,
+              "pass": false
+            }
+          },
+          "pass": false
+        }
+      },
+      "gates": {
+        "brier_skill_ci_lower": {
+          "value": -0.04599782519033323,
+          "above": 0.0,
+          "ci": [
+            -0.04599782519033323,
+            -0.008167003662366322
+          ],
+          "pass": false
+        },
+        "calibration": {
+          "p_value": 0.0,
+          "min_p": 0.05,
+          "pass": false
+        },
+        "min_scored": {
+          "value": 20025,
+          "required": 500,
+          "pass": true
+        },
+        "top_decile_expectancy_after_costs": {
+          "value": -0.0002787238055582773,
+          "required_positive": true,
+          "pass": false
+        }
+      },
+      "runtime_s": 194.4,
+      "pass": false,
+      "skill_q": 0.999
+    },
+    "20": {
+      "horizon": 20,
+      "period": "validation",
+      "start": "2018-12-31T18:30:00+00:00",
+      "end": "2025-09-30T18:30:00+00:00",
+      "instruments": [
+        "NSE:AXISBANK",
+        "NSE:BANKNIFTY",
+        "NSE:BHARTIARTL",
+        "NSE:HDFCBANK",
+        "NSE:ICICIBANK",
+        "NSE:INFY",
+        "NSE:ITC",
+        "NSE:LT",
+        "NSE:NIFTY50",
+        "NSE:RELIANCE",
+        "NSE:SBIN",
+        "NSE:TCS"
+      ],
+      "gap_bars": 30,
+      "n_folds": 14,
+      "n_rows": 20099,
+      "n_no_features": 0,
+      "n_flat": 8,
+      "n_unresolved": 240,
+      "n_unfitted": 0,
+      "n_scored": 19851,
+      "n_dates": 1655,
+      "n_blocks": 83,
+      "methods": {
+        "regime_v1": {
+          "brier": 0.25162330938647876,
+          "brier_base_rate": 0.2443873380188,
+          "skill": -0.02960861813193505,
+          "skill_ci": [
+            -0.054865048594975825,
+            -0.006699760439521086
+          ],
+          "skill_ci_method": "block bootstrap, blocks of 20 trading days",
+          "skill_ci_by_date": [
+            -0.03813666840875341,
+            -0.020608415982187985
+          ],
+          "skill_p_one_sided": 0.9945,
+          "ece": 0.0814989008655002,
+          "calibration_p": 0.0,
+          "calibration_p_thinned": 0.0,
+          "ece_thinned": 0.11567549937958223,
+          "n_thinned": 983,
+          "calibration_clustered": {
+            "intercept": -0.015001638760407554,
+            "slope": -0.06775046425166731,
+            "wald": 25.86390406951899,
+            "df": 2,
+            "p_value": 2.419494231806471e-06,
+            "n_clusters": 83
+          },
+          "mean_p_up": 0.593612288097972,
+          "up_rate": 0.5786106493375649,
+          "hit_rate": 0.5713062314241096,
+          "top_decile": {
+            "n": 2020,
+            "n_long": 1990,
+            "n_short": 30,
+            "conviction_threshold": 0.14406779661016955,
+            "mean_p_up": 0.7751945572133441,
+            "hit_rate": 0.6153465346534653,
+            "base_hit_rate": 0.577227363248527,
+            "hit_vs_base_z": 0.6884112648369332,
+            "hit_vs_base_p": 0.24559691600338113,
+            "n_clusters": 52,
+            "mean_gross_return": 0.01803921746010654,
+            "mean_cost": 0.002944125734653465,
+            "expectancy": 0.01509509172545308,
+            "expectancy_ci": [
+              -0.0032771833313641275,
+              0.03028948280532423
+            ]
+          },
+          "skill_vs": {
+            "base_rate": {
+              "skill": -0.02960861813193505,
+              "ci": [
+                -0.054865048594975825,
+                -0.006699760439521086
+              ]
+            },
+            "trend_rule_ema200": {
+              "skill": -0.030347867524681105,
+              "ci": [
+                -0.05584348398962609,
+                -0.007845247822572671
+              ]
+            },
+            "momentum_sign_20d": {
+              "skill": -0.02677084508326577,
+              "ci": [
+                -0.05301234010094938,
+                -0.003392416381285342
+              ]
+            }
+          },
+          "gates": {
+            "brier_skill_ci_lower": {
+              "value": -0.054865048594975825,
+              "above": 0.0,
+              "ci": [
+                -0.054865048594975825,
+                -0.006699760439521086
+              ],
+              "pass": false
+            },
+            "calibration": {
+              "p_value": 0.0,
+              "min_p": 0.05,
+              "pass": false
+            },
+            "min_scored": {
+              "value": 19851,
+              "required": 500,
+              "pass": true
+            },
+            "top_decile_expectancy_after_costs": {
+              "value": 0.01509509172545308,
+              "required_positive": true,
+              "pass": true
+            }
+          },
+          "pass": false
+        },
+        "base_rate": {
+          "brier": 0.2443873380188,
+          "brier_base_rate": 0.2443873380188,
+          "skill": 0.0,
+          "skill_ci": [
+            0.0,
+            0.0
+          ],
+          "skill_ci_method": "block bootstrap, blocks of 20 trading days",
+          "skill_ci_by_date": [
+            0.0,
+            0.0
+          ],
+          "skill_p_one_sided": 1.0,
+          "ece": 0.02633452861361346,
+          "calibration_p": 0.0,
+          "calibration_p_thinned": 0.678,
+          "ece_thinned": 0.034321963227223765,
+          "n_thinned": 983,
+          "calibration_clustered": {
+            "intercept": 0.0004834873320982782,
+            "slope": -0.26854349689668244,
+            "wald": 8.1653925199545,
+            "df": 2,
+            "p_value": 0.016861940131649523,
+            "n_clusters": 83
+          },
+          "mean_p_up": 0.5781271620054665,
+          "up_rate": 0.5786106493375649,
+          "hit_rate": 0.5786106493375649,
+          "top_decile": {
+            "n": 2026,
+            "n_long": 2026,
+            "n_short": 0,
+            "conviction_threshold": 0.1052730696798494,
+            "mean_p_up": 0.6126349845319734,
+            "hit_rate": 0.56071076011846,
+            "base_hit_rate": 0.6126349845319734,
+            "hit_vs_base_z": -1.3453692456924267,
+            "hit_vs_base_p": 0.9107469891121684,
+            "n_clusters": 83,
+            "mean_gross_return": 0.007601084158255469,
+            "mean_cost": 0.0029486802961500485,
+            "expectancy": 0.004652403862105423,
+            "expectancy_ci": [
+              -0.0058683236528203385,
+              0.015346719112021363
+            ]
+          },
+          "gates": {
+            "brier_skill_ci_lower": {
+              "value": 0.0,
+              "above": 0.0,
+              "ci": [
+                0.0,
+                0.0
+              ],
+              "pass": false
+            },
+            "calibration": {
+              "p_value": 0.0,
+              "min_p": 0.05,
+              "pass": false
+            },
+            "min_scored": {
+              "value": 19851,
+              "required": 500,
+              "pass": true
+            },
+            "top_decile_expectancy_after_costs": {
+              "value": 0.004652403862105423,
+              "required_positive": true,
+              "pass": true
+            }
+          },
+          "pass": false
+        },
+        "trend_rule_ema200": {
+          "brier": 0.24421199608146063,
+          "brier_base_rate": 0.2443873380188,
+          "skill": 0.0007174755401029298,
+          "skill_ci": [
+            -0.002178495180666989,
+            0.003816318906797825
+          ],
+          "skill_ci_method": "block bootstrap, blocks of 20 trading days",
+          "skill_ci_by_date": [
+            -0.0004344329722562711,
+            0.0018394067104173318
+          ],
+          "skill_p_one_sided": 0.327,
+          "ece": 0.04539178312794509,
+          "calibration_p": 0.0,
+          "calibration_p_thinned": 0.0845,
+          "ece_thinned": 0.05286346289022262,
+          "n_thinned": 983,
+          "calibration_clustered": {
+            "intercept": -0.0010536117310470962,
+            "slope": 0.2626331254785773,
+            "wald": 5.31822233967608,
+            "df": 2,
+            "p_value": 0.07001042147231958,
+            "n_clusters": 83
+          },
+          "mean_p_up": 0.5796642610686119,
+          "up_rate": 0.5786106493375649,
+          "hit_rate": 0.5786106493375649,
+          "top_decile": {
+            "n": 1992,
+            "n_long": 1992,
+            "n_short": 0,
+            "conviction_threshold": 0.10797082573586869,
+            "mean_p_up": 0.6302513870507012,
+            "hit_rate": 0.5943775100401606,
+            "base_hit_rate": 0.5939442162270772,
+            "hit_vs_base_z": 0.010100711897727384,
+            "hit_vs_base_p": 0.495970467480386,
+            "n_clusters": 72,
+            "mean_gross_return": 0.015133549815122124,
+            "mean_cost": 0.0030943949819277096,
+            "expectancy": 0.012039154833194414,
+            "expectancy_ci": [
+              -0.004239395597393549,
+              0.027523933443277634
+            ]
+          },
+          "gates": {
+            "brier_skill_ci_lower": {
+              "value": -0.002178495180666989,
+              "above": 0.0,
+              "ci": [
+                -0.002178495180666989,
+                0.003816318906797825
+              ],
+              "pass": false
+            },
+            "calibration": {
+              "p_value": 0.0,
+              "min_p": 0.05,
+              "pass": false
+            },
+            "min_scored": {
+              "value": 19851,
+              "required": 500,
+              "pass": true
+            },
+            "top_decile_expectancy_after_costs": {
+              "value": 0.012039154833194414,
+              "required_positive": true,
+              "pass": true
+            }
+          },
+          "pass": false
+        },
+        "momentum_sign_20d": {
+          "brier": 0.24506277188467834,
+          "brier_base_rate": 0.2443873380188,
+          "skill": -0.002763784209746545,
+          "skill_ci": [
+            -0.006645703848301559,
+            0.001174271610933873
+          ],
+          "skill_ci_method": "block bootstrap, blocks of 20 trading days",
+          "skill_ci_by_date": [
+            -0.004218188390665222,
+            -0.0013001642505919237
+          ],
+          "skill_p_one_sided": 0.9265,
+          "ece": 0.04473716779579063,
+          "calibration_p": 0.0,
+          "calibration_p_thinned": 0.0005,
+          "ece_thinned": 0.07493707835125384,
+          "n_thinned": 983,
+          "calibration_clustered": {
+            "intercept": -0.0004667608594870916,
+            "slope": -0.15714063480053797,
+            "wald": 13.970521091903906,
+            "df": 2,
+            "p_value": 0.0009254221502132689,
+            "n_clusters": 83
+          },
+          "mean_p_up": 0.5790774101970521,
+          "up_rate": 0.5786106493375649,
+          "hit_rate": 0.5786106493375649,
+          "top_decile": {
+            "n": 1988,
+            "n_long": 1988,
+            "n_short": 0,
+            "conviction_threshold": 0.12171899125064334,
+            "mean_p_up": 0.6329086964210949,
+            "hit_rate": 0.5503018108651911,
+            "base_hit_rate": 0.5968121787007531,
+            "hit_vs_base_z": -1.1284694281813046,
+            "hit_vs_base_p": 0.8704391394942915,
+            "n_clusters": 81,
+            "mean_gross_return": 0.004688781504823874,
+            "mean_cost": 0.003000827317907444,
+            "expectancy": 0.001687954186916432,
+            "expectancy_ci": [
+              -0.013302859469633159,
+              0.015037894295190753
+            ]
+          },
+          "gates": {
+            "brier_skill_ci_lower": {
+              "value": -0.006645703848301559,
+              "above": 0.0,
+              "ci": [
+                -0.006645703848301559,
+                0.001174271610933873
+              ],
+              "pass": false
+            },
+            "calibration": {
+              "p_value": 0.0,
+              "min_p": 0.05,
+              "pass": false
+            },
+            "min_scored": {
+              "value": 19851,
+              "required": 500,
+              "pass": true
+            },
+            "top_decile_expectancy_after_costs": {
+              "value": 0.001687954186916432,
+              "required_positive": true,
+              "pass": true
+            }
+          },
+          "pass": false
+        }
+      },
+      "gates": {
+        "brier_skill_ci_lower": {
+          "value": -0.054865048594975825,
+          "above": 0.0,
+          "ci": [
+            -0.054865048594975825,
+            -0.006699760439521086
+          ],
+          "pass": false
+        },
+        "calibration": {
+          "p_value": 0.0,
+          "min_p": 0.05,
+          "pass": false
+        },
+        "min_scored": {
+          "value": 19851,
+          "required": 500,
+          "pass": true
+        },
+        "top_decile_expectancy_after_costs": {
+          "value": 0.01509509172545308,
+          "required_positive": true,
+          "pass": true
+        }
+      },
+      "runtime_s": 233.1,
+      "pass": false,
+      "skill_q": 0.999
+    }
+  },
+  "pass": false,
+  "runtime_s": 429.8
+}
