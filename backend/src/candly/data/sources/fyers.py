@@ -432,6 +432,7 @@ def refresh_access_token(token: FyersToken) -> FyersToken:
     except FyersAuthError as exc:
         if not exc.rejects_session:
             raise FyersError(f"Fyers session refresh failed ({exc}); will retry") from exc
+        log.warning("Fyers rejected the session refresh (code %s): %s", exc.code, exc)
         token.refresh_token, token.refresh_expires_at = None, None
         save_token(token)
         raise FyersNotConnected(f"Fyers session refresh was rejected ({exc}): log in again") from exc
