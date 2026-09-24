@@ -2,12 +2,14 @@ import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { AppRoutes } from "../App";
+import type { CandlesResponse } from "../api/types";
 import type { DrawnLevel } from "../chart/levels";
 import type { MarkerGlyph } from "../chart/transforms";
 import {
   DAY,
   T0,
   abstainingForecast,
+  candle,
   candles,
   catalog,
   forecast,
@@ -67,7 +69,8 @@ describe("chart page", () => {
   it("shows a loading state while candles load", async () => {
     api({ "/api/candles": never });
     renderWithProviders(<AppRoutes />, { route: ROUTE });
-    expect(await screen.findByText("Loading candles…")).toBeTruthy();
+    // the first render in this file also pays for loading the page's modules
+    expect(await screen.findByText("Loading candles…", undefined, { timeout: 5000 })).toBeTruthy();
   });
 
   it("renders the top bar, the chart and the setup panel", async () => {
@@ -90,11 +93,24 @@ describe("chart page", () => {
     expect(chart().dataset.markers).toBe("bearish(hollow),bullish");
   });
 
+  it("puts the expected next candle first in the panel and keys it on the chart", async () => {
+    api();
+    renderWithProviders(<AppRoutes />, { route: ROUTE });
+    const expected = await (await findPanel()).findByRole("region", { name: "Expected next candle" });
+    expect(expected.textContent).toContain("Next session · Thu 24 Sep");
+    expect(expected.textContent).toContain("Likely range 101.00 – 106.00");
+    const verdict = within(panel()).getByRole("region", { name: "Verdict" });
+    expect(expected.compareDocumentPosition(verdict) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByText("Expected (next 3)")).toBeTruthy();
+  });
+
   it("says abstaining plainly, with no trade card", async () => {
     api({ "/api/forecast": abstainingForecast });
     renderWithProviders(<AppRoutes />, { route: ROUTE });
     expect(await (await findPanel()).findByText("No clear edge")).toBeTruthy();
-    expect(within(panel()).getByText("The odds are too close to a coin flip.")).toBeTruthy();
+    expect(within(panel()).getByText("Up/down unclear")).toBeTruthy();
+    const verdict = within(panel()).getByRole("region", { name: "Verdict" });
+    expect(within(verdict).getByText("The odds are too close to a coin flip.")).toBeTruthy();
     expect(within(panel()).queryByRole("region", { name: "Trade plan" })).toBeNull();
   });
 
@@ -174,6 +190,15 @@ describe("chart page", () => {
       expect(chart().dataset.forecast).toBe("no");
     });
 
+    it("show the forecast even when an older version of the app had it switched off", async () => {
+      window.localStorage.setItem("candly.layers", JSON.stringify({ patterns: true, levels: true, forecast: false, allLevels: false }));
+      api();
+      renderWithProviders(<AppRoutes />, { route: ROUTE });
+      await (await findPanel()).findByText("Bullish setup");
+      expect(chart().dataset.forecast).toBe("yes");
+      expect(screen.getByRole("button", { name: "Forecast" }).getAttribute("aria-pressed")).toBe("true");
+    });
+
     it("say where stale levels come from", async () => {
       api({ "/api/levels": { ...levels, as_of: T0 - 2 * DAY, stale: true } });
       renderWithProviders(<AppRoutes />, { route: ROUTE });
@@ -222,6 +247,8 @@ describe("chart page", () => {
     it("groups instruments with the day's price and change, and an EXP chip near expiry", async () => {
       api({
         "/api/instruments": ALL,
+        // no daily bars for the quote: the daily scanner row stands in
+        "/api/candles": (url: URL) => (url.searchParams.get("limit") === "2" ? jsonResponse(503, { detail: "no data" }) : jsonResponse(200, candles)),
         "/api/scanner": [scannerRow({}), scannerRow({ instrument: nifty.id, name: nifty.name, last_close: 23414.3, change_pct: -0.4 })],
       });
       renderWithProviders(<AppRoutes />, { route: ROUTE });
@@ -235,6 +262,29 @@ describe("chart page", () => {
       const active = within(list).getByRole("link", { name: /RELIANCE/ });
       expect(active.getAttribute("aria-current")).toBe("page");
       expect(within(active).getByText("Bullish")).toBeTruthy();
+    });
+
+    it("shows the live price and today's change while the market is open, and the last close when it isn't", async () => {
+      const daily: Record<string, CandlesResponse> = {
+        [nifty.id]: { ...candles, candles: [candle(T0 - DAY, 23300, 23330), candle(T0, 23330, 23414.3)], forming: candle(T0 + DAY, 23414.3, 23233.2) },
+        "MCX:CRUDEOIL": { ...candles, candles: [candle(T0 - DAY, 8600, 8700), candle(T0, 8700, 8643)], forming: null },
+      };
+      const fetchMock = api({
+        "/api/instruments": ALL,
+        "/api/scanner": [scannerRow({}), scannerRow({ instrument: nifty.id, name: nifty.name, last_close: 23414.3, change_pct: 0.4 })],
+        "/api/candles": (url: URL) =>
+          url.searchParams.get("limit") === "2" ? jsonResponse(200, daily[url.searchParams.get("instrument")!] ?? candles) : jsonResponse(200, candles),
+      });
+      renderWithProviders(<AppRoutes />, { route: ROUTE });
+      const list = await screen.findByRole("complementary", { name: "Watchlist" });
+      const niftyRow = await within(list).findByRole("link", { name: /NIFTY50/ });
+      await waitFor(() => expect(niftyRow.textContent).toContain("23,233.20"));
+      expect(niftyRow.textContent).toContain("-0.77%");
+      const crude = within(list).getByRole("link", { name: /CRUDEOIL/ });
+      await waitFor(() => expect(crude.textContent).toContain("8,643.00"), { timeout: 4000 });
+      expect(crude.textContent).toContain("-0.66%");
+      const quoted = fetchMock.mock.calls.map(([u]) => new URL(String(u), "http://localhost")).filter((u) => u.searchParams.get("limit") === "2");
+      expect(quoted.every((u) => u.searchParams.get("tf") === "1D")).toBe(true);
     });
 
     it("focuses search with /, filters, and steps with the arrow keys", async () => {
@@ -266,6 +316,29 @@ describe("chart page", () => {
       await user.keyboard("[[");
       await user.keyboard("[[");
       expect(screen.getByTestId("location").textContent).toBe("/chart/NSE:NIFTY50/1D");
+    });
+  });
+
+  describe("freshness", () => {
+    it("turns the as-of label amber when intraday data is more than two bars behind while the market is open", async () => {
+      api();
+      const { unmount } = renderWithProviders(<AppRoutes />, { route: "/chart/NSE:RELIANCE/5m" });
+      await screen.findByTestId("price-chart");
+      const label = screen.getByText(/^as of/);
+      expect(label.textContent).toMatch(/· [0-9]+ (min|h|days) behind$/);
+      expect(label.className).toContain("text-forming");
+      unmount();
+      api({ "/api/health": { ...health, markets: health.markets.map((m) => ({ ...m, open: false })) } });
+      renderWithProviders(<AppRoutes />, { route: "/chart/NSE:RELIANCE/5m" });
+      await screen.findByTestId("price-chart");
+      await waitFor(() => expect(screen.getByText(/^as of/).textContent).not.toContain("behind"));
+    });
+
+    it("never calls a daily chart behind", async () => {
+      api();
+      renderWithProviders(<AppRoutes />, { route: ROUTE });
+      await screen.findByTestId("price-chart");
+      expect(screen.getByText(/^as of/).textContent).toBe("as of 23 Sep");
     });
   });
 

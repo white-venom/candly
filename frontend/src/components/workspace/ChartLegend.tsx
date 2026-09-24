@@ -11,18 +11,21 @@ function fmtValue(v: number | undefined, onPrice: boolean): string {
   return Math.abs(v) >= 1e5 ? fmtVolume(v) : fmtNum(v, 2);
 }
 
-/** OHLC and change of the bar under the crosshair (else the latest), indicator values, and a stale-levels note. */
+/** OHLC and change of the bar under the crosshair (else the latest), indicator values, the forecast key, and a stale-levels note. */
 export function ChartLegend({
   tf,
   bar,
   plots,
   values,
+  expected,
   levelsNote,
 }: {
   tf: string;
   bar: HoverBar | null;
   plots: IndicatorPlot[];
   values: Record<string, number>;
+  /** forecast bars on the chart; 0 when the forecast layer is off */
+  expected: number;
   levelsNote: string | null;
 }) {
   const groups = [...new Map(plots.map((p) => [p.group, p])).values()];
@@ -68,6 +71,12 @@ export function ChartLegend({
             );
           })}
         </ul>
+      )}
+      {expected > 0 && (
+        <p className="inline-flex items-center gap-1.5 text-ink-muted">
+          <span aria-hidden="true" className="h-3 w-2.5 rounded-[2px] border border-band bg-band/15" />
+          Expected (next {expected})
+        </p>
       )}
       {levelsNote && <p className="font-medium text-forming">{levelsNote}</p>}
     </div>

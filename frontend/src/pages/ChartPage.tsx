@@ -23,13 +23,14 @@ import { LayerControls } from "../components/workspace/LayerControls";
 import { TopBar } from "../components/workspace/TopBar";
 import { Watchlist } from "../components/workspace/Watchlist";
 import { watchlistOrder } from "../lib/instruments";
-import { DEFAULT_LAYERS } from "../lib/layers";
+import { useLayers } from "../lib/layers";
+import { freshness } from "../lib/freshness";
 import { dataStatus } from "../lib/messages";
 import { usePref } from "../lib/prefs";
 import { chartPath, defaultSelection, readLastSelection, writeLastSelection } from "../lib/routes";
 import { useHotkeys } from "../lib/shortcuts";
 import { useSignalFilters, type SignalFilters } from "../lib/signalFilters";
-import { formatDayIST } from "../lib/time";
+import { formatDayIST, nowUnix } from "../lib/time";
 import { defaultTimeframe, sortTimeframes } from "../lib/timeframes";
 
 const NO_CANDLES: Candle[] = [];
@@ -82,7 +83,7 @@ function Workspace({
     selection.enabled.map((e) => e.name),
   );
   const health = useHealth();
-  const [layers, setLayers] = usePref("candly.layers", DEFAULT_LAYERS);
+  const [layers, setLayers] = useLayers();
   const [indicatorsOpen, setIndicatorsOpen] = useState(false);
 
   const tfs = sortTimeframes(info.timeframes);
@@ -113,6 +114,8 @@ function Workspace({
     layers.levels && levelsStale ? (levelData?.as_of !== undefined ? `Levels from ${formatDayIST(levelData.as_of)}` : "Levels from an older session") : null;
   const latest = useMemo(() => latestBar(closed, forming), [closed, forming]);
   const canConnect = dataStatus(health.data, health.error).canConnect;
+  const marketOpen = health.data?.markets.find((m) => m.exchange === info.exchange)?.open ?? false;
+  const fresh = freshness(closed.at(-1)?.time ?? null, forming?.time ?? null, tf, marketOpen, nowUnix());
   const noDataHint = canConnect ? `Connect Fyers — the backfill loads ${tf} candles.` : `Run ingest for ${tf} to load candles.`;
 
   return (
@@ -122,6 +125,7 @@ function Workspace({
         tf={tf}
         last={latest}
         asOf={closed.at(-1)?.time ?? null}
+        behind={fresh?.behind ? fresh.lag : null}
         onTimeframe={(t) => navigate(chartPath(info.id, t))}
         showWatchlist={showWatchlist}
         showPanel={showPanel}

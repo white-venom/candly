@@ -52,13 +52,13 @@ function setup() {
   const chart = lwc.state.chart;
   // creation order: volume, candles, p10, p50, p90, ghost
   const [volume, candleSeries, p10, p50, p90, ghost] = chart.series;
-  // attach order: band fill, price tags, pattern markers
-  const [bandFill, tags, markers] = candleSeries.attachPrimitive.mock.calls.map(([p]) => {
+  // attach order: band fill, expected box, price tags, pattern markers
+  const [bandFill, expectedBox, tags, markers] = candleSeries.attachPrimitive.mock.calls.map(([p]) => {
     vi.spyOn(p as Primitive, "set");
     return p as Primitive;
   });
   const lastTags = () => (tags.set.mock.lastCall?.[0] ?? []) as PriceTag[];
-  return { controller, chart, volume, candleSeries, p10, p50, p90, ghost, bandFill, tags, markers, lastTags };
+  return { controller, chart, volume, candleSeries, p10, p50, p90, ghost, bandFill, expectedBox, tags, markers, lastTags };
 }
 
 describe("PriceChartController", () => {
@@ -98,6 +98,26 @@ describe("PriceChartController", () => {
       ["Stop", forecast.trade!.stop, true, true],
       ["103.00", 103, false, true],
     ]);
+  });
+
+  it("boxes the bar forming now as Expected and draws ghosts only after it, following the chart as bars close", () => {
+    const { controller, expectedBox, ghost } = setup();
+    const light = chartTheme("light");
+    controller.setCandles(candles.candles, candle(T0 + DAY, 103, 105));
+    controller.setForecast(forecast);
+    expect(expectedBox.set).toHaveBeenLastCalledWith({ time: T0 + DAY, low: 101, mid: 104, high: 106 }, 107, chartTheme("dark").expected);
+    const drawn = () => (ghost.setData.mock.lastCall![0] as { time: number; open?: number }[]).filter((g) => "open" in g).map((g) => g.time);
+    expect(drawn()).toEqual([T0 + 2 * DAY, T0 + 3 * DAY]);
+
+    // the next bar is forming before a fresh forecast arrives: the box moves on with it
+    controller.setCandles([...candles.candles, candle(T0 + DAY, 103, 105)], candle(T0 + 2 * DAY, 105, 104));
+    expect(expectedBox.set.mock.lastCall![0]).toMatchObject({ time: T0 + 2 * DAY, low: 100 });
+    expect(drawn()).toEqual([T0 + 3 * DAY]);
+
+    controller.setTheme("light");
+    expect(expectedBox.set.mock.lastCall![2]).toEqual(light.expected);
+    controller.setForecast(null);
+    expect(expectedBox.set.mock.lastCall![0]).toBeNull();
   });
 
   it("draws no stop while abstaining, and greys the ghosts", () => {

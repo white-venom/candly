@@ -31,6 +31,14 @@ export function fmtPrice(x: Num): string {
   return isNum(x) ? priceFormat.format(x) : DASH;
 }
 
+const wholeFormat = new Intl.NumberFormat("en-IN", { maximumFractionDigits: 0 });
+
+/** Prices in a forecast range: whole numbers from 1,000 up (23,410), two decimals below (268.40). */
+export function fmtRangePrice(x: Num): string {
+  if (!isNum(x)) return DASH;
+  return Math.abs(x) >= 1000 ? wholeFormat.format(x) : priceFormat.format(x);
+}
+
 /** Rupees, Indian digit grouping: 100000 → "₹1,00,000". */
 export function fmtInr(x: Num, digits = 0): string {
   return isNum(x) ? `₹${x.toLocaleString("en-IN", { minimumFractionDigits: digits, maximumFractionDigits: digits })}` : DASH;

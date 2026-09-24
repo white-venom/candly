@@ -25,6 +25,20 @@ describe("accuracy page", () => {
     expect(screen.getByRole("region", { name: "By group" }).textContent).toContain("NSE:RELIANCE");
   });
 
+  it("grades candles as same, close or wrong when the backend sends the shares", async () => {
+    api({ "/api/accuracy": { ...accuracy, category_shares: { same: 0.21, close: 0.57, wrong: 0.22 } } });
+    const { unmount } = renderWithProviders(<AccuracyPage />, { route: "/accuracy" });
+    const grades = await screen.findByRole("region", { name: "Expected vs actual candles" });
+    expect(grades.textContent).toContain("Same21%close within 0.25 ATR of the middle, and the range held");
+    expect(grades.textContent).toContain("Close57%close inside the 80% band");
+    expect(grades.textContent).toContain("Wrong22%close outside the 80% band");
+    unmount();
+    api();
+    renderWithProviders(<AccuracyPage />, { route: "/accuracy" });
+    await screen.findByText("61.2 / 100");
+    expect(screen.queryByRole("region", { name: "Expected vs actual candles" })).toBeNull();
+  });
+
   it("passes the filters to the API, scoring analog_v1 by default", async () => {
     const fetchMock = api({ "/api/ledger": [] });
     renderWithProviders(<AccuracyPage />, { route: "/accuracy?instrument=NSE:RELIANCE&tf=1D&days=30" });

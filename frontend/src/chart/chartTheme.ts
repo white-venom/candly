@@ -14,6 +14,9 @@ import type { Theme } from "../lib/theme";
 /** A horizontal line across the pane with a short tag ("PDH", "Stop") on the price axis. */
 export type TagLook = { color: string; dash: number[]; width: number; tagBackground: string; tagText: string };
 
+/** The "Expected" box: outline and median, translucent fill, the label and its halo. */
+export type ExpectedLook = { stroke: string; fill: string; text: string; halo: string };
+
 export type ChartTheme = {
   tokens: Tokens;
   /** layout background, text, grid, borders, crosshair */
@@ -22,9 +25,12 @@ export type ChartTheme = {
   /** per-bar colours for the still-open candle: a hollow amber outline */
   forming: { color: string; borderColor: string; wickColor: string };
   volume: { up: string; down: string; forming: string };
+  /** ghost candles of a directional call: tinted bodies */
   ghost: CandlestickSeriesPartialOptions;
-  /** ghost candles of an abstaining forecast: grey, so they never read as a call */
+  /** ghost candles of an abstaining forecast: grey outlines, hollow, so they never read as a call */
   ghostAbstain: CandlestickSeriesPartialOptions;
+  /** the next bar's range box, in the band colour: the range holds whether or not there is a call */
+  expected: ExpectedLook;
   band: { p10: LineSeriesPartialOptions; p50: LineSeriesPartialOptions; p90: LineSeriesPartialOptions };
   /** the translucent fill between p10 and p90 */
   bandFill: string;
@@ -46,13 +52,14 @@ export type ChartTheme = {
 const QUIET_SERIES = { priceLineVisible: false, lastValueVisible: false } as const;
 
 export const GHOST_BODY_ALPHA = 0.28;
+const GHOST_HOLLOW_ALPHA = 0.06;
 
 /** Translucent body, opaque outline: reads as a projection but stays at 3:1 against the chart. */
-function ghostOptions(up: string, down: string): CandlestickSeriesPartialOptions {
+function ghostOptions(up: string, down: string, bodyAlpha = GHOST_BODY_ALPHA): CandlestickSeriesPartialOptions {
   return {
     ...QUIET_SERIES,
-    upColor: withAlpha(up, GHOST_BODY_ALPHA),
-    downColor: withAlpha(down, GHOST_BODY_ALPHA),
+    upColor: withAlpha(up, bodyAlpha),
+    downColor: withAlpha(down, bodyAlpha),
     borderVisible: true,
     borderUpColor: up,
     borderDownColor: down,
@@ -105,7 +112,8 @@ export function chartTheme(theme: Theme): ChartTheme {
       forming: withAlpha(t.forming, 0.45),
     },
     ghost: ghostOptions(t.up, t.down),
-    ghostAbstain: ghostOptions(t.abstain, t.abstain),
+    ghostAbstain: ghostOptions(t.abstain, t.abstain, GHOST_HOLLOW_ALPHA),
+    expected: { stroke: t.band, fill: withAlpha(t.band, 0.16), text: t.band, halo: t.surface },
     band: {
       p10: bandLine(withAlpha(t.band, 0.55), LineStyle.Solid),
       p50: bandLine(t.band, LineStyle.Dashed),

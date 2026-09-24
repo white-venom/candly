@@ -1,6 +1,8 @@
 import type { IPrimitivePaneRenderer, IPrimitivePaneView, ISeriesPrimitive, Logical, SeriesAttachedParameter, Time } from "lightweight-charts";
 import type { Direction } from "../api/types";
-import type { TagLook } from "./chartTheme";
+import type { ExpectedRange } from "../lib/expected";
+import type { ExpectedLook, TagLook } from "./chartTheme";
+import { expectedBoxGeometry, type BoxGeometry } from "./expectedBox";
 import { placeTags } from "./tagLayout";
 import type { MarkerGlyph } from "./transforms";
 
@@ -255,6 +257,81 @@ export class BandFill extends Primitive {
       ctx.closePath();
       ctx.fillStyle = this.color;
       ctx.fill();
+    });
+  }
+}
+
+const EXPECTED_FONT = '600 10px Inter, "Segoe UI", system-ui, sans-serif';
+
+/**
+ * The next bar's 80% close range as an outlined box around its slot, with a median tick, drawn under
+ * the candles so the live bar stays on top. The "Expected" label is drawn above everything.
+ */
+export class ExpectedBox extends Primitive {
+  private range: ExpectedRange | null = null;
+  private barHigh: number | null = null;
+  private look: ExpectedLook = { stroke: "transparent", fill: "transparent", text: "transparent", halo: "transparent" };
+  private readonly allViews: readonly IPrimitivePaneView[];
+
+  constructor() {
+    super("bottom");
+    this.allViews = [...super.paneViews(), { zOrder: () => "top", renderer: () => ({ draw: (target: Target) => this.drawLabel(target) }) }];
+  }
+
+  /** `barHigh`: the high of the candle already in the slot (the forming bar), if any. */
+  set(range: ExpectedRange | null, barHigh: number | null, look: ExpectedLook): void {
+    this.range = range;
+    this.barHigh = barHigh;
+    this.look = look;
+    this.redraw();
+  }
+
+  override paneViews(): readonly IPrimitivePaneView[] {
+    return this.allViews;
+  }
+
+  private geometry(): BoxGeometry | null {
+    const p = this.param;
+    const r = this.range;
+    if (!p || !r) return null;
+    const ts = p.chart.timeScale();
+    const a = ts.logicalToCoordinate(0 as Logical);
+    const b = ts.logicalToCoordinate(1 as Logical);
+    const spacing = a !== null && b !== null ? Math.abs(b - a) : 6;
+    const y = (price: number | null) => (price === null ? null : p.series.priceToCoordinate(price));
+    return expectedBoxGeometry(ts.timeToCoordinate(r.time as Time), spacing, { high: y(r.high), mid: y(r.mid), low: y(r.low) }, y(this.barHigh));
+  }
+
+  protected draw(target: Target): void {
+    const g = this.geometry();
+    if (!g) return;
+    target.useMediaCoordinateSpace(({ context: ctx }) => {
+      ctx.fillStyle = this.look.fill;
+      ctx.fillRect(g.left, g.top, g.width, g.height);
+      ctx.strokeStyle = this.look.stroke;
+      ctx.lineWidth = 1;
+      ctx.strokeRect(Math.round(g.left) + 0.5, Math.round(g.top) + 0.5, Math.max(1, Math.round(g.width) - 1), Math.max(1, Math.round(g.height) - 1));
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(g.tick.x1, g.tick.y);
+      ctx.lineTo(g.tick.x2, g.tick.y);
+      ctx.stroke();
+    });
+  }
+
+  private drawLabel(target: Target): void {
+    const g = this.geometry();
+    if (!g) return;
+    target.useMediaCoordinateSpace(({ context: ctx }) => {
+      ctx.font = EXPECTED_FONT;
+      ctx.textAlign = "center";
+      ctx.textBaseline = g.label.baseline;
+      ctx.lineJoin = "round";
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = this.look.halo;
+      ctx.strokeText("Expected", g.label.x, g.label.y);
+      ctx.fillStyle = this.look.text;
+      ctx.fillText("Expected", g.label.x, g.label.y);
     });
   }
 }

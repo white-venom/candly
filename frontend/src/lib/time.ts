@@ -55,12 +55,24 @@ export function formatDayIST(unix: number, now = nowUnix()): string {
   return p.year === istParts(now).year ? day : `${day} ${p.year}`;
 }
 
+const weekdayFormat = new Intl.DateTimeFormat("en-US", { timeZone: IST, weekday: "short" });
+
+/** "Thu 25 Sep": a session named by its IST day. */
+export function formatSessionIST(unix: number): string {
+  const p = istParts(unix);
+  return `${weekdayFormat.format(new Date(unix * 1000))} ${Number(p.day)} ${p.month}`;
+}
+
+export function sameDayIST(a: number, b: number): boolean {
+  const [x, y] = [istParts(a), istParts(b)];
+  return x.year === y.year && x.month === y.month && x.day === y.day;
+}
+
 /** "10:15" on the same IST day as `now`, else "23 Sep, 10:15". */
 export function formatWhenIST(unix: number, now = nowUnix()): string {
   const p = istParts(unix);
-  const n = istParts(now);
   const time = `${p.hour}:${p.minute}`;
-  if (p.year === n.year && p.month === n.month && p.day === n.day) return time;
+  if (sameDayIST(unix, now)) return time;
   return `${formatDayIST(unix, now)}, ${time}`;
 }
 

@@ -3,7 +3,8 @@ import { useMemo, useRef, useState } from "react";
 import type { CandlesResponse, Forecast, PatternSignal } from "../../api/types";
 import type { DrawnLevel } from "../../chart/levels";
 import { PriceChart } from "../../chart/PriceChart";
-import { lastValues, latestBar, signalsAt, type Hover, type IndicatorPlot, type MarkerGlyph } from "../../chart/transforms";
+import { barsWithForming, lastValues, latestBar, signalsAt, type Hover, type IndicatorPlot, type MarkerGlyph } from "../../chart/transforms";
+import { currentStep, forecastTimes } from "../../lib/expected";
 import { ErrorBoundary } from "../ErrorBoundary";
 import { QueryView, type EmptyInfo } from "../ui/States";
 import { ChartLegend } from "./ChartLegend";
@@ -32,6 +33,13 @@ export function ChartArea({ viewKey, tf, label, candles, signals, markers, level
   const latest = useMemo(() => (candles.data ? latestBar(candles.data.candles, candles.data.forming) : null), [candles.data]);
   const latestValues = useMemo(() => lastValues(plots), [plots]);
   const hovered = hover ? signalsAt(signals, hover.bar.time) : [];
+  const stepsLeft = useMemo(() => {
+    if (!forecast || !candles.data) return 0;
+    const times = forecastTimes(forecast);
+    const bars = { forming: barsWithForming(candles.data.candles, candles.data.forming).formingTime, lastClosed: candles.data.candles.at(-1)?.time ?? null };
+    const step = currentStep(times, bars);
+    return step === -1 ? 0 : times.length - step;
+  }, [forecast, candles.data]);
 
   return (
     <div ref={box} className="relative min-h-[420px] flex-1 bg-surface">
@@ -58,7 +66,14 @@ export function ChartArea({ viewKey, tf, label, candles, signals, markers, level
               label={label}
               onHover={setHover}
             />
-            <ChartLegend tf={tf} bar={hover?.bar ?? latest} plots={plots} values={hover?.values ?? latestValues} levelsNote={levelsNote} />
+            <ChartLegend
+              tf={tf}
+              bar={hover?.bar ?? latest}
+              plots={plots}
+              values={hover?.values ?? latestValues}
+              expected={stepsLeft}
+              levelsNote={levelsNote}
+            />
             {hover && hovered.length > 0 && <PatternTooltip signals={hovered} x={hover.x} containerWidth={box.current?.clientWidth ?? 0} />}
           </ErrorBoundary>
         )}

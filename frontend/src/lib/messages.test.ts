@@ -62,6 +62,10 @@ describe("abstain reasons in plain language", () => {
   it("never passes an unknown reason through raw", () => {
     expect(abstainReason("model exploded at 2026-09-23T04:45:00+00:00", { tf: "1D" })).toEqual({ text: "No clear edge right now.", hint: null });
     expect(abstainReason(null, { tf: "1D" }).text).toBe("No clear edge right now.");
+    expect(abstainReason("direction unclear: range forecast only", { tf: "5m" })).toEqual({
+      text: "Range only — the model doesn't predict up/down here.",
+      hint: "The expected range still applies.",
+    });
   });
 });
 

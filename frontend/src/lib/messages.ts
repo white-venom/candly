@@ -112,6 +112,10 @@ export function abstainReason(raw: string | null | undefined, ctx: ReasonContext
     return { text: "The expected move doesn't cover trading costs.", hint: `Expected ${m[1]}% vs ${m[2]}% round-trip costs.` };
   }
   if (r.startsWith("edge below costs")) return { text: "The expected move doesn't cover trading costs.", hint: null };
+  // range_v1 forecasts only the range; a direction comes only from a validated daily trend model.
+  if (r.startsWith("direction unclear")) {
+    return { text: "Range only — the model doesn't predict up/down here.", hint: "The expected range still applies." };
+  }
   // The minimum-edge gate: "edge below minimum: …", "below minimum edge…" or the older "|p(up) − base rate| < 0.03".
   if (/^(edge|below minimum edge|min(imum)?[ _-]edge)|^\|p\(up\) ?[−-] ?base rate\|/i.test(r)) {
     const threshold = /<\s*(0?\.\d+)/.exec(r);

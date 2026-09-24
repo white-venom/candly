@@ -1,12 +1,14 @@
 import clsx from "clsx";
 import { useMemo, useState, type KeyboardEvent, type RefObject } from "react";
 import { Link, useNavigate } from "react-router";
-import { useScanner } from "../../api/hooks";
+import { useDailyQuotes, useHealth, useScanner } from "../../api/hooks";
 import type { Instrument, ScannerRow } from "../../api/types";
 import { expiryTitle } from "../../lib/expiry";
 import { fmtPct, fmtPrice, signTone } from "../../lib/format";
-import { expiryIsNear, groupInstruments, matchesSearch } from "../../lib/instruments";
+import { expiryIsNear, groupInstruments, matchesSearch, watchlistOrder } from "../../lib/instruments";
+import { watchQuote, type Quote } from "../../lib/quotes";
 import { chartPath } from "../../lib/routes";
+import { formatDayIST } from "../../lib/time";
 import { defaultTimeframe } from "../../lib/timeframes";
 import { IconButton } from "../ui/Button";
 import { DirectionGlyph } from "../ui/Chip";
@@ -17,7 +19,11 @@ function targetTf(i: Instrument, tf: string): string {
   return i.timeframes.includes(tf) ? tf : defaultTimeframe(i.timeframes);
 }
 
-function Row({ instrument: i, tf, active, quote, call }: { instrument: Instrument; tf: string; active: boolean; quote?: ScannerRow; call?: ScannerRow }) {
+function quoteTitle(q: Quote): string {
+  return q.live ? "Live · change vs the previous close" : `Close on ${formatDayIST(q.time)}`;
+}
+
+function Row({ instrument: i, tf, active, quote, call }: { instrument: Instrument; tf: string; active: boolean; quote: Quote | null; call?: ScannerRow }) {
   const direction = call && !call.abstain && call.direction !== "neutral" ? call.direction : null;
   return (
     <Link
@@ -48,8 +54,10 @@ function Row({ instrument: i, tf, active, quote, call }: { instrument: Instrumen
       </span>
       {quote ? (
         <>
-          <span className="w-[4.25rem] text-right text-ink tabular-nums">{fmtPrice(quote.last_close)}</span>
-          <span className={clsx("w-[3.25rem] text-right text-xs tabular-nums", signTone(quote.change_pct))}>{fmtPct(quote.change_pct)}</span>
+          <span title={quoteTitle(quote)} className="w-[4.25rem] text-right text-ink tabular-nums">
+            {fmtPrice(quote.price)}
+          </span>
+          <span className={clsx("w-[3.25rem] text-right text-xs tabular-nums", signTone(quote.changePct))}>{fmtPct(quote.changePct)}</span>
         </>
       ) : (
         <span className="text-xs text-ink-faint">{i.data["1D"]?.bars === 0 ? "No data" : "—"}</span>
@@ -59,7 +67,7 @@ function Row({ instrument: i, tf, active, quote, call }: { instrument: Instrumen
 }
 
 /**
- * Instruments by section with the day's last price and change (scanner at 1D) and a ▲/▼ where the
+ * Instruments by section with the latest price and the day's change (lib/quotes), and a ▲/▼ where the
  * current timeframe has a directional call. `/` focuses the search; ↑/↓ step through the list.
  */
 export function Watchlist({
@@ -75,12 +83,21 @@ export function Watchlist({
   searchRef: RefObject<HTMLInputElement | null>;
   onCollapse: () => void;
 }) {
-  const daily = useScanner("1D");
+  const dailyScanner = useScanner("1D");
   const calls = useScanner(tf);
+  const health = useHealth();
+  const markets = health.data?.markets;
+  const quoteItems = useMemo(() => {
+    const open = new Set((markets ?? []).filter((m) => m.open).map((m) => m.exchange));
+    return watchlistOrder(instruments)
+      .filter((i) => i.timeframes.includes("1D"))
+      .map((i) => ({ id: i.id, live: open.has(i.exchange) }));
+  }, [instruments, markets]);
+  const dailyBars = useDailyQuotes(quoteItems);
   const [query, setQuery] = useState("");
   const navigate = useNavigate();
 
-  const quotes = useMemo(() => new Map((daily.data ?? []).map((r) => [r.instrument, r])), [daily.data]);
+  const dailyRows = useMemo(() => new Map((dailyScanner.data ?? []).map((r) => [r.instrument, r])), [dailyScanner.data]);
   const callsBy = useMemo(() => new Map((calls.data ?? []).map((r) => [r.instrument, r])), [calls.data]);
   const groups = groupInstruments(instruments.filter((i) => matchesSearch(i, query)));
   const visible = groups.flatMap((g) => g.items);
@@ -136,7 +153,7 @@ export function Watchlist({
             <ul>
               {g.items.map((i) => (
                 <li key={i.id}>
-                  <Row instrument={i} tf={tf} active={i.id === current} quote={quotes.get(i.id)} call={callsBy.get(i.id)} />
+                  <Row instrument={i} tf={tf} active={i.id === current} quote={watchQuote(dailyBars.get(i.id), dailyRows.get(i.id))} call={callsBy.get(i.id)} />
                 </li>
               ))}
             </ul>

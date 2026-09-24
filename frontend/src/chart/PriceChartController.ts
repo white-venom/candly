@@ -13,11 +13,12 @@ import {
   type Time,
 } from "lightweight-charts";
 import type { Candle, Forecast } from "../api/types";
+import { currentStep, expectedRanges, forecastTimes } from "../lib/expected";
 import { isIntraday } from "../lib/timeframes";
 import type { Theme } from "../lib/theme";
 import { chartTheme, type ChartTheme } from "./chartTheme";
 import type { DrawnLevel } from "./levels";
-import { BandFill, PatternMarkers, PriceTags, type PriceTag } from "./primitives";
+import { BandFill, ExpectedBox, PatternMarkers, PriceTags, type PriceTag } from "./primitives";
 import { chartTimeFormatter, istTickMarkFormatter } from "./timeFormat";
 import {
   BAND_KEYS,
@@ -39,7 +40,8 @@ import {
 type IndicatorHandle = { plot: IndicatorPlot; series: ISeriesApi<"Line"> | ISeriesApi<"Histogram"> };
 
 const QUIET = { priceLineVisible: false, lastValueVisible: false } as const;
-const BAR_PX = 5.5;
+/** default zoom: roomy enough that the forming bar, its Expected box and the ghosts after it read clearly */
+const BAR_PX = 8;
 const PRICE_AXIS_PX = 70;
 /** empty bars kept right of the last candle: room for three ghost candles and their cone */
 const FUTURE_BARS = 10;
@@ -60,6 +62,7 @@ export class PriceChartController {
   private readonly bandSeries: Record<BandKey, ISeriesApi<"Line">>;
   private readonly markers = new PatternMarkers();
   private readonly bandFill = new BandFill();
+  private readonly expectedBox = new ExpectedBox();
   private readonly tags = new PriceTags();
   private theme: ChartTheme;
   private candles: Candle[] = [];
@@ -101,6 +104,7 @@ export class PriceChartController {
     };
     this.ghostSeries = this.chart.addSeries(CandlestickSeries, this.theme.ghost);
     this.candleSeries.attachPrimitive(this.bandFill);
+    this.candleSeries.attachPrimitive(this.expectedBox);
     this.candleSeries.attachPrimitive(this.tags);
     this.candleSeries.attachPrimitive(this.markers);
     this.markers.setColors(this.theme.markers, this.theme.tokens.surface);
@@ -115,9 +119,10 @@ export class PriceChartController {
     for (const key of BAND_KEYS) this.bandSeries[key].applyOptions(th.band[key]);
     for (const handle of this.indicatorHandles) this.styleIndicator(handle);
     this.markers.setColors(th.markers, th.tokens.surface);
-    // Per-bar colours (forming candle, volume), the band fill and the tags live in the data.
+    // Per-bar colours (forming candle, volume), the band fill, the box and the tags live in the data.
     this.renderCandles();
     this.renderBandFill();
+    this.renderSteps();
     this.renderTags();
   }
 
@@ -133,6 +138,7 @@ export class PriceChartController {
     this.forming = forming;
     this.renderCandles();
     this.renderMarkers();
+    this.renderSteps();
     this.renderTags();
   }
 
@@ -148,14 +154,14 @@ export class PriceChartController {
     this.renderTags();
   }
 
-  /** Ghost candles, the p10–p90 cone and, for a directional call only, the stop. */
+  /** The Expected box on the next bar, ghost candles after it, the p10–p90 cone and, for a directional call only, the stop. */
   setForecast(forecast: Forecast | null): void {
     this.forecast = forecast;
     this.ghostSeries.applyOptions(forecast?.abstain ? this.theme.ghostAbstain : this.theme.ghost);
-    this.ghostSeries.setData(forecast ? ghostData(forecast) : []);
     const bands = forecast ? bandData(forecast) : null;
     for (const key of BAND_KEYS) this.bandSeries[key].setData(bands ? bands[key] : []);
     this.renderBandFill();
+    this.renderSteps();
     this.renderTags();
   }
 
@@ -255,6 +261,22 @@ export class PriceChartController {
     const band = f ? bandData(f) : null;
     const points = band ? band.p10.map((p, i) => ({ time: Number(p.time), low: p.value, high: band.p90[i].value })) : [];
     this.bandFill.set(points, f?.abstain ? this.theme.bandFillAbstain : this.theme.bandFill);
+  }
+
+  /** The Expected box on the first step that hasn't closed, ghost candles on the steps after it. */
+  private renderSteps(): void {
+    const f = this.forecast;
+    if (!f) {
+      this.ghostSeries.setData([]);
+      this.expectedBox.set(null, null, this.theme.expected);
+      return;
+    }
+    const { formingTime } = barsWithForming(this.candles, this.forming);
+    const step = currentStep(forecastTimes(f), { forming: formingTime, lastClosed: this.candles.at(-1)?.time ?? null });
+    this.ghostSeries.setData(ghostData(f, step));
+    const range = step === -1 ? null : (expectedRanges(f)[step] ?? null);
+    const inSlot = range && this.forming && formingTime === range.time ? this.forming.high : null;
+    this.expectedBox.set(range, inSlot, this.theme.expected);
   }
 
   /** Histogram colours are per bar, so a histogram re-sets its data; a line only changes options. */

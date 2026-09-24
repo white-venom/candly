@@ -17,3 +17,10 @@ export function sortTimeframes(tfs: readonly string[]): string[] {
 export function defaultTimeframe(available: readonly string[]): string {
   return available.includes("1D") ? "1D" : (sortTimeframes(available)[0] ?? "1D");
 }
+
+const TF_SECONDS: Record<string, number> = { "5m": 300, "15m": 900, "1h": 3600, "1D": 86400 };
+
+/** A bar's nominal length. The last bar of a session can be shorter (NSE 1h: 15:15–15:30). */
+export function tfSeconds(tf: string): number {
+  return TF_SECONDS[tf] ?? 86400;
+}

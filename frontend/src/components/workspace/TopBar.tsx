@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import type { Instrument } from "../../api/types";
 import type { HoverBar } from "../../chart/transforms";
 import { fmtPct, fmtPrice, signTone } from "../../lib/format";
+import { fmtLag } from "../../lib/freshness";
 import { formatBarWhenIST } from "../../lib/time";
 import { sortTimeframes } from "../../lib/timeframes";
 import { ExpiryBadge } from "../ExpiryBadge";
@@ -21,6 +22,7 @@ export function TopBar({
   tf,
   last,
   asOf,
+  behind,
   onTimeframe,
   controls,
   showWatchlist,
@@ -32,6 +34,8 @@ export function TopBar({
   last: HoverBar | null;
   /** time of the last closed bar */
   asOf: number | null;
+  /** seconds the data runs behind while the market is open, when that is more than two bars; else null */
+  behind: number | null;
   onTimeframe: (tf: string) => void;
   controls: ReactNode;
   showWatchlist?: () => void;
@@ -53,9 +57,13 @@ export function TopBar({
         <p className="flex min-w-0 items-center gap-1.5 text-2xs leading-4 whitespace-nowrap text-ink-faint tabular-nums">
           {info.expiry && <ExpiryBadge expiry={info.expiry} compact className="h-4 px-1 text-[10px]" />}
           {asOf !== null && (
-            <span className="truncate">
+            <span
+              className={clsx("truncate", behind !== null && "font-medium text-forming")}
+              title={behind !== null ? `The last closed ${tf} bar ended ${fmtLag(behind)} ago while the market is open — the data is behind.` : undefined}
+            >
               as of {formatBarWhenIST(asOf, tf)}
               {tf === "1D" ? "" : " IST"}
+              {behind !== null && ` · ${fmtLag(behind)} behind`}
             </span>
           )}
         </p>

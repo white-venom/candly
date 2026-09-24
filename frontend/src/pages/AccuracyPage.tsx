@@ -3,7 +3,7 @@ import clsx from "clsx";
 import type { ReactNode } from "react";
 import { useSearchParams } from "react-router";
 import { useAccuracy, useInstruments, useLedger } from "../api/hooks";
-import type { AccuracyResponse, LedgerEntry } from "../api/types";
+import type { AccuracyResponse, CategoryShares, LedgerEntry } from "../api/types";
 import { InstrumentOptions } from "../components/InstrumentOptions";
 import { Page } from "../components/shell/Page";
 import { Chip, Eyebrow } from "../components/ui/Chip";
@@ -23,6 +23,7 @@ const ALL_METHODS = "all";
 const DEFAULT_METHOD = "analog_v1";
 const METHODS = [
   { value: "analog_v1", label: "Model (analog_v1)" },
+  { value: "range_v1", label: "Range model (range_v1)" },
   { value: "baseline_base_rate", label: "Baseline: base rate" },
   { value: "baseline_persistence", label: "Baseline: persistence" },
   { value: "baseline_random_walk", label: "Baseline: random-walk bands" },
@@ -80,6 +81,26 @@ function Tiles({ s }: { s: AccuracyResponse["summary"] }) {
       />
       <Tile label="Graded" value={fmtInt(s.n_graded)} sub={`${fmtInt(s.n_abstained)} abstained · ${fmtInt(s.n_forecasts)} forecasts`} />
     </dl>
+  );
+}
+
+const CATEGORIES: { key: keyof CategoryShares; label: string; sub: string }[] = [
+  { key: "same", label: "Same", sub: "close within 0.25 ATR of the middle, and the range held" },
+  { key: "close", label: "Close", sub: "close inside the 80% band" },
+  { key: "wrong", label: "Wrong", sub: "close outside the 80% band" },
+];
+
+/** How each graded candle compared with the expected one. */
+function CandleGrades({ shares }: { shares: CategoryShares }) {
+  return (
+    <section aria-label="Expected vs actual candles">
+      <Eyebrow className="mb-2">Expected vs actual candles</Eyebrow>
+      <dl className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        {CATEGORIES.map((c) => (
+          <Tile key={c.key} label={c.label} value={fmtProb(shares[c.key], 0)} sub={c.sub} />
+        ))}
+      </dl>
+    </section>
   );
 }
 
@@ -194,6 +215,7 @@ function Summary({ query }: { query: UseQueryResult<AccuracyResponse> }) {
     <QueryView query={query} isEmpty={(a) => a.summary.n_forecasts === 0} empty={NO_GRADES} loadingLabel="Loading accuracy…" className="rounded-lg border border-line bg-surface py-12">
       {(a) => (
         <div className={clsx("flex flex-col gap-4", query.isPlaceholderData && "opacity-60")}>
+          {a.category_shares && <CandleGrades shares={a.category_shares} />}
           <Tiles s={a.summary} />
           <div className="grid gap-4 lg:grid-cols-2">
             <Card title="Calibration">

@@ -191,4 +191,9 @@ export type AccuracyResponse = {
   calibration: { bin_low: number; bin_high: number; mean_pred: number | null; observed: number | null; n: number }[];
   rolling: { time: number; hit_rate: number | null; brier: number | null; match_score: number | null }[];
   by_group: { group_by: "instrument" | "tf" | "pattern" | "session_phase" | "vol_regime"; key: string; n: number; hit_rate: number | null; brier: number | null }[];
+  // Pivot (config/pivot.yaml candle_accuracy), not in docs/CONTRACTS.md yet; optional. Shares 0–1 of graded steps:
+  // same = close within 0.25 ATR of the median and high/low inside the range; close = inside p10–p90; wrong = outside.
+  category_shares?: CategoryShares | null;
 };
+
+export type CategoryShares = { same: number; close: number; wrong: number };

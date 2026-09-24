@@ -88,8 +88,15 @@ function byTime<T extends { time: number }>(items: readonly T[]): T[] {
   return [...items].sort((a, b) => a.time - b.time);
 }
 
-export function ghostData(forecast: Forecast): CandlestickData<Time>[] {
-  return byTime(forecast.ghost_candles).map((c) => ({ time: asTime(c.time), open: c.open, high: c.high, low: c.low, close: c.close }));
+/**
+ * Ghost candles for the steps after `current`, the step drawn as the Expected box (lib/expected
+ * currentStep; -1 when every step has closed). That step and any before it only keep their slots.
+ */
+export function ghostData(forecast: Forecast, current = 0): (CandlestickData<Time> | WhitespaceData<Time>)[] {
+  const last = current === -1 ? Infinity : current;
+  return byTime(forecast.ghost_candles).map((c, i) =>
+    i <= last ? { time: asTime(c.time) } : { time: asTime(c.time), open: c.open, high: c.high, low: c.low, close: c.close },
+  );
 }
 
 export type BandKey = "p10" | "p50" | "p90";

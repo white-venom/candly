@@ -1,4 +1,6 @@
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
+import { withLastSteps } from "../lib/expected";
 import { applySignalFilters, type SignalFilters } from "../lib/signalFilters";
 import { apiGet, apiPost } from "./client";
 import type {
@@ -80,6 +82,39 @@ export function useCandles(instrument: string, tf: string, limit = 500) {
   });
 }
 
+/** Releases one more of `count` items every `stepMs`, so their first requests are spread out. */
+function useStaggered(count: number, stepMs: number): number {
+  const [released, setReleased] = useState(1);
+  useEffect(() => {
+    if (released >= count) return;
+    const timer = window.setTimeout(() => setReleased((r) => r + 1), stepMs);
+    return () => window.clearTimeout(timer);
+  }, [released, count, stepMs]);
+  return released;
+}
+
+const QUOTE_STAGGER_MS = 1000;
+
+/**
+ * The last two daily bars of each instrument, with today's forming one, for the watchlist quote
+ * (lib/quotes). While a market is open (`live`) its forming bar is rebuilt from today's 5m bars at the
+ * broker, so the first requests start a second apart and repeat every minute only while it is open.
+ */
+export function useDailyQuotes(items: { id: string; live: boolean }[]): Map<string, CandlesResponse> {
+  const released = useStaggered(items.length, QUOTE_STAGGER_MS);
+  return useQueries({
+    queries: items.map(({ id, live }, i) => ({
+      queryKey: ["candles", id, "1D", 2],
+      queryFn: ({ signal }: { signal: AbortSignal }) => apiGet<CandlesResponse>("/candles", { instrument: id, tf: "1D", limit: 2 }, signal),
+      enabled: i < released,
+      refetchInterval: live ? MINUTE : false,
+      refetchOnWindowFocus: false,
+      staleTime: live ? 30 * SECOND : 5 * MINUTE,
+    })),
+    combine: (results) => new Map(results.flatMap((r, i) => (r.data && items[i] ? [[items[i].id, r.data] as const] : []))),
+  });
+}
+
 export function useIndicatorCatalog() {
   return useQuery({
     queryKey: ["indicator-catalog"],
@@ -125,10 +160,16 @@ export function useLevels(instrument: string, tf: string) {
   });
 }
 
+/**
+ * Polled every minute. The last forecast stays on screen while a refetch runs or fails (the query keeps
+ * its data), and its steps carry over if a refetch comes back without any (lib/expected withLastSteps).
+ */
 export function useForecast(instrument: string, tf: string, steps = 3) {
+  const client = useQueryClient();
   return useQuery({
     queryKey: ["forecast", instrument, tf, steps],
-    queryFn: ({ signal }) => apiGet<Forecast>("/forecast", { instrument, tf, steps }, signal),
+    queryFn: async ({ signal, queryKey }) =>
+      withLastSteps(await apiGet<Forecast>("/forecast", { instrument, tf, steps }, signal), client.getQueryData<Forecast>(queryKey)),
     enabled: Boolean(instrument && tf),
     refetchInterval: MINUTE,
   });

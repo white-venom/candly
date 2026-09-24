@@ -1,20 +1,27 @@
-import { useForecast, useHealth, usePatterns } from "../../api/hooks";
-import type { Instrument } from "../../api/types";
+import { useCandles, useForecast, useHealth, usePatterns } from "../../api/hooks";
+import type { CandlesResponse, Instrument } from "../../api/types";
+import { barsWithForming } from "../../chart/transforms";
 import { unitLabel } from "../../lib/instruments";
 import { dataStatus, humanizeText } from "../../lib/messages";
 import type { SignalFilters } from "../../lib/signalFilters";
 import { IconButton } from "../ui/Button";
 import { Eyebrow } from "../ui/Chip";
 import { QueryView } from "../ui/States";
+import { ExpectedCard } from "./ExpectedCard";
 import { PanelNews } from "./PanelNews";
 import { RecentSignals } from "./RecentSignals";
 import { TradeCard } from "./TradeCard";
 import { VerdictCard } from "./VerdictCard";
 import { WhyList } from "./WhyList";
 
-/** The right-hand panel: verdict, trade plan, why, recent signals, news. */
+const formingTime = (d: CandlesResponse | undefined) => (d ? barsWithForming(d.candles, d.forming).formingTime : null);
+
+/** The right-hand panel: the expected next candle, verdict, trade plan, why, recent signals, news. */
 export function SetupPanel({ info, tf, filters, onCollapse }: { info: Instrument; tf: string; filters: SignalFilters; onCollapse: () => void }) {
   const forecast = useForecast(info.id, tf);
+  // the chart's own query: tells the card whether the first forecast bar is the one forming now
+  const candles = useCandles(info.id, tf);
+  const bars = { forming: formingTime(candles.data), lastClosed: candles.data?.candles.at(-1)?.time ?? null };
   const patterns = usePatterns(info.id, tf, filters);
   const health = useHealth();
   const canConnect = dataStatus(health.data, health.error).canConnect;
@@ -33,6 +40,7 @@ export function SetupPanel({ info, tf, filters, onCollapse }: { info: Instrument
           <QueryView query={forecast} loadingLabel="Loading forecast…" noDataHint="The forecast needs candles first." className="rounded-lg border border-line">
             {(f) => (
               <>
+                <ExpectedCard forecast={f} tf={tf} bars={bars} canConnect={canConnect} />
                 <VerdictCard forecast={f} tf={tf} canConnect={canConnect} />
                 {f.explanation && (
                   <section aria-label="In plain words">

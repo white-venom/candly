@@ -2,7 +2,7 @@ import { useCallback, useState } from "react";
 import { readStorage, writeStorage } from "./storage";
 
 /** Reads a saved JSON value, keeping only the fields of `fallback` that come back with the same type. */
-function readPref<T extends Record<string, unknown>>(key: string, fallback: T): T {
+export function readPref<T extends Record<string, unknown>>(key: string, fallback: T): T {
   const raw = readStorage(key);
   if (!raw) return fallback;
   try {

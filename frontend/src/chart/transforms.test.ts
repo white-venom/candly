@@ -87,10 +87,16 @@ describe("pattern markers", () => {
 });
 
 describe("forecast drawing", () => {
-  it("puts ghost candles at the forecast's future times, without volume", () => {
+  it("puts ghost candles at the forecast's future times, without volume, after the step drawn as the Expected box", () => {
     const ghosts = ghostData(forecast);
     expect(ghosts.map((g) => g.time)).toEqual([T0 + DAY, T0 + 2 * DAY, T0 + 3 * DAY]);
-    expect(ghosts[0]).toEqual({ time: T0 + DAY, open: 103, high: 106, low: 101, close: 104 });
+    expect(ghosts[0]).toEqual({ time: T0 + DAY });
+    expect(ghosts[1]).toEqual({ time: T0 + 2 * DAY, open: 104, high: 106, low: 101.5, close: 103.5 });
+  });
+
+  it("keeps only the slots of steps that have closed, and draws no ghosts once all have", () => {
+    expect(ghostData(forecast, 1).filter((g) => "open" in g).map((g) => g.time)).toEqual([T0 + 3 * DAY]);
+    expect(ghostData(forecast, -1).every((g) => !("open" in g))).toBe(true);
   });
 
   it("builds the 10/50/90 band from the reference close", () => {
