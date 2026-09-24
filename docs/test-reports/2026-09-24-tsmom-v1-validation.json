@@ -1,0 +1,1546 @@
+{
+  "test": "tsmom_v1",
+  "period": "validation",
+  "generated_at": "2026-09-24T11:50:32.675801+00:00",
+  "edge_search_v2_sha256": "2c7ea1287598d2ac918669edbcf69aafbaaeda7e67c4be6217770f63e16ec4c6",
+  "config_hashes": {
+    "research.yaml": "642e412d15a156732d7a5d726bbf1eb699497b253e24222d6750eb89015bc7d5",
+    "patterns.yaml": "e0464b18601745671b84d3ed8d4fb06e20f4b9f37de48de51f191f19ddaf9254",
+    "costs.yaml": "c07fd90cd49a8eb68b5e1bf4ad07fb12aae5e6f697531854f51e4b303b2d791c",
+    "expiry.yaml": "a47b2a6277c49b331b87b821c16eed0101242f391090785f95c24f8ebd54d3b0",
+    "markets.yaml": "f73c5ab9315caf35cb79d5ce509a0fc0a1b4fda3f7623fb39a7e984dca83e77c",
+    "watchlist.yaml": "0be3a783d10a75d3dd72002306efd0a0da844e146f19d33b27610156d9bfb0a6",
+    "holidays_observed.json": "965345a57c0b05fe8946563212fca5855582142ed34781033628cfc3774c0159",
+    "edge_search.yaml": "b5e2f46f69c7ce19759b05bf0e2d70ce7b182116cfcaa91aad7c816c5912b702",
+    "edge_search_v2.yaml": "2c7ea1287598d2ac918669edbcf69aafbaaeda7e67c4be6217770f63e16ec4c6"
+  },
+  "registered": {
+    "name": "tsmom_v1",
+    "universe": [
+      "NSE:NIFTY50",
+      "NSE:BANKNIFTY",
+      "BSE:SENSEX",
+      "MCX:CRUDEOIL",
+      "MCX:NATURALGAS",
+      "MCX:GOLD",
+      "MCX:SILVER"
+    ],
+    "signal": "sign of the close-to-close return from t-252 to t-21 trading days",
+    "sizing": "per instrument, target 10% annualised vol using 60-day EWMA of daily returns (causal); equal risk",
+    "rebalance": "monthly_first_trading_day",
+    "holding": "until the next rebalance",
+    "index_futures_return": "spot index return minus 5% a year carry (futures proxy, applied to both strategy and baseline)",
+    "mcx_roll_rule": "on the first trading day of a new front contract (detected from the MCX expiry calendar, or from the series itself before any strategy number is computed), use that day's open-to-close return instead of close-to-close",
+    "costs": "futures segment, one round trip per position change plus one roll per month per open position",
+    "evaluation": {
+      "indices_from": "2008-01-01",
+      "mcx_from": "2019-01-01",
+      "until": "holdout_start"
+    },
+    "baselines": [
+      "buy_and_hold_equal_risk",
+      "always_flat"
+    ],
+    "primary": "annualised Sharpe after cost of the combined portfolio, one-sided > 0",
+    "pass_if": {
+      "sharpe_after_cost_ci_lower_above": 0.0,
+      "sharpe_beats_buy_and_hold_point": true
+    }
+  },
+  "split": {
+    "indices_from": "2008-01-01",
+    "mcx_from": "2019-01-01",
+    "until_holdout_start": "2025-10-01",
+    "holdout_start_utc": "2025-09-30T18:30:00+00:00",
+    "reading": "evaluation starts at indices_from / mcx_from; the data before each start (at least one year) is the signal warm-up"
+  },
+  "data": {
+    "NSE:NIFTY50": {
+      "bars": 6658,
+      "first_bar": "1999-01-01T03:45:00+00:00",
+      "last_bar": "2025-09-30T03:45:00+00:00"
+    },
+    "NSE:BANKNIFTY": {
+      "bars": 4945,
+      "first_bar": "2005-10-18T03:45:00+00:00",
+      "last_bar": "2025-09-30T03:45:00+00:00"
+    },
+    "BSE:SENSEX": {
+      "bars": 5147,
+      "first_bar": "2005-01-03T03:45:00+00:00",
+      "last_bar": "2025-09-30T03:45:00+00:00"
+    },
+    "MCX:CRUDEOIL": {
+      "bars": 1988,
+      "first_bar": "2018-01-01T03:30:00+00:00",
+      "last_bar": "2025-09-30T03:30:00+00:00"
+    },
+    "MCX:NATURALGAS": {
+      "bars": 1992,
+      "first_bar": "2018-01-01T03:30:00+00:00",
+      "last_bar": "2025-09-30T03:30:00+00:00"
+    },
+    "MCX:GOLD": {
+      "bars": 1966,
+      "first_bar": "2018-01-01T03:30:00+00:00",
+      "last_bar": "2025-09-30T03:30:00+00:00"
+    },
+    "MCX:SILVER": {
+      "bars": 1992,
+      "first_bar": "2018-01-01T03:30:00+00:00",
+      "last_bar": "2025-09-30T03:30:00+00:00"
+    }
+  },
+  "implementation": {
+    "signal": "sign of the compounded futures-proxy return from the close 252 bars ago to the close 21 bars ago, at the close of the first trading day of each IST month",
+    "sizing": "weight = signal x 10% / sigma, sigma = sqrt(252 x EWMA of squared daily returns), centre of mass 60 days, >= 60 returns, no leverage cap",
+    "execution": "decided and traded at the rebalance close, held from the next bar to the next rebalance",
+    "index_futures_proxy": "spot close-to-close minus 5% a year, accrued per calendar day",
+    "costs": "round trip x |weight change| + round trip x |new weight| (monthly roll) per rebalance",
+    "portfolio": "daily mean of the active sleeves (3 indices before mcx_from, all 7 after); sleeves without 252 bars of history are flat but counted",
+    "sharpe": "calendar-month P&L (sum of daily), mean / sd x sqrt(12)",
+    "bootstrap": {
+      "kind": "date_block",
+      "resamples": 2000,
+      "ci_level": 0.95,
+      "seed": 20260924,
+      "block": "one calendar month",
+      "p_value": "(1 + #{bootstrap Sharpe <= 0}) / (1 + B)",
+      "diagnostic_block": "12 months"
+    }
+  },
+  "roll_rule": {
+    "MCX:CRUDEOIL": {
+      "window": {
+        "months": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12
+        ],
+        "days": [
+          14,
+          25
+        ]
+      },
+      "n_rolls": 93,
+      "by_evidence": {
+        "weak_volume_jump": 49,
+        "volume_switch": 34,
+        "oi_switch": 10
+      },
+      "weak_by_year": {
+        "2018": 12,
+        "2019": 10,
+        "2020": 9,
+        "2021": 3,
+        "2022": 1,
+        "2023": 3,
+        "2024": 6,
+        "2025": 5
+      },
+      "mean_roll_gap": 0.009963538444511064,
+      "roll_days": {
+        "2018-01-18": "weak_volume_jump",
+        "2018-02-20": "weak_volume_jump",
+        "2018-03-20": "weak_volume_jump",
+        "2018-04-20": "weak_volume_jump",
+        "2018-05-22": "weak_volume_jump",
+        "2018-06-20": "weak_volume_jump",
+        "2018-07-17": "weak_volume_jump",
+        "2018-08-21": "weak_volume_jump",
+        "2018-09-21": "weak_volume_jump",
+        "2018-10-17": "weak_volume_jump",
+        "2018-11-20": "weak_volume_jump",
+        "2018-12-19": "weak_volume_jump",
+        "2019-01-22": "weak_volume_jump",
+        "2019-02-20": "weak_volume_jump",
+        "2019-03-20": "weak_volume_jump",
+        "2019-04-22": "weak_volume_jump",
+        "2019-05-22": "weak_volume_jump",
+        "2019-06-18": "weak_volume_jump",
+        "2019-07-22": "volume_switch",
+        "2019-08-20": "weak_volume_jump",
+        "2019-09-17": "weak_volume_jump",
+        "2019-10-22": "weak_volume_jump",
+        "2019-11-20": "weak_volume_jump",
+        "2019-12-19": "volume_switch",
+        "2020-01-20": "volume_switch",
+        "2020-02-18": "weak_volume_jump",
+        "2020-03-20": "weak_volume_jump",
+        "2020-04-21": "weak_volume_jump",
+        "2020-05-19": "weak_volume_jump",
+        "2020-06-22": "weak_volume_jump",
+        "2020-07-21": "weak_volume_jump",
+        "2020-08-20": "volume_switch",
+        "2020-09-22": "weak_volume_jump",
+        "2020-10-20": "weak_volume_jump",
+        "2020-11-17": "weak_volume_jump",
+        "2020-12-21": "volume_switch",
+        "2021-01-22": "weak_volume_jump",
+        "2021-02-22": "weak_volume_jump",
+        "2021-03-18": "weak_volume_jump",
+        "2021-04-20": "volume_switch",
+        "2021-05-20": "volume_switch",
+        "2021-06-22": "volume_switch",
+        "2021-07-20": "volume_switch",
+        "2021-08-20": "volume_switch",
+        "2021-09-21": "volume_switch",
+        "2021-10-20": "volume_switch",
+        "2021-11-19": "volume_switch",
+        "2021-12-17": "volume_switch",
+        "2022-01-20": "volume_switch",
+        "2022-02-18": "weak_volume_jump",
+        "2022-03-22": "volume_switch",
+        "2022-04-20": "volume_switch",
+        "2022-05-20": "volume_switch",
+        "2022-06-17": "volume_switch",
+        "2022-07-20": "volume_switch",
+        "2022-08-19": "volume_switch",
+        "2022-09-20": "volume_switch",
+        "2022-10-20": "volume_switch",
+        "2022-11-18": "volume_switch",
+        "2022-12-20": "volume_switch",
+        "2023-01-20": "volume_switch",
+        "2023-02-17": "volume_switch",
+        "2023-03-21": "volume_switch",
+        "2023-04-20": "volume_switch",
+        "2023-05-19": "volume_switch",
+        "2023-06-20": "weak_volume_jump",
+        "2023-07-20": "volume_switch",
+        "2023-08-22": "volume_switch",
+        "2023-09-20": "volume_switch",
+        "2023-10-20": "volume_switch",
+        "2023-11-22": "weak_volume_jump",
+        "2023-12-19": "weak_volume_jump",
+        "2024-01-22": "oi_switch",
+        "2024-02-19": "oi_switch",
+        "2024-03-19": "oi_switch",
+        "2024-04-19": "weak_volume_jump",
+        "2024-05-21": "weak_volume_jump",
+        "2024-06-18": "weak_volume_jump",
+        "2024-07-19": "weak_volume_jump",
+        "2024-08-19": "weak_volume_jump",
+        "2024-09-19": "oi_switch",
+        "2024-10-21": "oi_switch",
+        "2024-11-19": "oi_switch",
+        "2024-12-18": "weak_volume_jump",
+        "2025-01-20": "weak_volume_jump",
+        "2025-02-21": "weak_volume_jump",
+        "2025-03-17": "weak_volume_jump",
+        "2025-04-22": "oi_switch",
+        "2025-05-20": "weak_volume_jump",
+        "2025-06-19": "oi_switch",
+        "2025-07-22": "weak_volume_jump",
+        "2025-08-20": "oi_switch",
+        "2025-09-19": "oi_switch"
+      },
+      "repairs": {
+        "after_data_hole": [],
+        "one_day_off_market_print": [
+          "2022-05-02",
+          "2022-05-03"
+        ],
+        "invalid_price_zeroed": [
+          "2020-04-20"
+        ],
+        "after_invalid_price": [
+          "2020-04-21"
+        ]
+      }
+    },
+    "MCX:NATURALGAS": {
+      "window": {
+        "months": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12
+        ],
+        "days": [
+          19,
+          31
+        ]
+      },
+      "n_rolls": 93,
+      "by_evidence": {
+        "weak_volume_jump": 44,
+        "volume_switch": 34,
+        "oi_switch": 15
+      },
+      "weak_by_year": {
+        "2018": 12,
+        "2019": 12,
+        "2020": 12,
+        "2021": 3,
+        "2022": 1,
+        "2024": 3,
+        "2025": 1
+      },
+      "mean_roll_gap": 0.021817166350913592,
+      "roll_days": {
+        "2018-01-31": "weak_volume_jump",
+        "2018-02-26": "weak_volume_jump",
+        "2018-03-29": "weak_volume_jump",
+        "2018-04-26": "weak_volume_jump",
+        "2018-05-31": "weak_volume_jump",
+        "2018-06-27": "weak_volume_jump",
+        "2018-07-30": "weak_volume_jump",
+        "2018-08-29": "weak_volume_jump",
+        "2018-09-27": "weak_volume_jump",
+        "2018-10-30": "weak_volume_jump",
+        "2018-11-26": "weak_volume_jump",
+        "2018-12-27": "weak_volume_jump",
+        "2019-01-29": "weak_volume_jump",
+        "2019-02-26": "weak_volume_jump",
+        "2019-03-27": "weak_volume_jump",
+        "2019-04-25": "weak_volume_jump",
+        "2019-05-29": "weak_volume_jump",
+        "2019-06-27": "weak_volume_jump",
+        "2019-07-31": "weak_volume_jump",
+        "2019-08-28": "weak_volume_jump",
+        "2019-09-26": "weak_volume_jump",
+        "2019-10-28": "weak_volume_jump",
+        "2019-11-29": "weak_volume_jump",
+        "2019-12-27": "weak_volume_jump",
+        "2020-01-29": "weak_volume_jump",
+        "2020-02-26": "weak_volume_jump",
+        "2020-03-27": "weak_volume_jump",
+        "2020-04-28": "weak_volume_jump",
+        "2020-05-27": "weak_volume_jump",
+        "2020-06-29": "weak_volume_jump",
+        "2020-07-29": "weak_volume_jump",
+        "2020-08-27": "weak_volume_jump",
+        "2020-09-28": "weak_volume_jump",
+        "2020-10-28": "weak_volume_jump",
+        "2020-11-25": "weak_volume_jump",
+        "2020-12-29": "weak_volume_jump",
+        "2021-01-27": "weak_volume_jump",
+        "2021-02-24": "weak_volume_jump",
+        "2021-03-29": "weak_volume_jump",
+        "2021-04-28": "volume_switch",
+        "2021-05-26": "volume_switch",
+        "2021-06-25": "volume_switch",
+        "2021-07-28": "volume_switch",
+        "2021-08-27": "volume_switch",
+        "2021-09-28": "volume_switch",
+        "2021-10-27": "volume_switch",
+        "2021-11-25": "volume_switch",
+        "2021-12-29": "volume_switch",
+        "2022-01-27": "volume_switch",
+        "2022-02-24": "volume_switch",
+        "2022-03-29": "volume_switch",
+        "2022-04-27": "volume_switch",
+        "2022-05-26": "volume_switch",
+        "2022-06-24": "weak_volume_jump",
+        "2022-07-27": "volume_switch",
+        "2022-08-26": "volume_switch",
+        "2022-09-28": "volume_switch",
+        "2022-10-27": "volume_switch",
+        "2022-11-25": "volume_switch",
+        "2022-12-28": "volume_switch",
+        "2023-01-31": "volume_switch",
+        "2023-02-24": "volume_switch",
+        "2023-03-29": "volume_switch",
+        "2023-04-26": "volume_switch",
+        "2023-05-26": "volume_switch",
+        "2023-06-28": "volume_switch",
+        "2023-07-27": "volume_switch",
+        "2023-08-29": "volume_switch",
+        "2023-09-27": "volume_switch",
+        "2023-10-27": "volume_switch",
+        "2023-11-28": "volume_switch",
+        "2023-12-27": "volume_switch",
+        "2024-01-29": "oi_switch",
+        "2024-02-26": "oi_switch",
+        "2024-03-25": "oi_switch",
+        "2024-04-25": "oi_switch",
+        "2024-05-28": "volume_switch",
+        "2024-06-25": "oi_switch",
+        "2024-07-26": "oi_switch",
+        "2024-08-27": "oi_switch",
+        "2024-09-25": "oi_switch",
+        "2024-10-28": "weak_volume_jump",
+        "2024-11-25": "weak_volume_jump",
+        "2024-12-26": "weak_volume_jump",
+        "2025-01-28": "oi_switch",
+        "2025-02-25": "oi_switch",
+        "2025-03-26": "volume_switch",
+        "2025-04-25": "weak_volume_jump",
+        "2025-05-28": "oi_switch",
+        "2025-06-26": "oi_switch",
+        "2025-07-29": "oi_switch",
+        "2025-08-27": "oi_switch",
+        "2025-09-26": "oi_switch"
+      },
+      "repairs": {
+        "after_data_hole": [],
+        "one_day_off_market_print": [
+          "2024-10-08",
+          "2024-10-09"
+        ],
+        "invalid_price_zeroed": [],
+        "after_invalid_price": []
+      }
+    },
+    "MCX:GOLD": {
+      "window": {
+        "months": [
+          2,
+          4,
+          6,
+          8,
+          10,
+          12
+        ],
+        "days": [
+          1,
+          10
+        ]
+      },
+      "n_rolls": 46,
+      "by_evidence": {
+        "volume_switch": 34,
+        "oi_switch": 10,
+        "data_hole": 2
+      },
+      "weak_by_year": {},
+      "mean_roll_gap": 0.005479649577894405,
+      "roll_days": {
+        "2018-02-06": "volume_switch",
+        "2018-04-06": "volume_switch",
+        "2018-06-06": "volume_switch",
+        "2018-08-06": "volume_switch",
+        "2018-10-08": "volume_switch",
+        "2018-12-06": "volume_switch",
+        "2019-02-06": "volume_switch",
+        "2019-05-09": "data_hole",
+        "2019-06-05": "data_hole",
+        "2019-08-06": "volume_switch",
+        "2019-10-04": "volume_switch",
+        "2019-12-06": "volume_switch",
+        "2020-02-06": "volume_switch",
+        "2020-04-03": "volume_switch",
+        "2020-06-05": "volume_switch",
+        "2020-08-05": "volume_switch",
+        "2020-10-06": "volume_switch",
+        "2020-12-04": "volume_switch",
+        "2021-02-05": "volume_switch",
+        "2021-04-06": "volume_switch",
+        "2021-06-04": "volume_switch",
+        "2021-08-06": "volume_switch",
+        "2021-10-06": "volume_switch",
+        "2021-12-03": "volume_switch",
+        "2022-02-04": "volume_switch",
+        "2022-04-06": "volume_switch",
+        "2022-06-03": "volume_switch",
+        "2022-08-05": "volume_switch",
+        "2022-10-05": "volume_switch",
+        "2022-12-06": "volume_switch",
+        "2023-02-03": "volume_switch",
+        "2023-04-06": "volume_switch",
+        "2023-06-06": "volume_switch",
+        "2023-08-04": "volume_switch",
+        "2023-10-06": "volume_switch",
+        "2023-12-06": "volume_switch",
+        "2024-02-06": "oi_switch",
+        "2024-04-04": "oi_switch",
+        "2024-06-05": "oi_switch",
+        "2024-08-05": "oi_switch",
+        "2024-10-04": "oi_switch",
+        "2024-12-05": "oi_switch",
+        "2025-02-05": "oi_switch",
+        "2025-04-04": "oi_switch",
+        "2025-06-06": "oi_switch",
+        "2025-08-06": "oi_switch"
+      },
+      "repairs": {
+        "after_data_hole": [
+          "2019-05-09",
+          "2019-06-05"
+        ],
+        "one_day_off_market_print": [
+          "2018-04-03",
+          "2018-04-04",
+          "2021-12-02",
+          "2021-12-03",
+          "2022-10-25",
+          "2022-10-26",
+          "2022-11-24",
+          "2022-11-25"
+        ],
+        "invalid_price_zeroed": [],
+        "after_invalid_price": []
+      }
+    },
+    "MCX:SILVER": {
+      "window": {
+        "months": [
+          3,
+          5,
+          7,
+          9,
+          12
+        ],
+        "days": [
+          1,
+          10
+        ]
+      },
+      "n_rolls": 39,
+      "by_evidence": {
+        "volume_switch": 30,
+        "oi_switch": 9
+      },
+      "weak_by_year": {},
+      "mean_roll_gap": 0.014109831295380824,
+      "roll_days": {
+        "2018-03-06": "volume_switch",
+        "2018-05-07": "volume_switch",
+        "2018-07-06": "volume_switch",
+        "2018-09-06": "volume_switch",
+        "2018-12-06": "volume_switch",
+        "2019-03-06": "volume_switch",
+        "2019-05-03": "volume_switch",
+        "2019-07-08": "volume_switch",
+        "2019-09-06": "volume_switch",
+        "2019-12-06": "volume_switch",
+        "2020-03-06": "volume_switch",
+        "2020-05-06": "volume_switch",
+        "2020-07-03": "volume_switch",
+        "2020-09-04": "volume_switch",
+        "2020-12-04": "volume_switch",
+        "2021-03-05": "volume_switch",
+        "2021-05-06": "volume_switch",
+        "2021-07-06": "volume_switch",
+        "2021-09-03": "volume_switch",
+        "2021-12-03": "volume_switch",
+        "2022-03-04": "volume_switch",
+        "2022-05-06": "volume_switch",
+        "2022-07-06": "volume_switch",
+        "2022-09-06": "volume_switch",
+        "2022-12-06": "volume_switch",
+        "2023-03-03": "volume_switch",
+        "2023-05-05": "volume_switch",
+        "2023-07-06": "volume_switch",
+        "2023-09-06": "volume_switch",
+        "2023-12-06": "volume_switch",
+        "2024-03-05": "oi_switch",
+        "2024-05-03": "oi_switch",
+        "2024-07-05": "oi_switch",
+        "2024-09-05": "oi_switch",
+        "2024-12-05": "oi_switch",
+        "2025-03-05": "oi_switch",
+        "2025-05-06": "oi_switch",
+        "2025-07-04": "oi_switch",
+        "2025-09-05": "oi_switch"
+      },
+      "repairs": {
+        "after_data_hole": [],
+        "one_day_off_market_print": [
+          "2021-12-02",
+          "2021-12-03",
+          "2022-07-05",
+          "2022-07-06",
+          "2022-09-01",
+          "2022-09-02"
+        ],
+        "invalid_price_zeroed": [],
+        "after_invalid_price": []
+      }
+    }
+  },
+  "costs": {
+    "reference_notional_inr": 100000.0,
+    "index_futures": {
+      "segment": "futures",
+      "round_trip_pct": 0.1435188,
+      "round_trip_inr_at_reference_notional": 143.5188,
+      "components_pct": {
+        "brokerage": 0.04,
+        "dp_charge": 0.0,
+        "exchange_txn": 0.00346,
+        "sebi_fee": 0.00019999999999999998,
+        "transaction_tax": 0.05,
+        "stamp_duty": 0.002,
+        "gst": 0.0078588,
+        "slippage": 0.04
+      }
+    },
+    "mcx_futures": {
+      "segment": "mcx_futures",
+      "round_trip_pct": 0.12439199999999999,
+      "round_trip_inr_at_reference_notional": 124.392,
+      "components_pct": {
+        "brokerage": 0.04,
+        "dp_charge": 0.0,
+        "exchange_txn": 0.0042,
+        "sebi_fee": 0.00019999999999999998,
+        "transaction_tax": 0.01,
+        "stamp_duty": 0.002,
+        "gst": 0.007991999999999999,
+        "slippage": 0.06
+      }
+    }
+  },
+  "portfolio": {
+    "tsmom": {
+      "after_cost": {
+        "n_days": 4473,
+        "n_months": 213,
+        "first_month": "2008-01",
+        "last_month": "2025-09",
+        "annual_return": -0.026466633670394417,
+        "annual_vol": 0.08270981595359297,
+        "sharpe": -0.3199938648786787,
+        "sharpe_ci": [
+          -0.8012819667666016,
+          0.1609899142752736
+        ],
+        "sharpe_p_one_sided": 0.9090454772613693,
+        "sharpe_ci_12m_blocks": [
+          -0.6898660075440702,
+          0.05752422105105511
+        ],
+        "sharpe_from_daily": -0.3334284064374116,
+        "max_drawdown": 0.5231707375029242,
+        "hit_rate_months": 0.4694835680751174,
+        "worst_month": -0.07937510497001839,
+        "best_month": 0.06771194985467685,
+        "total": -0.469782747649501
+      },
+      "before_cost": {
+        "n_days": 4473,
+        "n_months": 213,
+        "first_month": "2008-01",
+        "last_month": "2025-09",
+        "annual_return": -0.014511690026257754,
+        "annual_vol": 0.08276947193762244,
+        "sharpe": -0.17532659912575252,
+        "sharpe_ci": [
+          -0.656230673239784,
+          0.2981004907229834
+        ],
+        "sharpe_p_one_sided": 0.7636181909045477,
+        "sharpe_ci_12m_blocks": [
+          -0.5539228186624924,
+          0.21869967216811065
+        ],
+        "sharpe_from_daily": -0.1828276087503856,
+        "max_drawdown": 0.3687590041139583,
+        "hit_rate_months": 0.4835680751173709,
+        "worst_month": -0.07797741248714943,
+        "best_month": 0.06864812883944607,
+        "total": -0.2575824979660752
+      },
+      "annual_cost": 0.011954943644136663
+    },
+    "buy_and_hold": {
+      "after_cost": {
+        "n_days": 4473,
+        "n_months": 213,
+        "first_month": "2008-01",
+        "last_month": "2025-09",
+        "annual_return": 0.020562285815424575,
+        "annual_vol": 0.090218128777978,
+        "sharpe": 0.227917449563017,
+        "sharpe_ci": [
+          -0.2348903290480891,
+          0.7119870381575766
+        ],
+        "sharpe_p_one_sided": 0.15792103948025987,
+        "sharpe_ci_12m_blocks": [
+          -0.2912914128867397,
+          0.7988042721829092
+        ],
+        "sharpe_from_daily": 0.23910192251096446,
+        "max_drawdown": 0.24410429368263023,
+        "hit_rate_months": 0.5352112676056338,
+        "worst_month": -0.10097602303243866,
+        "best_month": 0.06771194985467685,
+        "total": 0.3649805732237861
+      },
+      "before_cost": {
+        "n_days": 4473,
+        "n_months": 213,
+        "first_month": "2008-01",
+        "last_month": "2025-09",
+        "annual_return": 0.030345972538912677,
+        "annual_vol": 0.09022136243908305,
+        "sharpe": 0.3363501915569287,
+        "sharpe_ci": [
+          -0.12973650674707024,
+          0.8263048629279433
+        ],
+        "sharpe_p_one_sided": 0.07946026986506746,
+        "sharpe_ci_12m_blocks": [
+          -0.19364542358255452,
+          0.9164020414087116
+        ],
+        "sharpe_from_daily": 0.352649932730315,
+        "max_drawdown": 0.23915353621010388,
+        "hit_rate_months": 0.539906103286385,
+        "worst_month": -0.1002231726610257,
+        "best_month": 0.06864812883944607,
+        "total": 0.5386410125657
+      },
+      "annual_cost": 0.00978368672348811
+    }
+  },
+  "primary": {
+    "hypothesis": "tsmom_v1 combined portfolio",
+    "statistic": "annualised Sharpe after cost",
+    "value": -0.3199938648786787,
+    "ci": [
+      -0.8012819667666016,
+      0.1609899142752736
+    ],
+    "p_one_sided": 0.9090454772613693,
+    "n_months": 213,
+    "n_days": 4473
+  },
+  "pass_if": {
+    "sharpe_after_cost_ci_lower_above": {
+      "value": -0.3199938648786787,
+      "ci": [
+        -0.8012819667666016,
+        0.1609899142752736
+      ],
+      "ci_lower_above": 0.0,
+      "pass": false
+    },
+    "sharpe_beats_buy_and_hold_point": {
+      "tsmom_sharpe": -0.3199938648786787,
+      "buy_and_hold_sharpe": 0.227917449563017,
+      "required": true,
+      "pass": false
+    }
+  },
+  "pass_own_rule": false,
+  "n_hypotheses": 1,
+  "n_descriptive_tests": {
+    "per_instrument_sharpe_p": 7,
+    "note": "per-instrument p-values are not gated; bh_q_across_instruments is BH over those seven"
+  },
+  "family": {
+    "fdr_q": 0.1,
+    "note": "a pass also needs this p to survive Benjamini-Hochberg across every v2 primary p-value; the lead computes that across the family"
+  },
+  "per_instrument": {
+    "NSE:NIFTY50": {
+      "evaluation_from": "2008-01-01",
+      "round_trip_cost": 0.001435188,
+      "tsmom": {
+        "after_cost": {
+          "n_days": 4397,
+          "n_months": 213,
+          "first_month": "2008-01",
+          "last_month": "2025-09",
+          "annual_return": -0.04214601652781957,
+          "annual_vol": 0.10855452021676168,
+          "sharpe": -0.38824745799311156,
+          "sharpe_ci": [
+            -0.8400226747614529,
+            0.07641251266811684
+          ],
+          "sharpe_p_one_sided": 0.9440279860069966,
+          "sharpe_ci_12m_blocks": [
+            -0.8518637865386925,
+            0.08095387182956064
+          ],
+          "sharpe_from_daily": -0.4047642895369542,
+          "max_drawdown": 0.9055122001833973,
+          "hit_rate_months": 0.460093896713615,
+          "worst_month": -0.15478281232573576,
+          "best_month": 0.08091603228055758,
+          "total": -0.7480917933687972,
+          "mean_abs_position": 0.6396539491400637,
+          "max_abs_position": 1.1467493210956152,
+          "share_days_long": 0.6788719581532864,
+          "share_days_short": 0.3211280418467137,
+          "bh_q_across_instruments": 0.9980009995002499
+        },
+        "before_cost_sharpe": -0.2509685324735306,
+        "annual_cost": 0.014916941665676406,
+        "trades": {
+          "n_rebalances": 213,
+          "n_position_changes": 213,
+          "n_sign_flips": 31,
+          "mean_turnover_per_rebalance": 0.2268333292599519,
+          "months_open": 213
+        }
+      },
+      "buy_and_hold": {
+        "after_cost": {
+          "n_days": 4397,
+          "n_months": 213,
+          "first_month": "2008-01",
+          "last_month": "2025-09",
+          "annual_return": 0.012692803240771643,
+          "annual_vol": 0.10639371157903492,
+          "sharpe": 0.11930031439257338,
+          "sharpe_ci": [
+            -0.32693396666652014,
+            0.6090260796895068
+          ],
+          "sharpe_p_one_sided": 0.2813593203398301,
+          "sharpe_ci_12m_blocks": [
+            -0.35170396557131184,
+            0.611160969563044
+          ],
+          "sharpe_from_daily": 0.12201183446290982,
+          "max_drawdown": 0.37494351476052074,
+          "hit_rate_months": 0.5211267605633803,
+          "worst_month": -0.15478281232573576,
+          "best_month": 0.07713091997296002,
+          "total": 0.22529725752369664,
+          "mean_abs_position": 0.6396539491400637,
+          "max_abs_position": 1.1467493210956152,
+          "share_days_long": 1.0,
+          "share_days_short": 0.0
+        },
+        "before_cost_sharpe": 0.23041528571598793,
+        "annual_cost": 0.011828240145034592,
+        "trades": {
+          "n_rebalances": 213,
+          "n_position_changes": 213,
+          "n_sign_flips": 0,
+          "mean_turnover_per_rebalance": 0.04748972174176054,
+          "months_open": 213
+        }
+      }
+    },
+    "NSE:BANKNIFTY": {
+      "evaluation_from": "2008-01-01",
+      "round_trip_cost": 0.001435188,
+      "tsmom": {
+        "after_cost": {
+          "n_days": 4395,
+          "n_months": 213,
+          "first_month": "2008-01",
+          "last_month": "2025-09",
+          "annual_return": -0.07324462397480322,
+          "annual_vol": 0.1147529048531853,
+          "sharpe": -0.6382812188372249,
+          "sharpe_ci": [
+            -1.088940760784539,
+            -0.17758022960937841
+          ],
+          "sharpe_p_one_sided": 0.9980009995002499,
+          "sharpe_ci_12m_blocks": [
+            -1.0458747922850322,
+            -0.16902704808369948
+          ],
+          "sharpe_from_daily": -0.7129323669716195,
+          "max_drawdown": 1.3342690517258675,
+          "hit_rate_months": 0.4225352112676056,
+          "worst_month": -0.1950614687982768,
+          "best_month": 0.07542237413618486,
+          "total": -1.3000920755527574,
+          "mean_abs_position": 0.4760521910922205,
+          "max_abs_position": 0.9023375864450962,
+          "share_days_long": 0.6741751990898749,
+          "share_days_short": 0.32582480091012517,
+          "bh_q_across_instruments": 0.9980009995002499
+        },
+        "before_cost_sharpe": -0.544372454067168,
+        "annual_cost": 0.010797131531679488,
+        "trades": {
+          "n_rebalances": 213,
+          "n_position_changes": 213,
+          "n_sign_flips": 26,
+          "mean_turnover_per_rebalance": 0.15121211531951612,
+          "months_open": 213
+        }
+      },
+      "buy_and_hold": {
+        "after_cost": {
+          "n_days": 4395,
+          "n_months": 213,
+          "first_month": "2008-01",
+          "last_month": "2025-09",
+          "annual_return": 0.018344781109424394,
+          "annual_vol": 0.11419813515112237,
+          "sharpe": 0.16063993588991715,
+          "sharpe_ci": [
+            -0.2927485086341437,
+            0.677812512341163
+          ],
+          "sharpe_p_one_sided": 0.239880059970015,
+          "sharpe_ci_12m_blocks": [
+            -0.27948853308025334,
+            0.652742049393923
+          ],
+          "sharpe_from_daily": 0.17862583093153261,
+          "max_drawdown": 0.3469990335588225,
+          "hit_rate_months": 0.5164319248826291,
+          "worst_month": -0.1950614687982768,
+          "best_month": 0.08992902137425915,
+          "total": 0.32561986469228305,
+          "mean_abs_position": 0.4760521910922205,
+          "max_abs_position": 0.9023375864450962,
+          "share_days_long": 1.0,
+          "share_days_short": 0.0
+        },
+        "before_cost_sharpe": 0.23769612142726596,
+        "annual_cost": 0.008798223569725771,
+        "trades": {
+          "n_rebalances": 213,
+          "n_position_changes": 213,
+          "n_sign_flips": 0,
+          "mean_turnover_per_rebalance": 0.03514671936014141,
+          "months_open": 213
+        }
+      }
+    },
+    "BSE:SENSEX": {
+      "evaluation_from": "2008-01-01",
+      "round_trip_cost": 0.001435188,
+      "tsmom": {
+        "after_cost": {
+          "n_days": 4397,
+          "n_months": 213,
+          "first_month": "2008-01",
+          "last_month": "2025-09",
+          "annual_return": -0.03950320612393237,
+          "annual_vol": 0.10720805168493346,
+          "sharpe": -0.3684723815336714,
+          "sharpe_ci": [
+            -0.817731656070781,
+            0.09546234742640355
+          ],
+          "sharpe_p_one_sided": 0.9420289855072463,
+          "sharpe_ci_12m_blocks": [
+            -0.8134062201857033,
+            0.06531593159575491
+          ],
+          "sharpe_from_daily": -0.3782076374096987,
+          "max_drawdown": 0.7904874980102975,
+          "hit_rate_months": 0.4647887323943662,
+          "worst_month": -0.15524471962402608,
+          "best_month": 0.06857140158829308,
+          "total": -0.7011819086997993,
+          "mean_abs_position": 0.6444214959529716,
+          "max_abs_position": 1.1477368164653412,
+          "share_days_long": 0.6836479417784853,
+          "share_days_short": 0.3163520582215147,
+          "bh_q_across_instruments": 0.9980009995002499
+        },
+        "before_cost_sharpe": -0.22626546162475936,
+        "annual_cost": 0.015248685135958938,
+        "trades": {
+          "n_rebalances": 213,
+          "n_position_changes": 213,
+          "n_sign_flips": 33,
+          "mean_turnover_per_rebalance": 0.24137126545573512,
+          "months_open": 213
+        }
+      },
+      "buy_and_hold": {
+        "after_cost": {
+          "n_days": 4397,
+          "n_months": 213,
+          "first_month": "2008-01",
+          "last_month": "2025-09",
+          "annual_return": 0.012579240718568106,
+          "annual_vol": 0.10521128250712011,
+          "sharpe": 0.11956170877126997,
+          "sharpe_ci": [
+            -0.33409055266859194,
+            0.608702047109708
+          ],
+          "sharpe_p_one_sided": 0.2848575712143928,
+          "sharpe_ci_12m_blocks": [
+            -0.3614079935328532,
+            0.604871934937503
+          ],
+          "sharpe_from_daily": 0.12055560213846005,
+          "max_drawdown": 0.35749821239769697,
+          "hit_rate_months": 0.5211267605633803,
+          "worst_month": -0.15524471962402608,
+          "best_month": 0.07597145475198386,
+          "total": 0.22328152275458396,
+          "mean_abs_position": 0.6444214959529716,
+          "max_abs_position": 1.1477368164653412,
+          "share_days_long": 1.0,
+          "share_days_short": 0.0
+        },
+        "before_cost_sharpe": 0.2326008137374375,
+        "annual_cost": 0.011901017877176422,
+        "trades": {
+          "n_rebalances": 213,
+          "n_position_changes": 213,
+          "n_sign_flips": 0,
+          "mean_turnover_per_rebalance": 0.04699096714972242,
+          "months_open": 213
+        }
+      }
+    },
+    "MCX:CRUDEOIL": {
+      "evaluation_from": "2019-01-01",
+      "round_trip_cost": 0.00124392,
+      "tsmom": {
+        "after_cost": {
+          "n_days": 1734,
+          "n_months": 81,
+          "first_month": "2019-01",
+          "last_month": "2025-09",
+          "annual_return": 0.002047096720691151,
+          "annual_vol": 0.12427759946505126,
+          "sharpe": 0.01647196863717041,
+          "sharpe_ci": [
+            -0.9411491275555313,
+            0.6258139225249373
+          ],
+          "sharpe_p_one_sided": 0.5067466266866567,
+          "sharpe_ci_12m_blocks": [
+            -0.424204806326084,
+            0.338713597015535
+          ],
+          "sharpe_from_daily": 0.01806076336154727,
+          "max_drawdown": 0.22339551222969062,
+          "hit_rate_months": 0.41975308641975306,
+          "worst_month": -0.07180456059865398,
+          "best_month": 0.21858099639745832,
+          "total": 0.013817902864665318,
+          "mean_abs_position": 0.2727484996417171,
+          "max_abs_position": 0.4369271426083985,
+          "share_days_long": 0.45617070357554784,
+          "share_days_short": 0.5432525951557093,
+          "bh_q_across_instruments": 0.9980009995002499
+        },
+        "before_cost_sharpe": 0.06253524410091538,
+        "annual_cost": 0.005739730249597358,
+        "trades": {
+          "n_rebalances": 81,
+          "n_position_changes": 81,
+          "n_sign_flips": 12,
+          "mean_turnover_per_rebalance": 0.1118847931829486,
+          "months_open": 81
+        }
+      },
+      "buy_and_hold": {
+        "after_cost": {
+          "n_days": 1734,
+          "n_months": 81,
+          "first_month": "2019-01",
+          "last_month": "2025-09",
+          "annual_return": 0.008628357358310778,
+          "annual_vol": 0.11633355343758349,
+          "sharpe": 0.0741691206307057,
+          "sharpe_ci": [
+            -0.5957588718455621,
+            1.0763166110062763
+          ],
+          "sharpe_p_one_sided": 0.40929535232383807,
+          "sharpe_ci_12m_blocks": [
+            -0.4862690408857327,
+            0.8473594997659689
+          ],
+          "sharpe_from_daily": 0.07614472457374225,
+          "max_drawdown": 0.3727618496189836,
+          "hit_rate_months": 0.5308641975308642,
+          "worst_month": -0.18687273428195533,
+          "best_month": 0.05512351625693055,
+          "total": 0.05824141216859774,
+          "mean_abs_position": 0.2727484996417171,
+          "max_abs_position": 0.4369271426083985,
+          "share_days_long": 0.9994232987312572,
+          "share_days_short": 0.0
+        },
+        "before_cost_sharpe": 0.11280289574176766,
+        "annual_cost": 0.004487971928514176,
+        "trades": {
+          "n_rebalances": 81,
+          "n_position_changes": 81,
+          "n_sign_flips": 1,
+          "mean_turnover_per_rebalance": 0.028026350981200474,
+          "months_open": 81
+        }
+      }
+    },
+    "MCX:NATURALGAS": {
+      "evaluation_from": "2019-01-01",
+      "round_trip_cost": 0.00124392,
+      "tsmom": {
+        "after_cost": {
+          "n_days": 1738,
+          "n_months": 81,
+          "first_month": "2019-01",
+          "last_month": "2025-09",
+          "annual_return": 0.001546848616025193,
+          "annual_vol": 0.0935253962491713,
+          "sharpe": 0.016539343088203155,
+          "sharpe_ci": [
+            -0.7570406131289373,
+            0.7479139908466397
+          ],
+          "sharpe_p_one_sided": 0.4927536231884058,
+          "sharpe_ci_12m_blocks": [
+            -0.5882454391275341,
+            0.44760722227224115
+          ],
+          "sharpe_from_daily": 0.014916066278540687,
+          "max_drawdown": 0.18167808478578196,
+          "hit_rate_months": 0.4567901234567901,
+          "worst_month": -0.057843181930481935,
+          "best_month": 0.07507960698788414,
+          "total": 0.01044122815817003,
+          "mean_abs_position": 0.17521575159688235,
+          "max_abs_position": 0.2794326467984122,
+          "share_days_long": 0.42117376294591485,
+          "share_days_short": 0.5782508630609896,
+          "bh_q_across_instruments": 0.9980009995002499
+        },
+        "before_cost_sharpe": 0.05225720096589654,
+        "annual_cost": 0.0033409733233233435,
+        "trades": {
+          "n_rebalances": 81,
+          "n_position_changes": 81,
+          "n_sign_flips": 10,
+          "mean_turnover_per_rebalance": 0.04859716366157644,
+          "months_open": 81
+        }
+      },
+      "buy_and_hold": {
+        "after_cost": {
+          "n_days": 1738,
+          "n_months": 81,
+          "first_month": "2019-01",
+          "last_month": "2025-09",
+          "annual_return": -0.007872215058884248,
+          "annual_vol": 0.09367669228001722,
+          "sharpe": -0.08403600583326233,
+          "sharpe_ci": [
+            -0.918500647703446,
+            0.6632498192816203
+          ],
+          "sharpe_p_one_sided": 0.5932033983008496,
+          "sharpe_ci_12m_blocks": [
+            -0.7633401246659287,
+            0.5196328617101499
+          ],
+          "sharpe_from_daily": -0.07590132772626486,
+          "max_drawdown": 0.3104221467651149,
+          "hit_rate_months": 0.43209876543209874,
+          "worst_month": -0.05724542648648979,
+          "best_month": 0.07507960698788414,
+          "total": -0.05313745164746875,
+          "mean_abs_position": 0.17521575159688235,
+          "max_abs_position": 0.2794326467984122,
+          "share_days_long": 0.9994246260069045,
+          "share_days_short": 0.0
+        },
+        "before_cost_sharpe": -0.05385856541217133,
+        "annual_cost": 0.0028259714359081915,
+        "trades": {
+          "n_rebalances": 81,
+          "n_position_changes": 81,
+          "n_sign_flips": 1,
+          "mean_turnover_per_rebalance": 0.01409589030696945,
+          "months_open": 81
+        }
+      }
+    },
+    "MCX:GOLD": {
+      "evaluation_from": "2019-01-01",
+      "round_trip_cost": 0.00124392,
+      "tsmom": {
+        "after_cost": {
+          "n_days": 1712,
+          "n_months": 81,
+          "first_month": "2019-01",
+          "last_month": "2025-09",
+          "annual_return": 0.0728741313365952,
+          "annual_vol": 0.102966878166165,
+          "sharpe": 0.7077434281244597,
+          "sharpe_ci": [
+            -0.01657402331196079,
+            1.5124459545278195
+          ],
+          "sharpe_p_one_sided": 0.029985007496251874,
+          "sharpe_ci_12m_blocks": [
+            -0.2676437993575018,
+            1.7362093358272976
+          ],
+          "sharpe_from_daily": 0.6833921149038844,
+          "max_drawdown": 0.32256830845025686,
+          "hit_rate_months": 0.5308641975308642,
+          "worst_month": -0.05986330735923699,
+          "best_month": 0.08077128564664071,
+          "total": 0.4919003865220177,
+          "mean_abs_position": 0.7958257818304951,
+          "max_abs_position": 1.134612423898062,
+          "share_days_long": 0.8294392523364486,
+          "share_days_short": 0.1699766355140187,
+          "bh_q_across_instruments": 0.2098950524737631
+        },
+        "before_cost_sharpe": 0.8447186332677007,
+        "annual_cost": 0.014170818311035706,
+        "trades": {
+          "n_rebalances": 81,
+          "n_position_changes": 81,
+          "n_sign_flips": 5,
+          "mean_turnover_per_rebalance": 0.15024659908983456,
+          "months_open": 81
+        }
+      },
+      "buy_and_hold": {
+        "after_cost": {
+          "n_days": 1712,
+          "n_months": 81,
+          "first_month": "2019-01",
+          "last_month": "2025-09",
+          "annual_return": 0.12517612605760098,
+          "annual_vol": 0.09938364071177974,
+          "sharpe": 1.2595244565513695,
+          "sharpe_ci": [
+            0.5307850859119072,
+            2.0801470934191038
+          ],
+          "sharpe_p_one_sided": 0.0004997501249375312,
+          "sharpe_ci_12m_blocks": [
+            0.6280612262324118,
+            2.0357436754880363
+          ],
+          "sharpe_from_daily": 1.177982689875503,
+          "max_drawdown": 0.14692888849718339,
+          "hit_rate_months": 0.5802469135802469,
+          "worst_month": -0.045541415604811696,
+          "best_month": 0.08077128564664071,
+          "total": 0.8449388508888067,
+          "mean_abs_position": 0.7958257818304951,
+          "max_abs_position": 1.134612423898062,
+          "share_days_long": 0.9994158878504673,
+          "share_days_short": 0.0
+        },
+        "before_cost_sharpe": 1.3883399327402512,
+        "annual_cost": 0.012986836834827393,
+        "trades": {
+          "n_rebalances": 81,
+          "n_position_changes": 81,
+          "n_sign_flips": 1,
+          "mean_turnover_per_rebalance": 0.07092869840702588,
+          "months_open": 81
+        }
+      }
+    },
+    "MCX:SILVER": {
+      "evaluation_from": "2019-01-01",
+      "round_trip_cost": 0.00124392,
+      "tsmom": {
+        "after_cost": {
+          "n_days": 1738,
+          "n_months": 81,
+          "first_month": "2019-01",
+          "last_month": "2025-09",
+          "annual_return": -0.04320505325254257,
+          "annual_vol": 0.10488179644774456,
+          "sharpe": -0.41194043881646036,
+          "sharpe_ci": [
+            -1.1987347872969674,
+            0.3454297546189415
+          ],
+          "sharpe_p_one_sided": 0.8470764617691154,
+          "sharpe_ci_12m_blocks": [
+            -1.1498613989159852,
+            0.42556162707491757
+          ],
+          "sharpe_from_daily": -0.3958549598477839,
+          "max_drawdown": 0.47675719824090546,
+          "hit_rate_months": 0.43209876543209874,
+          "worst_month": -0.08654227460499389,
+          "best_month": 0.0774995695916023,
+          "total": -0.2916341094546624,
+          "mean_abs_position": 0.4520196439363083,
+          "max_abs_position": 0.7194602866274554,
+          "share_days_long": 0.6144994246260069,
+          "share_days_short": 0.3849252013808976,
+          "bh_q_across_instruments": 0.9980009995002499
+        },
+        "before_cost_sharpe": -0.3283577553095172,
+        "annual_cost": 0.008886670791091685,
+        "trades": {
+          "n_rebalances": 81,
+          "n_position_changes": 81,
+          "n_sign_flips": 10,
+          "mean_turnover_per_rebalance": 0.14317486306214647,
+          "months_open": 81
+        }
+      },
+      "buy_and_hold": {
+        "after_cost": {
+          "n_days": 1738,
+          "n_months": 81,
+          "first_month": "2019-01",
+          "last_month": "2025-09",
+          "annual_return": 0.059932759962061176,
+          "annual_vol": 0.10314243032547142,
+          "sharpe": 0.5810679443265023,
+          "sharpe_ci": [
+            -0.14710822396936865,
+            1.3192633467205623
+          ],
+          "sharpe_p_one_sided": 0.057971014492753624,
+          "sharpe_ci_12m_blocks": [
+            0.060451643060522,
+            1.190982288715241
+          ],
+          "sharpe_from_daily": 0.5496000808715552,
+          "max_drawdown": 0.20220692956321157,
+          "hit_rate_months": 0.49382716049382713,
+          "worst_month": -0.053592453615501585,
+          "best_month": 0.08486054779625328,
+          "total": 0.4045461297439129,
+          "mean_abs_position": 0.4520196439363083,
+          "max_abs_position": 0.7194602866274554,
+          "share_days_long": 0.9994246260069045,
+          "share_days_short": 0.0
+        },
+        "before_cost_sharpe": 0.6523942483403009,
+        "annual_cost": 0.007368007691299386,
+        "trades": {
+          "n_rebalances": 81,
+          "n_position_changes": 81,
+          "n_sign_flips": 1,
+          "mean_turnover_per_rebalance": 0.04143579759489394,
+          "months_open": 81
+        }
+      }
+    }
+  },
+  "diagnostics": {
+    "sharpe_diff_vs_buy_and_hold": {
+      "value": -0.5479113144416957,
+      "ci": [
+        -1.1307774470873162,
+        -0.033936074862553914
+      ],
+      "p_one_sided": 0.9815092453773113
+    },
+    "sub_periods": {
+      "2008-01-01..2019-01-01 (indices only)": {
+        "tsmom": {
+          "n_days": 2732,
+          "n_months": 132,
+          "first_month": "2008-01",
+          "last_month": "2018-12",
+          "annual_return": -0.01735542872762145,
+          "annual_vol": 0.09677839517358476,
+          "sharpe": -0.17933164418042072,
+          "sharpe_ci": [
+            -0.7311100840595235,
+            0.4015385046350896
+          ],
+          "sharpe_p_one_sided": 0.7216391804097951,
+          "sharpe_ci_12m_blocks": [
+            -0.6044645025124552,
+            0.2841418227815159
+          ],
+          "sharpe_from_daily": -0.19169140000796114,
+          "max_drawdown": 0.281316330852047,
+          "hit_rate_months": 0.5227272727272727,
+          "worst_month": -0.07937510497001839,
+          "best_month": 0.06771194985467685,
+          "total": -0.19090971600383583
+        },
+        "buy_and_hold": {
+          "n_days": 2732,
+          "n_months": 132,
+          "first_month": "2008-01",
+          "last_month": "2018-12",
+          "annual_return": 0.011956282419138436,
+          "annual_vol": 0.10419783011696065,
+          "sharpe": 0.11474598276871667,
+          "sharpe_ci": [
+            -0.44618578437829026,
+            0.7361056778478274
+          ],
+          "sharpe_p_one_sided": 0.3453273363318341,
+          "sharpe_ci_12m_blocks": [
+            -0.6233132801275688,
+            0.8788680435131468
+          ],
+          "sharpe_from_daily": 0.12348069740881683,
+          "max_drawdown": 0.24410429368263023,
+          "hit_rate_months": 0.5075757575757576,
+          "worst_month": -0.07937510497001839,
+          "best_month": 0.06771194985467685,
+          "total": 0.13151910661052268
+        }
+      },
+      "2019-01-01..2025-10-01 (all seven)": {
+        "tsmom": {
+          "n_days": 1741,
+          "n_months": 81,
+          "first_month": "2019-01",
+          "last_month": "2025-09",
+          "annual_return": -0.04131452320676521,
+          "annual_vol": 0.05254984161189704,
+          "sharpe": -0.78619691210281,
+          "sharpe_ci": [
+            -1.6065427331440205,
+            -0.04539102119556334
+          ],
+          "sharpe_p_one_sided": 0.9820089955022488,
+          "sharpe_ci_12m_blocks": [
+            -1.5676060975239894,
+            -0.021938303497417707
+          ],
+          "sharpe_from_daily": -0.743556221711485,
+          "max_drawdown": 0.3337526769821885,
+          "hit_rate_months": 0.38271604938271603,
+          "worst_month": -0.04409707180348299,
+          "best_month": 0.03581084089743945,
+          "total": -0.2788730316456651
+        },
+        "buy_and_hold": {
+          "n_days": 1741,
+          "n_months": 81,
+          "first_month": "2019-01",
+          "last_month": "2025-09",
+          "annual_return": 0.0345868839427057,
+          "annual_vol": 0.06134940197866648,
+          "sharpe": 0.5637688848985499,
+          "sharpe_ci": [
+            -0.22525034587218815,
+            1.7734408245734117
+          ],
+          "sharpe_p_one_sided": 0.07446276861569215,
+          "sharpe_ci_12m_blocks": [
+            0.058679837637371744,
+            1.2678079367760884
+          ],
+          "sharpe_from_daily": 0.5440973592671233,
+          "max_drawdown": 0.18683217581094874,
+          "hit_rate_months": 0.5802469135802469,
+          "worst_month": -0.10097602303243866,
+          "best_month": 0.029180354735222742,
+          "total": 0.23346146661326342
+        }
+      }
+    },
+    "indices_only_portfolio": {
+      "n_days": 4397,
+      "n_months": 213,
+      "first_month": "2008-01",
+      "last_month": "2025-09",
+      "annual_return": -0.05163128220885171,
+      "annual_vol": 0.1000897514228984,
+      "sharpe": -0.5158498395175308,
+      "sharpe_ci": [
+        -0.9727613771337876,
+        -0.05650011154575851
+      ],
+      "sharpe_p_one_sided": 0.9890054972513743,
+      "sharpe_ci_12m_blocks": [
+        -0.9446448343794657,
+        -0.04228928733662457
+      ],
+      "sharpe_from_daily": -0.5409016619144548,
+      "max_drawdown": 0.9556916388225669,
+      "hit_rate_months": 0.4788732394366197,
+      "worst_month": -0.16836300024934622,
+      "best_month": 0.06771194985467685,
+      "total": -0.916455259207118
+    },
+    "mcx_only_portfolio": {
+      "n_days": 1738,
+      "n_months": 81,
+      "first_month": "2019-01",
+      "last_month": "2025-09",
+      "annual_return": 0.008315755855192248,
+      "annual_vol": 0.05571667559975959,
+      "sharpe": 0.1492507542073836,
+      "sharpe_ci": [
+        -0.6548666409356441,
+        0.8508770982949778
+      ],
+      "sharpe_p_one_sided": 0.35282358820589704,
+      "sharpe_ci_12m_blocks": [
+        -0.4940929608321062,
+        0.7940826151273804
+      ],
+      "sharpe_from_daily": 0.14491705410536354,
+      "max_drawdown": 0.12209310505819365,
+      "hit_rate_months": 0.4567901234567901,
+      "worst_month": -0.02762845475961571,
+      "best_month": 0.04910237453091443,
+      "total": 0.05613135202254765
+    },
+    "variants": {
+      "mcx_rolls_evidenced_only": {
+        "tsmom_sharpe": -0.32183787895323773,
+        "tsmom_sharpe_ci": [
+          -0.8103223794731532,
+          0.15697375317316234
+        ],
+        "tsmom_p_one_sided": 0.9095452273863068,
+        "buy_and_hold_sharpe": 0.2387146991266707
+      },
+      "mcx_no_roll_adjustment": {
+        "tsmom_sharpe": -0.2870574824138708,
+        "tsmom_sharpe_ci": [
+          -0.7724835961805819,
+          0.18709742482381442
+        ],
+        "tsmom_p_one_sided": 0.8860569715142429,
+        "buy_and_hold_sharpe": 0.283959711709596
+      },
+      "crude_2020_04_20_floored_price_kept": {
+        "tsmom_sharpe": -0.3079326944220926,
+        "tsmom_sharpe_ci": [
+          -0.7945579492285053,
+          0.17212295340796996
+        ],
+        "tsmom_p_one_sided": 0.9000499750124937,
+        "buy_and_hold_sharpe": 0.21333585972409624
+      },
+      "index_signal_on_spot_without_carry": {
+        "tsmom_sharpe": -0.20732443448641086,
+        "tsmom_sharpe_ci": [
+          -0.6732426097166406,
+          0.2712495439036574
+        ],
+        "tsmom_p_one_sided": 0.8105947026486756,
+        "buy_and_hold_sharpe": 0.227917449563017
+      }
+    }
+  },
+  "interpretations": [
+    "Evaluation windows start at indices_from (2008-01-01) and mcx_from (2019-01-01); the data before each start is the signal warm-up (MCX data begins 2018-01-01, so its first year is exactly the warm-up).",
+    "'60-day EWMA' is read as MOP 2012's estimator: exponential weights with a centre of mass of 60 days on squared daily returns (not demeaned), annualised by 252, at least 60 returns.",
+    "The signal uses the instrument's futures-proxy return (spot minus carry for indices, roll-adjusted for MCX), as MOP's futures excess return; a spot-price signal for indices is a diagnostic.",
+    "Rebalance: decided and traded at the close of the first trading day of each IST month on the instrument's own calendar; the new weight earns from the next bar."
+  ],
+  "deviations": [
+    "MCX roll days are detected from the series itself (no historical MCX expiry calendar in the repo): gold and silver rolls all have contract-change evidence, but many crude oil (2018-2020, 2024-25) and natural gas (2018-2020) windows have none and use the largest volume jump in the usual days of the month (a weak guess). Diagnostics show the result with only evidenced rolls and with no roll rule.",
+    "Data repairs not in the registration, applied identically to strategy and baselines: open-to-close on the first bar after a data hole (> 5 calendar days; GOLD 2019-04-05..2019-05-09 and 2019-05-29..2019-06-05), open-to-close on both bars of a one-day off-market print (tiny volume, a big gap reversed next day), and zero return on the CRUDEOIL 2020-04-20 bar whose close is the vendor floor 1.0 (MCX settled the April 2020 contract at a negative price). Keeping the floored price is a diagnostic.",
+    "Costs: 'one round trip per position change' is read conservatively as a full round trip on the traded notional |weight change| at every monthly rebalance (a flip pays for twice the position), plus a full round trip on every open position each month for the roll, also for gold and silver, whose contracts roll every two months.",
+    "Cost rates are today's (futures STT 0.05% since 2026-04-01) applied to the whole history, and brokerage is costed at the Rs 1 lakh reference notional; both overstate historical costs."
+  ],
+  "caveats": [
+    "Index futures are proxied by spot minus 5% a year; the real basis moved with rates and dividends, and SENSEX futures were illiquid for most of the sample.",
+    "NIFTY 50, SENSEX and BANKNIFTY are highly correlated, so the equal-risk portfolio is mostly one equity bet before 2019; the sample has about 213 monthly observations and one crisis (2008) at its start.",
+    "The MCX continuous series is Fyers's unadjusted front month; its switch day is not always the exchange's expiry day, which is why the roll days come from the data.",
+    "Gold and silver are costed with a roll every month although their contracts roll every two months (registered; conservative).",
+    "Validation only: the holdout (>= 2025-10-01) was not read."
+  ],
+  "runtime_s": 4.7
+}

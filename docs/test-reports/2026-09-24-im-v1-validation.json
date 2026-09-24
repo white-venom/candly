@@ -1,0 +1,699 @@
+{
+  "test": "im_v1",
+  "period": "validation",
+  "generated_at": "2026-09-24T11:50:51.816232+00:00",
+  "edge_search_v2_sha256": "2c7ea1287598d2ac918669edbcf69aafbaaeda7e67c4be6217770f63e16ec4c6",
+  "config_hashes": {
+    "research.yaml": "642e412d15a156732d7a5d726bbf1eb699497b253e24222d6750eb89015bc7d5",
+    "patterns.yaml": "e0464b18601745671b84d3ed8d4fb06e20f4b9f37de48de51f191f19ddaf9254",
+    "costs.yaml": "c07fd90cd49a8eb68b5e1bf4ad07fb12aae5e6f697531854f51e4b303b2d791c",
+    "expiry.yaml": "a47b2a6277c49b331b87b821c16eed0101242f391090785f95c24f8ebd54d3b0",
+    "markets.yaml": "f73c5ab9315caf35cb79d5ce509a0fc0a1b4fda3f7623fb39a7e984dca83e77c",
+    "watchlist.yaml": "0be3a783d10a75d3dd72002306efd0a0da844e146f19d33b27610156d9bfb0a6",
+    "holidays_observed.json": "965345a57c0b05fe8946563212fca5855582142ed34781033628cfc3774c0159",
+    "edge_search.yaml": "b5e2f46f69c7ce19759b05bf0e2d70ce7b182116cfcaa91aad7c816c5912b702",
+    "edge_search_v2.yaml": "2c7ea1287598d2ac918669edbcf69aafbaaeda7e67c4be6217770f63e16ec4c6"
+  },
+  "registered": {
+    "name": "im_v1",
+    "instruments": [
+      "NSE:NIFTY50",
+      "NSE:BANKNIFTY"
+    ],
+    "times_ist": {
+      "first_end": "09:45",
+      "second_last": [
+        "14:30",
+        "15:00"
+      ],
+      "last": [
+        "15:00",
+        "15:30"
+      ]
+    },
+    "r1": "previous session close to the close of the 09:40 bar (includes the overnight gap)",
+    "r12": "14:30 to 15:00",
+    "target": "15:00 to 15:30 (the last 5m bar's close)",
+    "split": {
+      "train": [
+        "2017-07-17",
+        "2023-01-01"
+      ],
+      "validation": [
+        "2023-01-01",
+        "holdout_start"
+      ]
+    },
+    "variants": {
+      "sign_r1": "at 15:00 go long if r1 > 0 else short; exit at 15:30",
+      "agree": "trade only when sign(r1) == sign(r12), in that direction; flat otherwise"
+    },
+    "costs": "index futures intraday, one round trip per trade, from config/costs.yaml incl. slippage",
+    "skip_days": "special sessions, and days with a missing bar in any of the windows",
+    "primary": "mean after-cost return per trading day (flat days count as 0), one-sided > 0; one p per instrument x variant",
+    "pass_if": {
+      "mean_after_cost_ci_lower_above": 0.0,
+      "train_period_same_sign": true
+    }
+  },
+  "split": {
+    "train": [
+      "2017-07-17",
+      "2023-01-01"
+    ],
+    "validation": [
+      "2023-01-01",
+      "2025-10-01"
+    ],
+    "holdout_start": "2025-10-01",
+    "holdout_start_utc": "2025-09-30T18:30:00+00:00"
+  },
+  "implementation": {
+    "prices": "5m spot bar closes; ts = bar open (UTC), times below are IST bar opens",
+    "r1": "previous session's 15:25 bar close -> 09:40 bar close",
+    "r12": "14:25 bar close -> 14:55 bar close",
+    "target": "14:55 bar close -> 15:25 bar close (simple return)",
+    "required_bars": [
+      "09:15",
+      "09:20",
+      "09:25",
+      "09:30",
+      "09:35",
+      "09:40",
+      "14:25",
+      "14:30",
+      "14:35",
+      "14:40",
+      "14:45",
+      "14:50",
+      "14:55",
+      "15:00",
+      "15:05",
+      "15:10",
+      "15:15",
+      "15:20",
+      "15:25",
+      "previous session 15:25"
+    ],
+    "special_session": "weekend, a markets.yaml NSE special session, or a session whose bars do not run 09:15..15:25; the day after a special session is skipped too",
+    "bootstrap": {
+      "kind": "date_block",
+      "resamples": 2000,
+      "ci_level": 0.95,
+      "seed": 20260924,
+      "block": "one trading day",
+      "diagnostic_block_days": 20,
+      "p_value": "(1 + #{bootstrap mean <= 0}) / (1 + B)"
+    },
+    "regression_t_stats": "OLS with intercept, HC1 standard errors"
+  },
+  "costs": {
+    "segment": "futures (index intraday mapping) + index slippage",
+    "round_trip_pct": 0.1435188,
+    "round_trip_inr_at_reference_notional": 143.5188,
+    "reference_notional_inr": 100000.0,
+    "components_pct": {
+      "brokerage": 0.04,
+      "dp_charge": 0.0,
+      "exchange_txn": 0.00346,
+      "sebi_fee": 0.00019999999999999998,
+      "transaction_tax": 0.05,
+      "stamp_duty": 0.002,
+      "gst": 0.0078588,
+      "slippage": 0.04
+    }
+  },
+  "data": {
+    "NSE:NIFTY50": {
+      "bars": 151895,
+      "first_bar": "2017-07-17T03:45:00+00:00",
+      "last_bar": "2025-09-30T09:55:00+00:00",
+      "days_with_decision_bar": 2026,
+      "skipped": {
+        "special_session": 4,
+        "previous_session_special": 8,
+        "missing_window_bar": 2
+      }
+    },
+    "NSE:BANKNIFTY": {
+      "bars": 151886,
+      "first_bar": "2017-07-17T03:45:00+00:00",
+      "last_bar": "2025-09-30T09:55:00+00:00",
+      "days_with_decision_bar": 2026,
+      "skipped": {
+        "special_session": 4,
+        "previous_session_special": 8,
+        "missing_window_bar": 2
+      }
+    }
+  },
+  "hypotheses": [
+    {
+      "instrument": "NSE:NIFTY50",
+      "variant": "sign_r1",
+      "primary_mean_net_per_day": -0.0014274376105967866,
+      "ci": [
+        -0.0015625778422246983,
+        -0.0012976199895249902
+      ],
+      "p_one_sided": 1.0,
+      "n_days": 672,
+      "n_trades": 672,
+      "checks": {
+        "mean_after_cost_ci_lower_above": {
+          "ci_lower": -0.0015625778422246983,
+          "above": 0.0,
+          "pass": false
+        },
+        "train_period_same_sign": {
+          "train_mean_net_per_day": -0.0013728158688393695,
+          "validation_mean_net_per_day": -0.0014274376105967866,
+          "pass": true
+        }
+      },
+      "pass_own_rule": false,
+      "bh_q_within_im_v1": 1.0
+    },
+    {
+      "instrument": "NSE:NIFTY50",
+      "variant": "agree",
+      "primary_mean_net_per_day": -0.0007775401908041511,
+      "ci": [
+        -0.000881894378040103,
+        -0.0006728898563437496
+      ],
+      "p_one_sided": 1.0,
+      "n_days": 672,
+      "n_trades": 354,
+      "checks": {
+        "mean_after_cost_ci_lower_above": {
+          "ci_lower": -0.000881894378040103,
+          "above": 0.0,
+          "pass": false
+        },
+        "train_period_same_sign": {
+          "train_mean_net_per_day": -0.0006346546693915052,
+          "validation_mean_net_per_day": -0.0007775401908041511,
+          "pass": true
+        }
+      },
+      "pass_own_rule": false,
+      "bh_q_within_im_v1": 1.0
+    },
+    {
+      "instrument": "NSE:BANKNIFTY",
+      "variant": "sign_r1",
+      "primary_mean_net_per_day": -0.0015080042733411298,
+      "ci": [
+        -0.0016686813546665806,
+        -0.001339981264129088
+      ],
+      "p_one_sided": 1.0,
+      "n_days": 672,
+      "n_trades": 672,
+      "checks": {
+        "mean_after_cost_ci_lower_above": {
+          "ci_lower": -0.0016686813546665806,
+          "above": 0.0,
+          "pass": false
+        },
+        "train_period_same_sign": {
+          "train_mean_net_per_day": -0.001488417887296226,
+          "validation_mean_net_per_day": -0.0015080042733411298,
+          "pass": true
+        }
+      },
+      "pass_own_rule": false,
+      "bh_q_within_im_v1": 1.0
+    },
+    {
+      "instrument": "NSE:BANKNIFTY",
+      "variant": "agree",
+      "primary_mean_net_per_day": -0.0007569214865616837,
+      "ci": [
+        -0.0008903969737747532,
+        -0.0006324341976585114
+      ],
+      "p_one_sided": 1.0,
+      "n_days": 672,
+      "n_trades": 338,
+      "checks": {
+        "mean_after_cost_ci_lower_above": {
+          "ci_lower": -0.0008903969737747532,
+          "above": 0.0,
+          "pass": false
+        },
+        "train_period_same_sign": {
+          "train_mean_net_per_day": -0.0006223022702732918,
+          "validation_mean_net_per_day": -0.0007569214865616837,
+          "pass": true
+        }
+      },
+      "pass_own_rule": false,
+      "bh_q_within_im_v1": 1.0
+    }
+  ],
+  "n_hypotheses": 4,
+  "pass_own_rule_any": false,
+  "family": {
+    "fdr_q": 0.1,
+    "research_fdr_alpha": 0.1,
+    "note": "a pass also needs its p to survive Benjamini-Hochberg across every v2 primary p-value (computed by the lead); bh_q_within_im_v1 is context only"
+  },
+  "per_instrument": {
+    "NSE:NIFTY50": {
+      "sign_r1": {
+        "train": {
+          "n_days": 1340,
+          "n_trades": 1340,
+          "n_long": 793,
+          "n_short": 547,
+          "mean_net_per_day": -0.0013728158688393695,
+          "mean_net_per_day_ci": [
+            -0.0015054012839971157,
+            -0.0012433970910729775
+          ],
+          "p_one_sided": 1.0,
+          "mean_net_per_day_ci_20d_blocks": [
+            -0.0015086028403232575,
+            -0.0012400013741097485
+          ],
+          "mean_gross_per_day": 6.23721311606307e-05,
+          "mean_gross_per_day_ci": [
+            -7.021328399711959e-05,
+            0.00019179090892701997
+          ],
+          "mean_gross_per_trade": 6.23721311606307e-05,
+          "mean_net_per_trade": -0.0013728158688393695,
+          "round_trip_cost": 0.001435188,
+          "hit_rate": 0.514179104477612,
+          "hit_rate_if_independent": 0.5065760748496324,
+          "base_rate_up": 0.5358208955223881,
+          "net_win_rate": 0.25,
+          "sharpe_annualised": -8.820545256485866,
+          "total_net": -1.839573264244755,
+          "mean_net_per_day_by_year": {
+            "2017": -0.001647586219029706,
+            "2018": -0.0013819292705280505,
+            "2019": -0.0014924824393156646,
+            "2020": -0.00139712267525866,
+            "2021": -0.0011795682019695448,
+            "2022": -0.0012868382701077031
+          }
+        },
+        "validation": {
+          "n_days": 672,
+          "n_trades": 672,
+          "n_long": 383,
+          "n_short": 289,
+          "mean_net_per_day": -0.0014274376105967866,
+          "mean_net_per_day_ci": [
+            -0.0015625778422246983,
+            -0.0012976199895249902
+          ],
+          "p_one_sided": 1.0,
+          "mean_net_per_day_ci_20d_blocks": [
+            -0.0015694504815312268,
+            -0.0012880910176696586
+          ],
+          "mean_gross_per_day": 7.750389403213695e-06,
+          "mean_gross_per_day_ci": [
+            -0.00012738984222469723,
+            0.00013756801047501104
+          ],
+          "mean_gross_per_trade": 7.750389403213695e-06,
+          "mean_net_per_trade": -0.0014274376105967866,
+          "round_trip_cost": 0.001435188,
+          "hit_rate": 0.5059523809523809,
+          "hit_rate_if_independent": 0.5031223426870748,
+          "base_rate_up": 0.5223214285714286,
+          "net_win_rate": 0.15029761904761904,
+          "sharpe_annualised": -13.006928225053858,
+          "total_net": -0.9592380743210406,
+          "mean_net_per_day_by_year": {
+            "2023": -0.001422101835895989,
+            "2024": -0.0014518643905015178,
+            "2025": -0.001402551037973815
+          }
+        }
+      },
+      "agree": {
+        "train": {
+          "n_days": 1340,
+          "n_trades": 701,
+          "n_long": 410,
+          "n_short": 291,
+          "mean_net_per_day": -0.0006346546693915052,
+          "mean_net_per_day_ci": [
+            -0.0007358997388306338,
+            -0.0005372161112875764
+          ],
+          "p_one_sided": 1.0,
+          "mean_net_per_day_ci_20d_blocks": [
+            -0.0007326456145180441,
+            -0.0005365384354878032
+          ],
+          "mean_gross_per_day": 0.00011614144105625606,
+          "mean_gross_per_day_ci": [
+            2.117715429122864e-05,
+            0.00020794684654186805
+          ],
+          "mean_gross_per_trade": 0.00022201074324591032,
+          "mean_net_per_trade": -0.00121317725675409,
+          "round_trip_cost": 0.001435188,
+          "hit_rate": 0.543509272467903,
+          "hit_rate_if_independent": 0.506080865288394,
+          "base_rate_up": 0.5358208955223881,
+          "net_win_rate": 0.2781740370898716,
+          "sharpe_annualised": -5.302359308822576,
+          "total_net": -0.850437256984617,
+          "mean_net_per_day_by_year": {
+            "2017": -0.0008709100498911134,
+            "2018": -0.0006978148319637729,
+            "2019": -0.0007610623439775095,
+            "2020": -0.0007027072496186584,
+            "2021": -0.00046374369253730297,
+            "2022": -0.00044006793135519315
+          }
+        },
+        "validation": {
+          "n_days": 672,
+          "n_trades": 354,
+          "n_long": 207,
+          "n_short": 147,
+          "mean_net_per_day": -0.0007775401908041511,
+          "mean_net_per_day_ci": [
+            -0.000881894378040103,
+            -0.0006728898563437496
+          ],
+          "p_one_sided": 1.0,
+          "mean_net_per_day_ci_20d_blocks": [
+            -0.0008860681132959234,
+            -0.0006813061440644769
+          ],
+          "mean_gross_per_day": -2.1503655089865387e-05,
+          "mean_gross_per_day_ci": [
+            -0.00011353292810247355,
+            6.539256812507804e-05
+          ],
+          "mean_gross_per_trade": -4.082049779771056e-05,
+          "mean_net_per_trade": -0.0014760084977977106,
+          "round_trip_cost": 0.001435188,
+          "hit_rate": 0.5,
+          "hit_rate_if_independent": 0.5037832929782082,
+          "base_rate_up": 0.5223214285714286,
+          "net_win_rate": 0.12146892655367232,
+          "sharpe_annualised": -8.879043755117433,
+          "total_net": -0.5225070082203895,
+          "mean_net_per_day_by_year": {
+            "2023": -0.0007558275739070984,
+            "2024": -0.0008819049692299796,
+            "2025": -0.000669774324645921
+          }
+        }
+      }
+    },
+    "NSE:BANKNIFTY": {
+      "sign_r1": {
+        "train": {
+          "n_days": 1340,
+          "n_trades": 1340,
+          "n_long": 749,
+          "n_short": 591,
+          "mean_net_per_day": -0.001488417887296226,
+          "mean_net_per_day_ci": [
+            -0.0016695418579295211,
+            -0.0013073766746877597
+          ],
+          "p_one_sided": 1.0,
+          "mean_net_per_day_ci_20d_blocks": [
+            -0.0016781572645837486,
+            -0.0012995230537683883
+          ],
+          "mean_gross_per_day": -5.322988729622579e-05,
+          "mean_gross_per_day_ci": [
+            -0.0002343538579295255,
+            0.00012781132531223795
+          ],
+          "mean_gross_per_trade": -5.322988729622579e-05,
+          "mean_net_per_trade": -0.001488417887296226,
+          "round_trip_cost": 0.001435188,
+          "hit_rate": 0.4925373134328358,
+          "hit_rate_if_independent": 0.5018478503007351,
+          "base_rate_up": 0.5156716417910447,
+          "net_win_rate": 0.2738805970149254,
+          "sharpe_annualised": -7.081191610828107,
+          "total_net": -1.9944799689769428,
+          "mean_net_per_day_by_year": {
+            "2017": -0.0018212277628310942,
+            "2018": -0.001568981132376594,
+            "2019": -0.0015531395146527603,
+            "2020": -0.0013297524028215942,
+            "2021": -0.0013281480700825295,
+            "2022": -0.001510207397911944
+          }
+        },
+        "validation": {
+          "n_days": 672,
+          "n_trades": 672,
+          "n_long": 373,
+          "n_short": 299,
+          "mean_net_per_day": -0.0015080042733411298,
+          "mean_net_per_day_ci": [
+            -0.0016686813546665806,
+            -0.001339981264129088
+          ],
+          "p_one_sided": 1.0,
+          "mean_net_per_day_ci_20d_blocks": [
+            -0.0016381463821909194,
+            -0.0013915663525178525
+          ],
+          "mean_gross_per_day": -7.281627334112968e-05,
+          "mean_gross_per_day_ci": [
+            -0.00023349335466658075,
+            9.520673587091329e-05
+          ],
+          "mean_gross_per_trade": -7.281627334112968e-05,
+          "mean_net_per_trade": -0.0015080042733411298,
+          "round_trip_cost": 0.001435188,
+          "hit_rate": 0.47470238095238093,
+          "hit_rate_if_independent": 0.4980335884353741,
+          "base_rate_up": 0.48214285714285715,
+          "net_win_rate": 0.20089285714285715,
+          "sharpe_annualised": -11.070169536677694,
+          "total_net": -1.0133788716852392,
+          "mean_net_per_day_by_year": {
+            "2023": -0.0014127812867259064,
+            "2024": -0.0015511174135170451,
+            "2025": -0.0015777137425203632
+          }
+        }
+      },
+      "agree": {
+        "train": {
+          "n_days": 1340,
+          "n_trades": 667,
+          "n_long": 373,
+          "n_short": 294,
+          "mean_net_per_day": -0.0006223022702732918,
+          "mean_net_per_day_ci": [
+            -0.0007499955107712634,
+            -0.0004980081600328316
+          ],
+          "p_one_sided": 1.0,
+          "mean_net_per_day_ci_20d_blocks": [
+            -0.0007591422927080571,
+            -0.0004892421454576752
+          ],
+          "mean_gross_per_day": 9.207862226402173e-05,
+          "mean_gross_per_day_ci": [
+            -3.081769747443097e-05,
+            0.0002207879434791167
+          ],
+          "mean_gross_per_trade": 0.00018498553798169284,
+          "mean_net_per_trade": -0.0012502024620183072,
+          "round_trip_cost": 0.001435188,
+          "hit_rate": 0.5247376311844077,
+          "hit_rate_if_independent": 0.501856161471503,
+          "base_rate_up": 0.5156716417910447,
+          "net_win_rate": 0.2908545727136432,
+          "sharpe_annualised": -3.9232882736571812,
+          "total_net": -0.8338850421662111,
+          "mean_net_per_day_by_year": {
+            "2017": -0.0008299846194204304,
+            "2018": -0.0006344840703963418,
+            "2019": -0.0007061502598655281,
+            "2020": -0.0007270530983089892,
+            "2021": -0.0005016858877484249,
+            "2022": -0.00044669289387056784
+          }
+        },
+        "validation": {
+          "n_days": 672,
+          "n_trades": 338,
+          "n_long": 201,
+          "n_short": 137,
+          "mean_net_per_day": -0.0007569214865616837,
+          "mean_net_per_day_ci": [
+            -0.0008903969737747532,
+            -0.0006324341976585114
+          ],
+          "p_one_sided": 1.0,
+          "mean_net_per_day_ci_20d_blocks": [
+            -0.0008669208111038649,
+            -0.0006442224229750997
+          ],
+          "mean_gross_per_day": -3.505609370454073e-05,
+          "mean_gross_per_day_ci": [
+            -0.00015413270170958217,
+            7.960622652702798e-05
+          ],
+          "mean_gross_per_trade": -6.969732239482654e-05,
+          "mean_net_per_trade": -0.001504885322394827,
+          "round_trip_cost": 0.001435188,
+          "hit_rate": 0.45857988165680474,
+          "hit_rate_if_independent": 0.496618765849535,
+          "base_rate_up": 0.48214285714285715,
+          "net_win_rate": 0.1952662721893491,
+          "sharpe_annualised": -7.050326331030553,
+          "total_net": -0.5086512389694514,
+          "mean_net_per_day_by_year": {
+            "2023": -0.0005554221281088272,
+            "2024": -0.0008579766055568291,
+            "2025": -0.0008915809677731681
+          }
+        }
+      }
+    }
+  },
+  "regressions": {
+    "NSE:NIFTY50": {
+      "train": {
+        "target_on_r1": {
+          "n": 1340,
+          "r2": 0.0027437157445134863,
+          "intercept": 3.64073144776488e-05,
+          "intercept_t": 0.5269349900553931,
+          "slope_r1": 0.01654866531699539,
+          "t_r1": 1.3053436135306964
+        },
+        "target_on_r12": {
+          "n": 1340,
+          "r2": 0.00508145872492205,
+          "intercept": 5.843824592248611e-05,
+          "intercept_t": 0.8805446696519098,
+          "slope_r12": 0.06993775575233148,
+          "t_r12": 1.4581068811373672
+        },
+        "target_on_r1_and_r12": {
+          "n": 1340,
+          "r2": 0.006942169039813373,
+          "intercept": 4.754295529801531e-05,
+          "intercept_t": 0.7030530288472122,
+          "slope_r1": 0.013754394245014361,
+          "t_r1": 1.1234972806830739,
+          "slope_r12": 0.06416095578027144,
+          "t_r12": 1.36002365323201
+        }
+      },
+      "validation": {
+        "target_on_r1": {
+          "n": 672,
+          "r2": 0.01147975592775441,
+          "intercept": 0.00013474716735960022,
+          "intercept_t": 1.917776931347496,
+          "slope_r1": -0.03844595389654687,
+          "t_r1": -1.4303069636085193
+        },
+        "target_on_r12": {
+          "n": 672,
+          "r2": 0.010173503527949879,
+          "intercept": 0.00011748089924794978,
+          "intercept_t": 1.7536634401602011,
+          "slope_r12": -0.10785983108536802,
+          "t_r12": -1.3881358131218557
+        },
+        "target_on_r1_and_r12": {
+          "n": 672,
+          "r2": 0.02191379857112752,
+          "intercept": 0.0001361538985031926,
+          "intercept_t": 1.9457939684380985,
+          "slope_r1": -0.03888253983379973,
+          "t_r1": -1.4680446539082825,
+          "slope_r12": -0.10923997093877223,
+          "t_r12": -1.4228262216223153
+        }
+      }
+    },
+    "NSE:BANKNIFTY": {
+      "train": {
+        "target_on_r1": {
+          "n": 1340,
+          "r2": 9.213602755187011e-07,
+          "intercept": 0.00013233062844607144,
+          "intercept_t": 1.4362200884506213,
+          "slope_r1": 0.00029716148905894416,
+          "t_r1": 0.023450243119984462
+        },
+        "target_on_r12": {
+          "n": 1340,
+          "r2": 0.005050785915743483,
+          "intercept": 0.000138965136759342,
+          "intercept_t": 1.5400833212198273,
+          "slope_r12": 0.0652756848677865,
+          "t_r12": 1.4140345690788045
+        },
+        "target_on_r1_and_r12": {
+          "n": 1340,
+          "r2": 0.005058553597536597,
+          "intercept": 0.000139399503226454,
+          "intercept_t": 1.5282178052755089,
+          "slope_r1": -0.0008640257489827838,
+          "t_r1": -0.07099882075613478,
+          "slope_r12": 0.06541069566959945,
+          "t_r12": 1.4401172291835116
+        }
+      },
+      "validation": {
+        "target_on_r1": {
+          "n": 672,
+          "r2": 0.009173216438289722,
+          "intercept": 0.00010970877161901742,
+          "intercept_t": 1.3041544649824046,
+          "slope_r1": -0.03667910992913491,
+          "t_r1": -1.8178831341934985
+        },
+        "target_on_r12": {
+          "n": 672,
+          "r2": 0.0019627659616962,
+          "intercept": 9.656468401580314e-05,
+          "intercept_t": 1.1420601266528898,
+          "slope_r12": -0.04779170585384583,
+          "t_r12": -0.6870515124245034
+        },
+        "target_on_r1_and_r12": {
+          "n": 672,
+          "r2": 0.01118991836527572,
+          "intercept": 0.00011483736259980616,
+          "intercept_t": 1.3486493470513454,
+          "slope_r1": -0.036787514168627695,
+          "t_r1": -1.8407176686638582,
+          "slope_r12": -0.04844486582717612,
+          "t_r12": -0.6914335861180637
+        }
+      }
+    }
+  },
+  "deviations": [
+    "r12 starts at the close of the 14:25 bar (the price at 14:30), so that bar is required too; the registration names only the 14:30..15:00 window.",
+    "A day whose previous session was special is skipped as well (its r1 would start from a special session's close); the registration names only special sessions themselves.",
+    "Costs use today's rates (futures STT 0.05% since 2026-04-01) for the whole history and brokerage at the Rs 1 lakh reference notional (Rs 20 an order = 0.02%); one NIFTY lot is ~Rs 15-20 lakh, so brokerage is overstated. Both make the after-cost numbers conservative."
+  ],
+  "caveats": [
+    "Spot index bars proxy index futures: the futures basis, futures bid-ask and the 15:30 closing auction of the futures are not modelled; entry and exit are at the 5m bar closes at 15:00 and 15:30.",
+    "The spot index's last print is not the official closing price (a 30-minute VWAP of constituents); the target uses the last 5m bar's close as registered.",
+    "sign_r1 and agree on the same instrument share most trades, and NIFTY and BANKNIFTY are correlated, so the four p-values are dependent; BH is valid under positive dependence.",
+    "Validation only: the holdout (>= 2025-10-01) was not read."
+  ],
+  "runtime_s": 15.8
+}

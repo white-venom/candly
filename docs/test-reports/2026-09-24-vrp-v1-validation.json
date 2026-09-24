@@ -1,0 +1,649 @@
+{
+  "test": "vrp_v1",
+  "section": "vrp_direction",
+  "period": "validation",
+  "generated_at": "2026-09-24T11:39:34.792736+00:00",
+  "edge_search_v2_sha256": "2c7ea1287598d2ac918669edbcf69aafbaaeda7e67c4be6217770f63e16ec4c6",
+  "config_hashes": {
+    "research.yaml": "642e412d15a156732d7a5d726bbf1eb699497b253e24222d6750eb89015bc7d5",
+    "patterns.yaml": "e0464b18601745671b84d3ed8d4fb06e20f4b9f37de48de51f191f19ddaf9254",
+    "costs.yaml": "c07fd90cd49a8eb68b5e1bf4ad07fb12aae5e6f697531854f51e4b303b2d791c",
+    "expiry.yaml": "a47b2a6277c49b331b87b821c16eed0101242f391090785f95c24f8ebd54d3b0",
+    "markets.yaml": "f73c5ab9315caf35cb79d5ce509a0fc0a1b4fda3f7623fb39a7e984dca83e77c",
+    "watchlist.yaml": "0be3a783d10a75d3dd72002306efd0a0da844e146f19d33b27610156d9bfb0a6",
+    "holidays_observed.json": "965345a57c0b05fe8946563212fca5855582142ed34781033628cfc3774c0159",
+    "edge_search.yaml": "b5e2f46f69c7ce19759b05bf0e2d70ce7b182116cfcaa91aad7c816c5912b702",
+    "edge_search_v2.yaml": "2c7ea1287598d2ac918669edbcf69aafbaaeda7e67c4be6217770f63e16ec4c6"
+  },
+  "registration": {
+    "name": "vrp_v1",
+    "underlying": "NSE:NIFTY50",
+    "vrp": "VIX^2 (monthly variance units) minus realised variance of the last 22 sessions from daily returns",
+    "horizons_days": [
+      21,
+      63
+    ],
+    "model": "OLS of the next-h log return on vrp, expanding window refitted yearly; benchmark = expanding historical mean",
+    "split": {
+      "train": [
+        "2009-01-01",
+        "2016-01-01"
+      ],
+      "validation": [
+        "2016-01-01",
+        "holdout_start"
+      ]
+    },
+    "primary": "Clark-West test of out-of-sample R^2 > 0 (HAC, lags = h), one-sided; one p per horizon",
+    "pass_if": {
+      "clark_west_p_below": 0.05,
+      "timing_sharpe_after_cost_beats_buy_and_hold_point": true
+    },
+    "timing_rule": "long NIFTY futures proxy when the forecast exceeds round-trip cost, else flat"
+  },
+  "split": {
+    "registered_ist_dates": {
+      "train": [
+        "2009-01-01",
+        "2016-01-01"
+      ],
+      "validation": [
+        "2016-01-01",
+        "holdout_start"
+      ]
+    },
+    "holdout_start_ist": "2025-10-01",
+    "train": [
+      "2008-12-31T18:30:00+00:00",
+      "2015-12-31T18:30:00+00:00"
+    ],
+    "validation": [
+      "2015-12-31T18:30:00+00:00",
+      "2025-09-30T18:30:00+00:00"
+    ],
+    "holdout_start": "2025-09-30T18:30:00+00:00",
+    "holdout_used": false
+  },
+  "definitions": {
+    "vrp": "(VIX_t/100)^2 / 12 - sum of daily log-return^2 over the last 22 sessions (monthly variance units)",
+    "target": "log(close_{t+h} / close_t), NIFTY 50 spot",
+    "model": "OLS y_h = a + b vrp, expanding window from the train start, refitted every IST calendar year from the validation start; training targets end before the fold",
+    "benchmark": "mean of y_h over the same training rows",
+    "clark_west": "f = (y-b)^2 - [(y-m)^2 - (b-m)^2]; t = mean(f)/NW se (Bartlett, h lags); p = 1-Phi(t)",
+    "timing": "long futures proxy over day s if the forecast at s-2 exceeded the round trip, else flat",
+    "futures_proxy": "spot return - 0.05 x calendar days / 365",
+    "max_drawdown": "largest fall of the running sum of daily net returns (additive, not compounded)"
+  },
+  "protocol": {
+    "bootstrap": {
+      "kind": "date_block",
+      "resamples": 2000,
+      "ci_level": 0.95,
+      "seed": 20260924,
+      "blocks": "h consecutive trading days",
+      "p_value": "(1 + #{draws <= 0}) / (1 + B)"
+    }
+  },
+  "costs": {
+    "futures_round_trip": 0.001435188,
+    "components": {
+      "brokerage": 0.0004,
+      "dp_charge": 0.0,
+      "exchange_txn": 3.46e-05,
+      "sebi_fee": 2e-06,
+      "transaction_tax": 0.0005,
+      "stamp_duty": 2e-05,
+      "gst": 7.8588e-05,
+      "slippage": 0.0004
+    },
+    "roll": "one round trip per 21 sessions held"
+  },
+  "inputs": {
+    "train": {
+      "n": 1732,
+      "mean_vrp": 0.001089925219970023,
+      "std_vrp": 0.0031509826210025203,
+      "share_negative": 0.15300230946882218
+    },
+    "validation": {
+      "n": 2412,
+      "mean_vrp": 0.00029006942002116233,
+      "std_vrp": 0.0033680778098435127,
+      "share_negative": 0.16417910447761194
+    }
+  },
+  "n_hypotheses": 2,
+  "primary_p": {
+    "21": 0.5823817995908301,
+    "63": 0.8419842937406611
+  },
+  "family_fdr": {
+    "q": 0.1,
+    "status": "pending: Benjamini-Hochberg runs across every primary p in edge_search_v2.yaml",
+    "survival_possible": {
+      "21": false,
+      "63": false
+    },
+    "note": "a BH q-value is never below its p-value, so p > q means no survival whatever the other tests show"
+  },
+  "horizons": {
+    "21": {
+      "horizon": 21,
+      "n_forecasts": 2412,
+      "n_scored": 2391,
+      "n_blocks": 115,
+      "first_scored_ts": "2016-01-01T03:45:00+00:00",
+      "last_scored_ts": "2025-09-01T03:45:00+00:00",
+      "folds": [
+        {
+          "fold": 0,
+          "test_start": "2015-12-31T18:30:00+00:00",
+          "test_end": "2016-12-31T18:30:00+00:00",
+          "n_test": 246,
+          "n_train": 1711,
+          "first_train_ts": "2009-01-01T03:45:00+00:00",
+          "last_train_ts": "2015-12-01T03:45:00+00:00",
+          "last_label_end_ts": "2015-12-31T03:45:00+00:00",
+          "intercept": 0.005548592907993572,
+          "slope": 6.167656281309731,
+          "slope_hac_t": 2.8554125198218534,
+          "benchmark_mean": 0.012301256019170087
+        },
+        {
+          "fold": 1,
+          "test_start": "2016-12-31T18:30:00+00:00",
+          "test_end": "2017-12-31T18:30:00+00:00",
+          "n_test": 248,
+          "n_train": 1957,
+          "first_train_ts": "2009-01-01T03:45:00+00:00",
+          "last_train_ts": "2016-12-01T03:45:00+00:00",
+          "last_label_end_ts": "2016-12-30T03:45:00+00:00",
+          "intercept": 0.004990647768805222,
+          "slope": 6.116179683388106,
+          "slope_hac_t": 2.862156522743472,
+          "benchmark_mean": 0.011157380479151017
+        },
+        {
+          "fold": 2,
+          "test_start": "2017-12-31T18:30:00+00:00",
+          "test_end": "2018-12-31T18:30:00+00:00",
+          "n_test": 246,
+          "n_train": 2205,
+          "first_train_ts": "2009-01-01T03:45:00+00:00",
+          "last_train_ts": "2017-11-29T03:45:00+00:00",
+          "last_label_end_ts": "2017-12-29T03:45:00+00:00",
+          "intercept": 0.0064130904350721595,
+          "slope": 6.063893866750438,
+          "slope_hac_t": 2.9060612254191467,
+          "benchmark_mean": 0.012194690113190396
+        },
+        {
+          "fold": 3,
+          "test_start": "2018-12-31T18:30:00+00:00",
+          "test_end": "2019-12-31T18:30:00+00:00",
+          "n_test": 245,
+          "n_train": 2451,
+          "first_train_ts": "2009-01-01T03:45:00+00:00",
+          "last_train_ts": "2018-11-29T03:45:00+00:00",
+          "last_label_end_ts": "2018-12-31T03:45:00+00:00",
+          "intercept": 0.0059169856238077785,
+          "slope": 5.950260937864239,
+          "slope_hac_t": 2.8955313161417404,
+          "benchmark_mean": 0.011349112689158562
+        },
+        {
+          "fold": 4,
+          "test_start": "2019-12-31T18:30:00+00:00",
+          "test_end": "2020-12-31T18:30:00+00:00",
+          "n_test": 251,
+          "n_train": 2696,
+          "first_train_ts": "2009-01-01T03:45:00+00:00",
+          "last_train_ts": "2019-11-29T03:45:00+00:00",
+          "last_label_end_ts": "2019-12-31T03:45:00+00:00",
+          "intercept": 0.006078871477575644,
+          "slope": 5.7556879902163,
+          "slope_hac_t": 2.9716866283819403,
+          "benchmark_mean": 0.01121333278104933
+        },
+        {
+          "fold": 5,
+          "test_start": "2020-12-31T18:30:00+00:00",
+          "test_end": "2021-12-31T18:30:00+00:00",
+          "n_test": 246,
+          "n_train": 2947,
+          "first_train_ts": "2009-01-01T03:45:00+00:00",
+          "last_train_ts": "2020-12-01T03:45:00+00:00",
+          "last_label_end_ts": "2020-12-31T03:45:00+00:00",
+          "intercept": 0.009436230904165717,
+          "slope": 2.3460214834237507,
+          "slope_hac_t": 1.5119608101394286,
+          "benchmark_mean": 0.011075684188672738
+        },
+        {
+          "fold": 6,
+          "test_start": "2021-12-31T18:30:00+00:00",
+          "test_end": "2022-12-31T18:30:00+00:00",
+          "n_test": 248,
+          "n_train": 3193,
+          "first_train_ts": "2009-01-01T03:45:00+00:00",
+          "last_train_ts": "2021-12-02T03:45:00+00:00",
+          "last_label_end_ts": "2021-12-31T03:45:00+00:00",
+          "intercept": 0.010081523915216307,
+          "slope": 2.3896144659326803,
+          "slope_hac_t": 1.5374014972930152,
+          "benchmark_mean": 0.011777129828612953
+        },
+        {
+          "fold": 7,
+          "test_start": "2022-12-31T18:30:00+00:00",
+          "test_end": "2023-12-31T18:30:00+00:00",
+          "n_test": 246,
+          "n_train": 3441,
+          "first_train_ts": "2009-01-01T03:45:00+00:00",
+          "last_train_ts": "2022-12-01T03:45:00+00:00",
+          "last_label_end_ts": "2022-12-30T03:45:00+00:00",
+          "intercept": 0.009681915459996419,
+          "slope": 2.399229151388821,
+          "slope_hac_t": 1.5420123160183714,
+          "benchmark_mean": 0.011341058153931759
+        },
+        {
+          "fold": 8,
+          "test_start": "2023-12-31T18:30:00+00:00",
+          "test_end": "2024-12-31T18:30:00+00:00",
+          "n_test": 249,
+          "n_train": 3687,
+          "first_train_ts": "2009-01-01T03:45:00+00:00",
+          "last_train_ts": "2023-11-29T03:45:00+00:00",
+          "last_label_end_ts": "2023-12-29T03:45:00+00:00",
+          "intercept": 0.00976490099708062,
+          "slope": 2.3811434458965124,
+          "slope_hac_t": 1.5386965115336773,
+          "benchmark_mean": 0.011379075929851223
+        },
+        {
+          "fold": 9,
+          "test_start": "2024-12-31T18:30:00+00:00",
+          "test_end": "2025-09-30T18:30:00+00:00",
+          "n_test": 187,
+          "n_train": 3936,
+          "first_train_ts": "2009-01-01T03:45:00+00:00",
+          "last_train_ts": "2024-11-29T03:45:00+00:00",
+          "last_label_end_ts": "2024-12-31T03:45:00+00:00",
+          "intercept": 0.009904910092013535,
+          "slope": 2.304128990213788,
+          "slope_hac_t": 1.5429140135682187,
+          "benchmark_mean": 0.011393444733359853
+        }
+      ],
+      "clark_west": {
+        "n": 2391,
+        "lags": 21,
+        "mean_adjusted_diff": -1.2749707244038197e-05,
+        "hac_se": 6.129947512729167e-05,
+        "t": -0.20799047981345256,
+        "p_one_sided": 0.5823817995908301
+      },
+      "oos_r2": -0.16153056115178765,
+      "oos_r2_ci_h_day_blocks": [
+        -0.6259642266906543,
+        0.016310488645633246
+      ],
+      "oos_r2_by_fold": {
+        "0": -0.02836929694639756,
+        "1": -0.06205221989679366,
+        "2": -0.036376039685641626,
+        "3": -0.060374700204815834,
+        "4": -0.3015608720705534,
+        "5": 0.011751671097516403,
+        "6": 0.009893746126610647,
+        "7": -0.013163391917050404,
+        "8": -0.031941190904793304,
+        "9": -0.011720207137335903
+      },
+      "mse_model": 0.0027971361201110856,
+      "mse_benchmark": 0.002408146813922323,
+      "mean_target": 0.010510765880736503,
+      "mean_forecast": 0.00875142014231133,
+      "mean_benchmark": 0.0115215645296214,
+      "forecast_target_correlation": -0.011794368494451998,
+      "timing": {
+        "first_day": "2016-01-05T03:45:00+00:00",
+        "last_day": "2025-09-30T03:45:00+00:00",
+        "execution_lag_days": 1,
+        "buy_and_hold": {
+          "n_days": 2414,
+          "share_long": 1.0,
+          "n_switches": 1,
+          "annual_return_net": 0.065405511988154,
+          "annual_vol": 0.1635853359446906,
+          "sharpe_net": 0.3998250308344758,
+          "sharpe_gross": 0.5055652842585463,
+          "total_cost": 0.1656958717142857,
+          "max_drawdown": 0.49997114752989874
+        },
+        "registered": {
+          "threshold": 0.001435188,
+          "n_days": 2414,
+          "share_long": 0.9486329743164872,
+          "n_switches": 29,
+          "annual_return_net": 0.03039607424698252,
+          "annual_vol": 0.15212440578990358,
+          "sharpe_net": 0.19981063583552808,
+          "sharpe_gross": 0.32146197297092977,
+          "total_cost": 0.17731406028571428,
+          "max_drawdown": 0.5052188658768658,
+          "sharpe_diff_vs_buy_and_hold": -0.20001439499894771,
+          "sharpe_diff_ci_h_day_blocks": [
+            -0.41216868798195605,
+            -0.015902418956292713
+          ],
+          "sharpe_diff_p_one_sided": 0.984007996001999,
+          "beats_buy_and_hold_point": false
+        },
+        "carry_adjusted_diagnostic": {
+          "threshold": 0.005601854666666666,
+          "n_days": 2414,
+          "share_long": 0.9105219552609777,
+          "n_switches": 61,
+          "annual_return_net": 0.009658866455833678,
+          "annual_vol": 0.14769268772455604,
+          "sharpe_net": 0.06539840668244372,
+          "sharpe_gross": 0.20254245537018314,
+          "total_cost": 0.193989578,
+          "max_drawdown": 0.5820711335521236,
+          "sharpe_diff_vs_buy_and_hold": -0.33442662415203206,
+          "sharpe_diff_ci_h_day_blocks": [
+            -0.6363201779904848,
+            -0.08544124630667312
+          ],
+          "sharpe_diff_p_one_sided": 0.9985007496251874,
+          "beats_buy_and_hold_point": false
+        }
+      },
+      "primary_p": 0.5823817995908301,
+      "checks": {
+        "clark_west_p_below": {
+          "value": 0.5823817995908301,
+          "below": 0.05,
+          "pass": false
+        },
+        "timing_sharpe_after_cost_beats_buy_and_hold_point": {
+          "value": -0.20001439499894771,
+          "pass": false
+        }
+      },
+      "pass_if_met": false,
+      "runtime_s": 0.2
+    },
+    "63": {
+      "horizon": 63,
+      "n_forecasts": 2412,
+      "n_scored": 2349,
+      "n_blocks": 38,
+      "first_scored_ts": "2016-01-01T03:45:00+00:00",
+      "last_scored_ts": "2025-07-01T03:45:00+00:00",
+      "folds": [
+        {
+          "fold": 0,
+          "test_start": "2015-12-31T18:30:00+00:00",
+          "test_end": "2016-12-31T18:30:00+00:00",
+          "n_test": 246,
+          "n_train": 1669,
+          "first_train_ts": "2009-01-01T03:45:00+00:00",
+          "last_train_ts": "2015-09-28T03:45:00+00:00",
+          "last_label_end_ts": "2015-12-31T03:45:00+00:00",
+          "intercept": 0.030007790840559507,
+          "slope": 7.615520966048195,
+          "slope_hac_t": 1.6221654768555807,
+          "benchmark_mean": 0.038353062186187455
+        },
+        {
+          "fold": 1,
+          "test_start": "2016-12-31T18:30:00+00:00",
+          "test_end": "2017-12-31T18:30:00+00:00",
+          "n_test": 248,
+          "n_train": 1915,
+          "first_train_ts": "2009-01-01T03:45:00+00:00",
+          "last_train_ts": "2016-09-29T03:45:00+00:00",
+          "last_label_end_ts": "2016-12-30T03:45:00+00:00",
+          "intercept": 0.027409423003493923,
+          "slope": 7.353598759375068,
+          "slope_hac_t": 1.5901288032436798,
+          "benchmark_mean": 0.03491312065173031
+        },
+        {
+          "fold": 2,
+          "test_start": "2017-12-31T18:30:00+00:00",
+          "test_end": "2018-12-31T18:30:00+00:00",
+          "n_test": 246,
+          "n_train": 2163,
+          "first_train_ts": "2009-01-01T03:45:00+00:00",
+          "last_train_ts": "2017-09-28T03:45:00+00:00",
+          "last_label_end_ts": "2017-12-29T03:45:00+00:00",
+          "intercept": 0.030036383424542058,
+          "slope": 7.20749348196166,
+          "slope_hac_t": 1.5899946953758815,
+          "benchmark_mean": 0.03696614720670521
+        },
+        {
+          "fold": 3,
+          "test_start": "2018-12-31T18:30:00+00:00",
+          "test_end": "2019-12-31T18:30:00+00:00",
+          "n_test": 245,
+          "n_train": 2409,
+          "first_train_ts": "2009-01-01T03:45:00+00:00",
+          "last_train_ts": "2018-09-26T03:45:00+00:00",
+          "last_label_end_ts": "2018-12-31T03:45:00+00:00",
+          "intercept": 0.027331830799699804,
+          "slope": 7.228130819239709,
+          "slope_hac_t": 1.576990823163411,
+          "benchmark_mean": 0.03405677489440566
+        },
+        {
+          "fold": 4,
+          "test_start": "2019-12-31T18:30:00+00:00",
+          "test_end": "2020-12-31T18:30:00+00:00",
+          "n_test": 251,
+          "n_train": 2654,
+          "first_train_ts": "2009-01-01T03:45:00+00:00",
+          "last_train_ts": "2019-09-26T03:45:00+00:00",
+          "last_label_end_ts": "2019-12-31T03:45:00+00:00",
+          "intercept": 0.027308390801618728,
+          "slope": 6.8188258851707015,
+          "slope_hac_t": 1.5672235545844633,
+          "benchmark_mean": 0.033537049423167396
+        },
+        {
+          "fold": 5,
+          "test_start": "2020-12-31T18:30:00+00:00",
+          "test_end": "2021-12-31T18:30:00+00:00",
+          "n_test": 246,
+          "n_train": 2905,
+          "first_train_ts": "2009-01-01T03:45:00+00:00",
+          "last_train_ts": "2020-09-30T03:45:00+00:00",
+          "last_label_end_ts": "2020-12-31T03:45:00+00:00",
+          "intercept": 0.031604394344366765,
+          "slope": 0.6109253618746397,
+          "slope_hac_t": 0.18540716730761925,
+          "benchmark_mean": 0.03202694033247669
+        },
+        {
+          "fold": 6,
+          "test_start": "2021-12-31T18:30:00+00:00",
+          "test_end": "2022-12-31T18:30:00+00:00",
+          "n_test": 248,
+          "n_train": 3151,
+          "first_train_ts": "2009-01-01T03:45:00+00:00",
+          "last_train_ts": "2021-09-30T03:45:00+00:00",
+          "last_label_end_ts": "2021-12-31T03:45:00+00:00",
+          "intercept": 0.03567315859583884,
+          "slope": 0.6720393118271263,
+          "slope_hac_t": 0.207014796754156,
+          "benchmark_mean": 0.03614704364572696
+        },
+        {
+          "fold": 7,
+          "test_start": "2022-12-31T18:30:00+00:00",
+          "test_end": "2023-12-31T18:30:00+00:00",
+          "n_test": 246,
+          "n_train": 3399,
+          "first_train_ts": "2009-01-01T03:45:00+00:00",
+          "last_train_ts": "2022-09-29T03:45:00+00:00",
+          "last_label_end_ts": "2022-12-30T03:45:00+00:00",
+          "intercept": 0.033393256259084396,
+          "slope": 0.8099014624063543,
+          "slope_hac_t": 0.2443623042779047,
+          "benchmark_mean": 0.033954567013249934
+        },
+        {
+          "fold": 8,
+          "test_start": "2023-12-31T18:30:00+00:00",
+          "test_end": "2024-12-31T18:30:00+00:00",
+          "n_test": 249,
+          "n_train": 3645,
+          "first_train_ts": "2009-01-01T03:45:00+00:00",
+          "last_train_ts": "2023-09-27T03:45:00+00:00",
+          "last_label_end_ts": "2023-12-29T03:45:00+00:00",
+          "intercept": 0.03293685747973562,
+          "slope": 0.801518538090958,
+          "slope_hac_t": 0.24160268531379547,
+          "benchmark_mean": 0.03348449308098489
+        },
+        {
+          "fold": 9,
+          "test_start": "2024-12-31T18:30:00+00:00",
+          "test_end": "2025-09-30T18:30:00+00:00",
+          "n_test": 187,
+          "n_train": 3894,
+          "first_train_ts": "2009-01-01T03:45:00+00:00",
+          "last_train_ts": "2024-09-27T03:45:00+00:00",
+          "last_label_end_ts": "2024-12-31T03:45:00+00:00",
+          "intercept": 0.03404378732298742,
+          "slope": 0.7060856281623257,
+          "slope_hac_t": 0.21950860207107858,
+          "benchmark_mean": 0.03450224326357289
+        }
+      ],
+      "clark_west": {
+        "n": 2349,
+        "lags": 63,
+        "mean_adjusted_diff": -0.0005836166453572264,
+        "hac_se": 0.0005820761337744694,
+        "t": -1.002646580908184,
+        "p_one_sided": 0.8419842937406611
+      },
+      "oos_r2": -0.15919359521739618,
+      "oos_r2_ci_h_day_blocks": [
+        -0.445977487835103,
+        0.004625876168403518
+      ],
+      "oos_r2_by_fold": {
+        "0": -0.06907914795142878,
+        "1": -0.07077300980884527,
+        "2": -0.0019114871548766565,
+        "3": -0.027598657317215558,
+        "4": -0.3277081274817053,
+        "5": -0.001181758145914813,
+        "6": 0.006012505954794856,
+        "7": -0.005005057362995613,
+        "8": 0.0008216499364560592,
+        "9": 0.005159425801366635
+      },
+      "mse_model": 0.008148180388096135,
+      "mse_benchmark": 0.0070291799589938374,
+      "mean_target": 0.032369055742989414,
+      "mean_forecast": 0.031653321903441445,
+      "mean_benchmark": 0.03480652331190397,
+      "forecast_target_correlation": -0.16135069020496332,
+      "timing": {
+        "first_day": "2016-01-05T03:45:00+00:00",
+        "last_day": "2025-09-30T03:45:00+00:00",
+        "execution_lag_days": 1,
+        "buy_and_hold": {
+          "n_days": 2414,
+          "share_long": 1.0,
+          "n_switches": 1,
+          "annual_return_net": 0.065405511988154,
+          "annual_vol": 0.1635853359446906,
+          "sharpe_net": 0.3998250308344758,
+          "sharpe_gross": 0.5055652842585463,
+          "total_cost": 0.1656958717142857,
+          "max_drawdown": 0.49997114752989874
+        },
+        "registered": {
+          "threshold": 0.001435188,
+          "n_days": 2414,
+          "share_long": 0.987986743993372,
+          "n_switches": 5,
+          "annual_return_net": 0.04949316247989225,
+          "annual_vol": 0.15442436671338183,
+          "sharpe_net": 0.32050099044118896,
+          "sharpe_gross": 0.43309907540635295,
+          "total_cost": 0.16658432142857144,
+          "max_drawdown": 0.49997114752989874,
+          "sharpe_diff_vs_buy_and_hold": -0.07932404039328683,
+          "sharpe_diff_ci_h_day_blocks": [
+            -0.27345885674848364,
+            0.0
+          ],
+          "sharpe_diff_p_one_sided": 1.0,
+          "beats_buy_and_hold_point": false
+        },
+        "carry_adjusted_diagnostic": {
+          "threshold": 0.013935188000000001,
+          "n_days": 2414,
+          "share_long": 0.9739022369511184,
+          "n_switches": 13,
+          "annual_return_net": 0.0458178987783576,
+          "annual_vol": 0.15365284087295408,
+          "sharpe_net": 0.2981910293233144,
+          "sharpe_gross": 0.4136269030563001,
+          "total_cost": 0.17000143571428572,
+          "max_drawdown": 0.4990355668072807,
+          "sharpe_diff_vs_buy_and_hold": -0.10163400151116136,
+          "sharpe_diff_ci_h_day_blocks": [
+            -0.2926092466162496,
+            0.004684990425133295
+          ],
+          "sharpe_diff_p_one_sided": 0.9320339830084957,
+          "beats_buy_and_hold_point": false
+        }
+      },
+      "primary_p": 0.8419842937406611,
+      "checks": {
+        "clark_west_p_below": {
+          "value": 0.8419842937406611,
+          "below": 0.05,
+          "pass": false
+        },
+        "timing_sharpe_after_cost_beats_buy_and_hold_point": {
+          "value": -0.07932404039328683,
+          "pass": false
+        }
+      },
+      "pass_if_met": false,
+      "runtime_s": 0.1
+    }
+  },
+  "pass_if_met": {
+    "21": false,
+    "63": false
+  },
+  "deviations": [
+    "VIX^2 in monthly units is (VIX/100)^2 / 12 (BTZ's convention), not x 22/252 or x 30/365; chosen before any fit.",
+    "Clark-West p uses the standard normal for the HAC t statistic (as Clark and West tabulate).",
+    "Execution: a decision made at t's close is traded at t+1's close (one-day lag), the conservative reading of a rule that uses t's closing VIX and NIFTY.",
+    "The rule compares the forecast of the SPOT log return with the round trip, as registered; it ignores the ~5%/yr carry a futures holder pays. A carry-adjusted threshold is reported as a diagnostic only.",
+    "Futures rolls: one full round trip per 21 sessions held, charged pro rata per day (tsmom's 'one roll per month'); the same for buy-and-hold.",
+    "A day without a VIX print keeps the previous decision (no forecast can be made that day).",
+    "The OOS R^2 CI (h-day blocks) is reported for context; the registered primary is the Clark-West p."
+  ],
+  "caveats": [
+    "NIFTY 50 here is the price index; dividends (~1-1.5%/yr) are not in the target or in buy-and-hold. The futures proxy's 5% carry stands in for (interest - dividend yield), a constant that ignores rate changes.",
+    "One index, ~9.7 years of validation: 63-day targets give only ~38 non-overlapping observations, so the test has little power at h = 63.",
+    "Buy-and-hold beat-or-not is a point comparison as registered; its bootstrap CI is wide.",
+    "VIX methodology and the NIFTY option market changed over 2009-2025 (weekly options, retail flows); a constant VRP slope is a strong assumption."
+  ],
+  "runtime_s": 0.5
+}

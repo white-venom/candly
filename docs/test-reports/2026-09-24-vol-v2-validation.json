@@ -1,0 +1,948 @@
+{
+  "test": "vol_v2",
+  "section": "vol_intraday",
+  "period": "validation",
+  "generated_at": "2026-09-24T11:39:04.447126+00:00",
+  "edge_search_v2_sha256": "2c7ea1287598d2ac918669edbcf69aafbaaeda7e67c4be6217770f63e16ec4c6",
+  "config_hashes": {
+    "research.yaml": "642e412d15a156732d7a5d726bbf1eb699497b253e24222d6750eb89015bc7d5",
+    "patterns.yaml": "e0464b18601745671b84d3ed8d4fb06e20f4b9f37de48de51f191f19ddaf9254",
+    "costs.yaml": "c07fd90cd49a8eb68b5e1bf4ad07fb12aae5e6f697531854f51e4b303b2d791c",
+    "expiry.yaml": "a47b2a6277c49b331b87b821c16eed0101242f391090785f95c24f8ebd54d3b0",
+    "markets.yaml": "f73c5ab9315caf35cb79d5ce509a0fc0a1b4fda3f7623fb39a7e984dca83e77c",
+    "watchlist.yaml": "0be3a783d10a75d3dd72002306efd0a0da844e146f19d33b27610156d9bfb0a6",
+    "holidays_observed.json": "965345a57c0b05fe8946563212fca5855582142ed34781033628cfc3774c0159",
+    "edge_search.yaml": "b5e2f46f69c7ce19759b05bf0e2d70ce7b182116cfcaa91aad7c816c5912b702",
+    "edge_search_v2.yaml": "2c7ea1287598d2ac918669edbcf69aafbaaeda7e67c4be6217770f63e16ec4c6"
+  },
+  "registration": {
+    "name": "vol_v2",
+    "underlying": "NSE:NIFTY50",
+    "implied": "NSE:INDIAVIX",
+    "horizons_days": [
+      5,
+      20
+    ],
+    "target": "same realised-variance target as vol_v1",
+    "model": "OLS in logs: HAR on 5m realised variance (1d, 5d, 22d components) + overnight squared return + log VIX^2",
+    "baseline": "recalibrated VIX: OLS of log target on log VIX^2, fitted on train (the bias-corrected VIX vol_v1 matched)",
+    "split": {
+      "train": [
+        "2017-07-17",
+        "2021-01-01"
+      ],
+      "validation": [
+        "2021-01-01",
+        "holdout_start"
+      ]
+    },
+    "primary": "QLIKE improvement over recalibrated VIX, one-sided > 0; one p per horizon",
+    "pass_if": {
+      "qlike_improvement_vs_recalibrated_vix_ci_lower_above": 0.0,
+      "conditional_vs_always_short_sharpe_ci_lower_above": 0.0
+    },
+    "caveat": "variance-swap proxy only; real straddle P&L waits for logged option chains (vol_v3, pre-registered later)"
+  },
+  "split": {
+    "registered_ist_dates": {
+      "train": [
+        "2017-07-17",
+        "2021-01-01"
+      ],
+      "validation": [
+        "2021-01-01",
+        "holdout_start"
+      ]
+    },
+    "holdout_start_ist": "2025-10-01",
+    "train": [
+      "2017-07-16T18:30:00+00:00",
+      "2020-12-31T18:30:00+00:00"
+    ],
+    "validation": [
+      "2020-12-31T18:30:00+00:00",
+      "2025-09-30T18:30:00+00:00"
+    ],
+    "holdout_start": "2025-09-30T18:30:00+00:00",
+    "holdout_used": false
+  },
+  "definitions": {
+    "target": "vol_v1's: RV_h(t) = 252/h * sum_{i=1..h} r_{t+i}^2, r = daily close-to-close log return",
+    "rv5m": "252 * sum of squared 5m log returns inside the IST session (first bar open->close, then close->close); sessions with fewer than 60 bars have none",
+    "har_components": {
+      "rv5m_d": "mean rv5m over the last 1 regular sessions",
+      "rv5m_w": "mean rv5m over the last 5 regular sessions",
+      "rv5m_m": "mean rv5m over the last 22 regular sessions"
+    },
+    "overnight": "on2 = 252 * g^2, g = log(open_t / close_{t-1}) on daily bars; in the regression log(252 * max(g^2, 0.0001^2))",
+    "vix_var": "(VIX_t / 100)^2, same IST date, no carry-forward",
+    "regressors": {
+      "vol_v2_model": [
+        "log_rv5m_d",
+        "log_rv5m_w",
+        "log_rv5m_m",
+        "log_on2",
+        "log_vix_var"
+      ],
+      "recalibrated_vix": [
+        "log_vix_var"
+      ],
+      "har_5m_log": [
+        "log_rv5m_d",
+        "log_rv5m_w",
+        "log_rv5m_m",
+        "log_on2"
+      ]
+    },
+    "retransformation": "Duan smearing: forecast = exp(x'b) * mean(exp(train residuals)), the same procedure for every log model",
+    "loss": "QLIKE(RV, F) = RV/F - log(RV/F) - 1",
+    "variance_swap": "vol_v1's proxy: per non-overlapping h-day period from the first validation day, K = 1e4 * VIX^2 * h/252, R = 1e4 * RV_h * h/252, short earns K - R, cost 2K x option round trip",
+    "conditional": "short when VIX_t^2 > model forecast, flat otherwise; always_short shorts every period",
+    "context_forecasters": {
+      "india_vix_raw": "(VIX/100)^2",
+      "vol_v1_model": "vol_v1 LightGBM, its own yearly walk-forward from 2016-01-01 (num_threads=1)",
+      "har_rv_daily": "vol_v1's HAR on daily squared returns (levels), fitted on the vol_v2 train rows",
+      "har_5m_log": "the vol_v2 model without log VIX^2"
+    }
+  },
+  "protocol": {
+    "fit": "once on the train window; no refit in validation; train targets end before validation",
+    "bootstrap": {
+      "kind": "date_block",
+      "resamples": 2000,
+      "ci_level": 0.95,
+      "seed": 20260924,
+      "p_value": "(1 + #{draws <= 0}) / (1 + B)",
+      "qlike_blocks": "h consecutive trading days and 60 days; the gate takes the larger p and needs both CI lower bounds above 0",
+      "pnl_blocks": "one h-day period and ceil(60/h) periods; same rule"
+    }
+  },
+  "costs": {
+    "option_round_trip_of_premium": 0.003831068,
+    "components": {
+      "brokerage": 0.0004,
+      "dp_charge": 0.0,
+      "exchange_txn": 0.0007006,
+      "sebi_fee": 2e-06,
+      "transaction_tax": 0.0015,
+      "stamp_duty": 3e-05,
+      "gst": 0.00019846799999999998,
+      "slippage": 0.001
+    }
+  },
+  "n_hypotheses": 2,
+  "primary_p": {
+    "5": 0.8790604697651174,
+    "20": 0.5982008995502249
+  },
+  "family_fdr": {
+    "q": 0.1,
+    "status": "pending: Benjamini-Hochberg runs across every primary p in edge_search_v2.yaml",
+    "survival_possible": {
+      "5": false,
+      "20": false
+    },
+    "note": "a BH q-value is never below its p-value, so p > q means no survival whatever the other tests show"
+  },
+  "horizons": {
+    "5": {
+      "horizon": 5,
+      "n_validation_rows": 1178,
+      "n_scored": 1164,
+      "n_blocks": 235,
+      "first_scored_ts": "2021-01-01T03:45:00+00:00",
+      "last_scored_ts": "2025-09-23T03:45:00+00:00",
+      "fits": {
+        "n_train": 826,
+        "first_train_ts": "2017-08-16T03:45:00+00:00",
+        "last_train_ts": "2020-12-23T03:45:00+00:00",
+        "last_label_end_ts": "2020-12-31T03:45:00+00:00",
+        "vol_v2_model": {
+          "coef": {
+            "intercept": 0.026130521120962563,
+            "log_rv5m_d": 0.24335400909820043,
+            "log_rv5m_w": 0.25836099943830443,
+            "log_rv5m_m": -0.0034374684980750247,
+            "log_on2": -0.005830274482166442,
+            "log_vix_var": 0.5636018787146988
+          },
+          "hac_se": {
+            "intercept": 0.27183719222520913,
+            "log_rv5m_d": 0.06659550908596105,
+            "log_rv5m_w": 0.13980795122726702,
+            "log_rv5m_m": 0.1697061303238274,
+            "log_on2": 0.013656674524304881,
+            "log_vix_var": 0.13563530127138423
+          },
+          "smearing_factor": 1.4081104627596437,
+          "n_train": 826,
+          "r2_log_train": 0.5068069820752216
+        },
+        "recalibrated_vix": {
+          "coef": {
+            "intercept": -0.4059790902397897,
+            "log_vix_var": 1.0706569088989062
+          },
+          "hac_se": {
+            "intercept": 0.3248479566070933,
+            "log_vix_var": 0.08838024236373598
+          },
+          "smearing_factor": 1.4720339117960204,
+          "n_train": 826,
+          "r2_log_train": 0.45705657657108
+        },
+        "har_5m_log": {
+          "coef": {
+            "intercept": -0.04672726473183531,
+            "log_rv5m_d": 0.3192051644091321,
+            "log_rv5m_w": 0.3206410489026005,
+            "log_rv5m_m": 0.27046037303055914,
+            "log_on2": 0.006015456220641036
+          },
+          "hac_se": {
+            "intercept": 0.2890689450851394,
+            "log_rv5m_d": 0.07212443304276012,
+            "log_rv5m_w": 0.1554071239735709,
+            "log_rv5m_m": 0.1450344838370933,
+            "log_on2": 0.015502461862716888
+          },
+          "smearing_factor": 1.429725505028628,
+          "n_train": 826,
+          "r2_log_train": 0.47935657029572376
+        },
+        "har_rv_daily": {
+          "coef": {
+            "intercept": 0.015768572429342074,
+            "har_d": -0.0022036110584421897,
+            "har_w": 0.6672016466498984,
+            "har_m": -0.03792482098890193
+          },
+          "floor": 0.00041999084276447406,
+          "n_clipped_validation": 0
+        },
+        "n_train_on2_at_floor": 12
+      },
+      "qlike": {
+        "vol_v2_model": {
+          "n": 1164,
+          "qlike": 0.3394400996054504,
+          "qlike_ci": [
+            0.2862709524564856,
+            0.3997485161932784
+          ],
+          "mean_forecast_vol": 13.734327881656258,
+          "mean_realized_vol": 12.533162461305174,
+          "realized_over_forecast_variance": 0.9944507399995736,
+          "context_only": false
+        },
+        "recalibrated_vix": {
+          "n": 1164,
+          "qlike": 0.3236933456771644,
+          "qlike_ci": [
+            0.28040438520356026,
+            0.36859905508043883
+          ],
+          "mean_forecast_vol": 13.769345768885742,
+          "mean_realized_vol": 12.533162461305174,
+          "realized_over_forecast_variance": 1.0003104567295773,
+          "context_only": false
+        },
+        "india_vix_raw": {
+          "n": 1164,
+          "qlike": 0.3720255072910616,
+          "qlike_ci": [
+            0.33029555304444996,
+            0.4160828730595765
+          ],
+          "mean_forecast_vol": 15.804037800687286,
+          "mean_realized_vol": 12.533162461305174,
+          "realized_over_forecast_variance": 0.7660696036715408,
+          "context_only": true
+        },
+        "vol_v1_model": {
+          "n": 1164,
+          "qlike": 0.38607276869660895,
+          "qlike_ci": [
+            0.3121395139521719,
+            0.47300778077510836
+          ],
+          "mean_forecast_vol": 13.146737809202161,
+          "mean_realized_vol": 12.533162461305174,
+          "realized_over_forecast_variance": 1.067264773514701,
+          "context_only": true
+        },
+        "har_rv_daily": {
+          "n": 1164,
+          "qlike": 0.48950423490361394,
+          "qlike_ci": [
+            0.42217403363061334,
+            0.5635580327547864
+          ],
+          "mean_forecast_vol": 16.405760647504604,
+          "mean_realized_vol": 12.533162461305174,
+          "realized_over_forecast_variance": 0.7117028350454522,
+          "context_only": true
+        },
+        "har_5m_log": {
+          "n": 1164,
+          "qlike": 0.3842349604041922,
+          "qlike_ci": [
+            0.3116827925542211,
+            0.48024975420989896
+          ],
+          "mean_forecast_vol": 14.243190889500742,
+          "mean_realized_vol": 12.533162461305174,
+          "realized_over_forecast_variance": 0.9280473055450372,
+          "context_only": true
+        }
+      },
+      "model_vs": {
+        "recalibrated_vix": {
+          "n": 1164,
+          "improvement": -0.015746753928285936,
+          "relative_improvement": -0.048647135131381525,
+          "5d_blocks": {
+            "ci": [
+              -0.04781826757764921,
+              0.009258162964496204
+            ],
+            "p_one_sided": 0.8790604697651174,
+            "n_draws": 2000
+          },
+          "60d_blocks": {
+            "ci": [
+              -0.05538245256542058,
+              0.011147040710456397
+            ],
+            "p_one_sided": 0.8280859570214892,
+            "n_draws": 2000
+          },
+          "context_only": false
+        },
+        "india_vix_raw": {
+          "n": 1164,
+          "improvement": 0.032585407685611203,
+          "relative_improvement": 0.08758917613710115,
+          "5d_blocks": {
+            "ci": [
+              -0.009614840790728715,
+              0.06552887976215871
+            ],
+            "p_one_sided": 0.059470264867566215,
+            "n_draws": 2000
+          },
+          "60d_blocks": {
+            "ci": [
+              -0.020928075243682794,
+              0.0791189732044116
+            ],
+            "p_one_sided": 0.1054472763618191,
+            "n_draws": 2000
+          },
+          "context_only": true
+        },
+        "vol_v1_model": {
+          "n": 1164,
+          "improvement": 0.046632669091158555,
+          "relative_improvement": 0.12078725274665592,
+          "5d_blocks": {
+            "ci": [
+              0.012146458670208122,
+              0.08394064250069709
+            ],
+            "p_one_sided": 0.004497751124437781,
+            "n_draws": 2000
+          },
+          "60d_blocks": {
+            "ci": [
+              -0.003532582400258579,
+              0.11850696831009426
+            ],
+            "p_one_sided": 0.04047976011994003,
+            "n_draws": 2000
+          },
+          "context_only": true
+        },
+        "har_rv_daily": {
+          "n": 1164,
+          "improvement": 0.1500641352981636,
+          "relative_improvement": 0.30656350772473295,
+          "5d_blocks": {
+            "ci": [
+              0.1127854284779186,
+              0.1892288230080316
+            ],
+            "p_one_sided": 0.0004997501249375312,
+            "n_draws": 2000
+          },
+          "60d_blocks": {
+            "ci": [
+              0.10818593526870883,
+              0.19595323593072575
+            ],
+            "p_one_sided": 0.0004997501249375312,
+            "n_draws": 2000
+          },
+          "context_only": true
+        },
+        "har_5m_log": {
+          "n": 1164,
+          "improvement": 0.044794860798741856,
+          "relative_improvement": 0.11658194962691648,
+          "5d_blocks": {
+            "ci": [
+              0.017442717667843565,
+              0.08586385865080812
+            ],
+            "p_one_sided": 0.0004997501249375312,
+            "n_draws": 2000
+          },
+          "60d_blocks": {
+            "ci": [
+              0.011664263724252841,
+              0.10368173859973531
+            ],
+            "p_one_sided": 0.0004997501249375312,
+            "n_draws": 2000
+          },
+          "context_only": true
+        }
+      },
+      "variance_swap": {
+        "n_periods": 235,
+        "first_period_ts": "2021-01-01T03:45:00+00:00",
+        "cost_rate_of_premium": 0.003831068,
+        "mean_implied": 5.263660241472476,
+        "mean_realized": 4.036090361125355,
+        "mean_cost": 0.040330880627954944,
+        "always_short": {
+          "n_periods": 235,
+          "n_short": 235,
+          "n_flat": 0,
+          "mean_net": 1.1872389997191655,
+          "mean_gross": 1.2275698803471207,
+          "total_net": 279.0011649340039,
+          "std_net": 5.02916929140549,
+          "sharpe": 1.675934987342541,
+          "max_drawdown": 51.55582226969304,
+          "worst_period": -51.55582226969304,
+          "hit_rate_traded": 0.8042553191489362
+        },
+        "conditional": {
+          "n_periods": 235,
+          "n_short": 213,
+          "n_flat": 22,
+          "mean_net": 1.0608930402063093,
+          "mean_gross": 1.0974253064827968,
+          "total_net": 249.3098644484827,
+          "std_net": 4.964848939259665,
+          "sharpe": 1.516983403277087,
+          "max_drawdown": 51.55582226969304,
+          "worst_period": -51.55582226969304,
+          "hit_rate_traded": 0.812206572769953
+        },
+        "sharpe_diff": -0.15895158406545407,
+        "1_period_blocks": {
+          "ci": [
+            -0.38769640546061707,
+            0.032342107299930666
+          ],
+          "p_one_sided": 0.9505247376311844,
+          "n_draws": 2000
+        },
+        "60d_blocks": {
+          "ci": [
+            -0.3636130221763745,
+            0.008562724465123617
+          ],
+          "p_one_sided": 0.9700149925037481,
+          "n_draws": 2000
+        },
+        "phase_sharpe_diff": {
+          "values": [
+            -0.15895158406545407,
+            -0.003777973603524609,
+            -0.0646168963142777,
+            -0.04739090504431043,
+            -0.16929398902192294
+          ],
+          "min": -0.16929398902192294,
+          "median": -0.0646168963142777,
+          "max": -0.003777973603524609,
+          "share_above_0": 0.0
+        }
+      },
+      "primary_p": 0.8790604697651174,
+      "gates": {
+        "qlike_improvement_vs_recalibrated_vix": {
+          "value": -0.015746753928285936,
+          "by_block_scheme": {
+            "5d_blocks": {
+              "ci": [
+                -0.04781826757764921,
+                0.009258162964496204
+              ],
+              "p_one_sided": 0.8790604697651174,
+              "n_draws": 2000
+            },
+            "60d_blocks": {
+              "ci": [
+                -0.05538245256542058,
+                0.011147040710456397
+              ],
+              "p_one_sided": 0.8280859570214892,
+              "n_draws": 2000
+            }
+          },
+          "p_one_sided": 0.8790604697651174,
+          "ci_lower_above": 0.0,
+          "pass": false
+        },
+        "conditional_vs_always_short_sharpe": {
+          "value": -0.15895158406545407,
+          "by_block_scheme": {
+            "1_period_blocks": {
+              "ci": [
+                -0.38769640546061707,
+                0.032342107299930666
+              ],
+              "p_one_sided": 0.9505247376311844,
+              "n_draws": 2000
+            },
+            "60d_blocks": {
+              "ci": [
+                -0.3636130221763745,
+                0.008562724465123617
+              ],
+              "p_one_sided": 0.9700149925037481,
+              "n_draws": 2000
+            }
+          },
+          "p_one_sided": 0.9700149925037481,
+          "ci_lower_above": 0.0,
+          "pass": false
+        }
+      },
+      "pass_if_met": false,
+      "runtime_s": 0.5
+    },
+    "20": {
+      "horizon": 20,
+      "n_validation_rows": 1178,
+      "n_scored": 1149,
+      "n_blocks": 58,
+      "first_scored_ts": "2021-01-01T03:45:00+00:00",
+      "last_scored_ts": "2025-09-02T03:45:00+00:00",
+      "fits": {
+        "n_train": 811,
+        "first_train_ts": "2017-08-16T03:45:00+00:00",
+        "last_train_ts": "2020-12-02T03:45:00+00:00",
+        "last_label_end_ts": "2020-12-31T03:45:00+00:00",
+        "vol_v2_model": {
+          "coef": {
+            "intercept": -0.4855661713761306,
+            "log_rv5m_d": 0.1771409669946909,
+            "log_rv5m_w": 0.16562989128126382,
+            "log_rv5m_m": 0.03331954708280305,
+            "log_on2": 0.013366200799008743,
+            "log_vix_var": 0.484142815227456
+          },
+          "hac_se": {
+            "intercept": 0.3559020506146806,
+            "log_rv5m_d": 0.07736805628692556,
+            "log_rv5m_w": 0.13050757683525382,
+            "log_rv5m_m": 0.19971434687876055,
+            "log_on2": 0.016063053582395556,
+            "log_vix_var": 0.18238744182705
+          },
+          "smearing_factor": 1.5898765771088055,
+          "n_train": 811,
+          "r2_log_train": 0.46258131164581284
+        },
+        "recalibrated_vix": {
+          "coef": {
+            "intercept": -0.8333241771488458,
+            "log_vix_var": 0.8921441671574201
+          },
+          "hac_se": {
+            "intercept": 0.4008468877612957,
+            "log_vix_var": 0.10633630553691044
+          },
+          "smearing_factor": 1.6565142429319597,
+          "n_train": 811,
+          "r2_log_train": 0.4264522178799195
+        },
+        "har_5m_log": {
+          "coef": {
+            "intercept": -0.5478826631716099,
+            "log_rv5m_d": 0.2430377587152554,
+            "log_rv5m_w": 0.2212738845851923,
+            "log_rv5m_m": 0.2659833607281955,
+            "log_on2": 0.023503439743539994
+          },
+          "hac_se": {
+            "intercept": 0.39169132081233987,
+            "log_rv5m_d": 0.08097376653535986,
+            "log_rv5m_w": 0.14376541798916204,
+            "log_rv5m_m": 0.16477251666101306,
+            "log_on2": 0.01784139575731864
+          },
+          "smearing_factor": 1.580848029166432,
+          "n_train": 811,
+          "r2_log_train": 0.4354393372424711
+        },
+        "har_rv_daily": {
+          "coef": {
+            "intercept": 0.02724437001688097,
+            "har_d": 0.03953442662527218,
+            "har_w": 0.3205035386665519,
+            "har_m": -0.0022969776438435813
+          },
+          "floor": 0.0004235725643532855,
+          "n_clipped_validation": 0
+        },
+        "n_train_on2_at_floor": 12
+      },
+      "qlike": {
+        "vol_v2_model": {
+          "n": 1149,
+          "qlike": 0.20133850639722564,
+          "qlike_ci": [
+            0.16256104665811258,
+            0.2456241100414437
+          ],
+          "mean_forecast_vol": 16.28426782064073,
+          "mean_realized_vol": 13.307215377394938,
+          "realized_over_forecast_variance": 0.72826734196941,
+          "context_only": false
+        },
+        "recalibrated_vix": {
+          "n": 1149,
+          "qlike": 0.19947572786411485,
+          "qlike_ci": [
+            0.15902028267107157,
+            0.24522112045311642
+          ],
+          "mean_forecast_vol": 16.381202687489225,
+          "mean_realized_vol": 13.307215377394938,
+          "realized_over_forecast_variance": 0.7233035950802652,
+          "context_only": false
+        },
+        "india_vix_raw": {
+          "n": 1149,
+          "qlike": 0.17663010233402543,
+          "qlike_ci": [
+            0.13960468249815297,
+            0.22031576410830037
+          ],
+          "mean_forecast_vol": 15.873646649260227,
+          "mean_realized_vol": 13.307215377394938,
+          "realized_over_forecast_variance": 0.761052268893322,
+          "context_only": true
+        },
+        "vol_v1_model": {
+          "n": 1149,
+          "qlike": 0.20952133877612097,
+          "qlike_ci": [
+            0.15776933494194773,
+            0.27233053974200233
+          ],
+          "mean_forecast_vol": 14.04404618916369,
+          "mean_realized_vol": 13.307215377394938,
+          "realized_over_forecast_variance": 0.9442696466585598,
+          "context_only": true
+        },
+        "har_rv_daily": {
+          "n": 1149,
+          "qlike": 0.3593589634546109,
+          "qlike_ci": [
+            0.2950258115899912,
+            0.42579735896455423
+          ],
+          "mean_forecast_vol": 18.463133505264196,
+          "mean_realized_vol": 13.307215377394938,
+          "realized_over_forecast_variance": 0.5873556512315096,
+          "context_only": true
+        },
+        "har_5m_log": {
+          "n": 1149,
+          "qlike": 0.2354318204942004,
+          "qlike_ci": [
+            0.18889568691739012,
+            0.2916691686136258
+          ],
+          "mean_forecast_vol": 16.630508814000812,
+          "mean_realized_vol": 13.307215377394938,
+          "realized_over_forecast_variance": 0.7002276127434358,
+          "context_only": true
+        }
+      },
+      "model_vs": {
+        "recalibrated_vix": {
+          "n": 1149,
+          "improvement": -0.0018627785331108138,
+          "relative_improvement": -0.009338371906479459,
+          "20d_blocks": {
+            "ci": [
+              -0.017185788985926854,
+              0.011605357283583756
+            ],
+            "p_one_sided": 0.5982008995502249,
+            "n_draws": 2000
+          },
+          "60d_blocks": {
+            "ci": [
+              -0.01787142041904203,
+              0.014424124956657104
+            ],
+            "p_one_sided": 0.5882058970514743,
+            "n_draws": 2000
+          },
+          "context_only": false
+        },
+        "india_vix_raw": {
+          "n": 1149,
+          "improvement": -0.02470840406320026,
+          "relative_improvement": -0.13988784321980474,
+          "20d_blocks": {
+            "ci": [
+              -0.041987259668443154,
+              -0.008249353309188495
+            ],
+            "p_one_sided": 0.9985007496251874,
+            "n_draws": 2000
+          },
+          "60d_blocks": {
+            "ci": [
+              -0.044029581689956805,
+              -0.0056834331101445834
+            ],
+            "p_one_sided": 0.9920039980009995,
+            "n_draws": 2000
+          },
+          "context_only": true
+        },
+        "vol_v1_model": {
+          "n": 1149,
+          "improvement": 0.008182832378895291,
+          "relative_improvement": 0.039054887806147964,
+          "20d_blocks": {
+            "ci": [
+              -0.03884944992572559,
+              0.0589016350628478
+            ],
+            "p_one_sided": 0.3698150924537731,
+            "n_draws": 2000
+          },
+          "60d_blocks": {
+            "ci": [
+              -0.054178599099404916,
+              0.07272284470199947
+            ],
+            "p_one_sided": 0.4127936031984008,
+            "n_draws": 2000
+          },
+          "context_only": true
+        },
+        "har_rv_daily": {
+          "n": 1149,
+          "improvement": 0.1580204570573852,
+          "relative_improvement": 0.4397287201028566,
+          "20d_blocks": {
+            "ci": [
+              0.11877998097031599,
+              0.19975867105401265
+            ],
+            "p_one_sided": 0.0004997501249375312,
+            "n_draws": 2000
+          },
+          "60d_blocks": {
+            "ci": [
+              0.10063245085660669,
+              0.22321730287275726
+            ],
+            "p_one_sided": 0.0004997501249375312,
+            "n_draws": 2000
+          },
+          "context_only": true
+        },
+        "har_5m_log": {
+          "n": 1149,
+          "improvement": 0.03409331409697471,
+          "relative_improvement": 0.14481183565334832,
+          "20d_blocks": {
+            "ci": [
+              0.01668786815637974,
+              0.05554568179791113
+            ],
+            "p_one_sided": 0.0004997501249375312,
+            "n_draws": 2000
+          },
+          "60d_blocks": {
+            "ci": [
+              0.012321978814135688,
+              0.061277713499550024
+            ],
+            "p_one_sided": 0.0004997501249375312,
+            "n_draws": 2000
+          },
+          "context_only": true
+        }
+      },
+      "variance_swap": {
+        "n_periods": 58,
+        "first_period_ts": "2021-01-01T03:45:00+00:00",
+        "cost_rate_of_premium": 0.003831068,
+        "mean_implied": 21.33076573617953,
+        "mean_realized": 16.29699590152519,
+        "mean_cost": 0.16343922805474764,
+        "always_short": {
+          "n_periods": 58,
+          "n_short": 58,
+          "n_flat": 0,
+          "mean_net": 4.870330606599594,
+          "mean_gross": 5.0337698346543425,
+          "total_net": 282.47917518277643,
+          "std_net": 11.037994352763869,
+          "sharpe": 1.5662228218933862,
+          "max_drawdown": 39.391463171199234,
+          "worst_period": -28.599272057735046,
+          "hit_rate_traded": 0.7931034482758621
+        },
+        "conditional": {
+          "n_periods": 58,
+          "n_short": 22,
+          "n_flat": 36,
+          "mean_net": 3.6857608038150707,
+          "mean_gross": 3.762624952245162,
+          "total_net": 213.7741266212741,
+          "std_net": 9.535054113780536,
+          "sharpe": 1.3721110368074754,
+          "max_drawdown": 28.59927205773505,
+          "worst_period": -28.599272057735046,
+          "hit_rate_traded": 0.8181818181818182
+        },
+        "sharpe_diff": -0.19411178508591087,
+        "1_period_blocks": {
+          "ci": [
+            -1.0093786000157998,
+            0.5152583534388253
+          ],
+          "p_one_sided": 0.7266366816591704,
+          "n_draws": 2000
+        },
+        "60d_blocks": {
+          "ci": [
+            -1.0958085335215593,
+            0.49871695458973936
+          ],
+          "p_one_sided": 0.7361319340329835,
+          "n_draws": 2000
+        },
+        "phase_sharpe_diff": {
+          "values": [
+            -0.19411178508591087,
+            -0.6977759275345337,
+            -0.39479974517771477,
+            -1.053728903120797,
+            -0.8629915605608156,
+            -0.6118655833629623,
+            -0.0434677189480559,
+            -0.007346382060251955,
+            0.0867180569645809,
+            -0.17636760640589033,
+            -0.7943675996469217,
+            -0.5131252840217744,
+            -0.5331929831732904,
+            -0.4850589598121019,
+            -0.016911068784447814,
+            -0.18651690085072348,
+            -0.3498781392049528,
+            -0.8358476198797964,
+            -0.6715159129979614,
+            -0.6491285237153008
+          ],
+          "min": -1.053728903120797,
+          "median": -0.49909212191693814,
+          "max": 0.0867180569645809,
+          "share_above_0": 0.05
+        }
+      },
+      "primary_p": 0.5982008995502249,
+      "gates": {
+        "qlike_improvement_vs_recalibrated_vix": {
+          "value": -0.0018627785331108138,
+          "by_block_scheme": {
+            "20d_blocks": {
+              "ci": [
+                -0.017185788985926854,
+                0.011605357283583756
+              ],
+              "p_one_sided": 0.5982008995502249,
+              "n_draws": 2000
+            },
+            "60d_blocks": {
+              "ci": [
+                -0.01787142041904203,
+                0.014424124956657104
+              ],
+              "p_one_sided": 0.5882058970514743,
+              "n_draws": 2000
+            }
+          },
+          "p_one_sided": 0.5982008995502249,
+          "ci_lower_above": 0.0,
+          "pass": false
+        },
+        "conditional_vs_always_short_sharpe": {
+          "value": -0.19411178508591087,
+          "by_block_scheme": {
+            "1_period_blocks": {
+              "ci": [
+                -1.0093786000157998,
+                0.5152583534388253
+              ],
+              "p_one_sided": 0.7266366816591704,
+              "n_draws": 2000
+            },
+            "60d_blocks": {
+              "ci": [
+                -1.0958085335215593,
+                0.49871695458973936
+              ],
+              "p_one_sided": 0.7361319340329835,
+              "n_draws": 2000
+            }
+          },
+          "p_one_sided": 0.7361319340329835,
+          "ci_lower_above": 0.0,
+          "pass": false
+        }
+      },
+      "pass_if_met": false,
+      "runtime_s": 0.2
+    }
+  },
+  "pass_if_met": {
+    "5": false,
+    "20": false
+  },
+  "deviations": [
+    "Block length is not registered: the QLIKE gate uses both h-day blocks (vol_v1's gate) and 60-day blocks and keeps the more conservative (larger p; both CI lower bounds must be above 0). Same for the P&L check (one-period and ceil(60/h)-period blocks).",
+    "log of the overnight squared return needs a floor: |g| is floored at 0.0001 (1 bp) before the log; chosen before any fit.",
+    "The model and baseline are fitted once on the train window (the split is a fixed train/validation split); there is no refit inside validation, unlike vol_v1's yearly walk-forward.",
+    "The train window starts on the first 5m session (2017-07-17), so the first 21 sessions have no 22-day HAR component and are not trained on.",
+    "A session with fewer than 60 of 75 5m bars (Muhurat, weekend DR drills, the 2021-02-24 outage) or with no 5m bars (7 Muhurat days) has no rv5m: the HAR windows skip it (means over the last 1/5/22 regular sessions) and that day gets no forecast. The target still includes those days' returns.",
+    "The conditional rule is exactly the registered one (short when VIX^2 > forecast, else flat); unlike vol_v1 there is no margin and no long-volatility leg."
+  ],
+  "caveats": [
+    "variance-swap proxy only; real straddle P&L waits for logged option chains (vol_v3, pre-registered later)",
+    "Smearing factors are estimated on 2017-07..2020-12 residuals, which include March 2020; the same factor type scales the model and the recalibrated VIX, so the comparison is like for like, but both can be biased in validation (see realised / forecast variance per horizon).",
+    "The recalibrated VIX is fitted on 2017-07..2020-12, which contains the March 2020 crash; both it and the model can be miscalibrated in 2021-2025 if the level of the variance risk premium moved.",
+    "The variance-swap proxy uses VIX (a 30-calendar-day implied vol) as the strike at both horizons; at h = 5 that is a horizon mismatch (as in vol_v1).",
+    "Option costs: costs.yaml has no option slippage, so the default 0.05% per side applies; delta-hedging, margin and real quotes are not modelled.",
+    "Short variance has no loss cap; the sample's worst period is not the worst possible.",
+    "Validation (2021-01..2025-09) had no crash of March-2020 size; a calm sample flatters short-vol P&L."
+  ],
+  "runtime_s": 6.5
+}
