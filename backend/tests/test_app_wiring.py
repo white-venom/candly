@@ -65,7 +65,9 @@ def test_pipeline_jobs_replace_platform_ingest_jobs():
 def test_universe_ingest_uses_the_research_universe(monkeypatch):
     seen = {}
     monkeypatch.setattr(pipeline, "load_universe", lambda name: [f"NSE:{name.upper()}-X"])
-    monkeypatch.setattr(pipeline, "ingest", lambda tf, instruments: seen.update(tf=tf, instruments=instruments))
+    monkeypatch.setattr(
+        pipeline, "ingest", lambda tf, instruments: seen.update(tf=tf, instruments=instruments)
+    )
     pipeline.universe_daily_ingest()
     assert seen == {"tf": "1D", "instruments": ["NSE:NIFTY200-X"]}
 
