@@ -42,7 +42,13 @@ from candly.core.timeframes import is_intraday
 from candly.features.context import compute_context
 from candly.features.expiry import expiry_on
 from candly.forecast.models import Band, Candle, Driver, Forecast, ForecastContext, Trade
-from candly.forecast.timing import drop_unclosed, future_bar_times, last_expected_closed_bar, to_unix
+from candly.forecast.timing import (
+    drop_unclosed,
+    future_bar_times,
+    last_expected_closed_bar,
+    stale_grace,
+    to_unix,
+)
 from candly.patterns import PATTERN_INFO, detect_patterns, load_pattern_config
 from candly.research.config import ResearchConfig, load_research_config
 from candly.research.costs import round_trip_cost
@@ -236,7 +242,11 @@ class _AnalogRun:
                 ),
                 drivers=self._context_drivers(),
             )
-        expected = last_expected_closed_bar(self.exchange, self.tf, self.now) if self.check_stale else None
+        expected = (
+            last_expected_closed_bar(self.exchange, self.tf, self.now - stale_grace(self.tf))
+            if self.check_stale
+            else None
+        )
         if expected is not None and self.ref_ts < expected:
             return self._forecast(
                 abstain_reason=(

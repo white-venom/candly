@@ -175,6 +175,18 @@ def test_abstains_on_stale_data(random_daily):
     assert fc.p_up is None and fc.ghost_candles == []
 
 
+def test_stale_check_allows_the_ingest_delay(random_daily):
+    last = random_daily["ts"].iloc[-1]
+    next_open = future_bar_times("NSE", "1D", last, 1)[0]
+    next_close = cal.bar_close_time("NSE", next_open, "1D")
+    # The next daily bar closed 30 min ago but isn't ingested yet: still a live forecast.
+    fresh = make_forecast("NSE:RELIANCE", "1D", random_daily, None, now=next_close + timedelta(minutes=30))
+    assert not (fc_reason := fresh.abstain_reason or "").startswith("stale data"), fc_reason
+    # Two hours late is genuinely stale.
+    late = make_forecast("NSE:RELIANCE", "1D", random_daily, None, now=next_close + timedelta(hours=2))
+    assert late.abstain and late.abstain_reason.startswith("stale data")
+
+
 def test_abstains_without_enough_history():
     short = synthetic_candles("1D", "2024-01-01", "2024-02-15", seed=1)
     fc = make_forecast("NSE:RELIANCE", "1D", short, None, now=just_after_close(short))

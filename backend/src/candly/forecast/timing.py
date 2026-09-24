@@ -9,6 +9,13 @@ import pandas as pd
 from candly.core.calendar import get_calendar
 
 _MAX_DAYS = 30
+# Ingest downloads a just-closed bar ~30-60 s after the close (the daily bar at 15:45 IST), so a live
+# forecast only counts as stale once the next bar is this late; otherwise it vanishes every candle.
+STALE_GRACE = {"intraday": timedelta(minutes=3), "1D": timedelta(minutes=90)}
+
+
+def stale_grace(tf: str) -> timedelta:
+    return STALE_GRACE["1D"] if tf == "1D" else STALE_GRACE["intraday"]
 
 
 def to_unix(ts: pd.Timestamp) -> int:
