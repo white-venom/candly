@@ -1,0 +1,16 @@
+{
+  "name": "tour",
+  "version": "1.0.0",
+  "description": "",
+  "scripts": {
+    "tour": "node tour.mjs"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "dependencies": {
+    "playwright-core": "^1.63.0"
+  },
+  "private": true
+}
