@@ -1,0 +1,82 @@
+# Edge search v4: more candle ideas, pre-registered 2026-09-24 night BEFORE any of them was run.
+# The user chose to keep testing direction from candles after v1/v2 failed (patterns failed 4 times).
+# These test how traders actually use candles, which v1/v2 did not: patterns AT key levels with volume,
+# opening-range breakouts, gap fades, and an intraday cross-sectional model on the first hour's candles.
+# Each new test raises the multiple-testing bar for all of them.
+# Rules as in edge_search_v2.yaml: validation only, holdout (>= 2025-10-01) locked, costs from
+# config/costs.yaml, causal features with truncation tests, nothing tuned on validation, one primary
+# one-sided p per hypothesis, pass = own pass_if AND BH survival across the cumulative family.
+
+family:
+  fdr_q: 0.10
+  includes: [edge_search_v2.yaml, edge_search_v3.yaml]   # cumulative: 17 + 4 + the 10 below = 31
+
+patterns_levels:
+  name: pv3_levels                 # patterns where traders use them: at support/resistance, with volume
+  events: "a CONFIRMED pattern from candly.patterns at bar t (the v1 detector, unchanged), kept only if
+    (bullish) bar t's low is within 0.25 x ATR(14) of a support level, or (bearish) bar t's high is within
+    0.25 x ATR(14) of a resistance level, AND volume(t) >= 1.5 x the median volume of the previous 20 bars"
+  levels: "all from bars before t: the previous session's low/high (intraday tfs) or the previous 20-session
+    low/high (1D); the 3 most recent confirmed swing lows/highs (2-bar fractals, confirmed >= 2 bars before t)
+    within the last 60 bars; floor-pivot P and S1/R1 of the previous session (intraday) or previous week (1D)"
+  datasets:
+    nifty200_1D: {universe: config/universe_nifty200.yaml, tf: 1D}
+    watchlist_1h: {universe: "NSE stocks in config/watchlist.yaml (indices excluded: no volume)", tf: 1h}
+    watchlist_15m: {universe: "same", tf: 15m}
+    watchlist_5m: {universe: "same", tf: 5m}
+  method: "the v1 scorecard statistics (research.yaml: horizons, cluster-robust test vs bucket base rate,
+    costs, BH within the dataset, certification incl. same-sign validation), with buckets = pattern x horizon
+    pooled over instruments and NO context split; train_end per research.yaml for the timeframe"
+  primary: "Simes global p (smallest BH-adjusted bucket p) per dataset"
+  pass_if: {certified_buckets_min: 1}
+  caveats: "Nifty 200 = current constituents (survivorship); pre-2019 1D volume is mis-adjusted around old
+    splits/bonuses, which only affects the volume ratio in the 20 bars after such an event"
+
+opening_range_breakout:
+  name: orb_v1
+  instruments: [NSE:NIFTY50, NSE:BANKNIFTY]   # 5m spot bars as the futures proxy
+  opening_range: "high and low of the 09:15, 09:20 and 09:25 IST bars"
+  entry: "at the close of the first bar from 09:30 to 14:55 that closes above the range high (long) or
+    below the range low (short); one trade per day"
+  stop: "the opposite side of the opening range; exit at the stop price when a later bar's high/low reaches it"
+  exit: "close of the 15:15 bar if not stopped"
+  costs: "index futures intraday round trip incl. slippage (as im_v1)"
+  skip_days: "special sessions and days with a missing bar"
+  split: {train: [2017-07-17, 2023-01-01], validation: [2023-01-01, holdout_start]}
+  primary: "mean after-cost return per session (no-trade days = 0), one-sided > 0; one p per instrument"
+  pass_if: {mean_after_cost_ci_lower_above: 0.0, train_period_same_sign: true}
+
+gap_fade:
+  name: gap_v1                     # "gaps get filled"
+  instruments: [NSE:NIFTY50, NSE:BANKNIFTY]
+  gap: "open of the 09:15 bar / previous session close - 1"
+  trigger: "|gap| >= 0.5% and the 09:15 bar did not reach the previous close"
+  entry: "close of the 09:15 bar, against the gap"
+  exit: "the previous close when a later bar reaches it (target), else the close of the 15:15 bar; no stop"
+  costs: "index futures intraday round trip incl. slippage"
+  skip_days: "special sessions and days with a missing bar"
+  split: {train: [2017-07-17, 2023-01-01], validation: [2023-01-01, holdout_start]}
+  primary: "mean after-cost return per session (no-trade days = 0), one-sided > 0; one p per instrument"
+  pass_if: {mean_after_cost_ci_lower_above: 0.0, train_period_same_sign: true}
+
+intraday_cross_section:
+  name: xsi_v1                     # which stocks do best from 10:15 to 15:20, from the first hour's candles
+  universe: config/universe_nifty200.yaml     # needs 5m bars from 2017-07; current constituents (survivorship)
+  decision_time: "10:15 IST (after the 10:10 bar closes); entry at the 10:15 bar open, exit at the 15:15 bar close"
+  features: "gap; first-hour return; first-hour range / daily ATR(14); first-hour volume / median first-hour
+    volume of the previous 20 sessions; position of price in the first-hour range; previous-day, 5-day and
+    20-day returns; distance to the previous day's high/low in ATR; confirmed patterns on the 15m bars of
+    the first hour and on the previous daily bar; first-hour return minus its sector median; NIFTY50
+    first-hour return"
+  label: "within-day quintile of the 10:15 -> 15:20 return"
+  model: "LightGBM lambdarank with the xs_v1 settings (lr 0.05, 15 leaves, depth 4, min_data_in_leaf 1000,
+    feature_fraction 0.8, L2 10, 200 rounds, seed 20260924, deterministic)"
+  split: {train: [2017-07-17, 2023-01-01], validation: [2023-01-01, holdout_start], retrain: yearly_expanding}
+  portfolio: "equal weight; long top decile and short bottom decile (intraday short sale)"
+  costs: "equity intraday per leg incl. slippage from config/costs.yaml"
+  baselines: [first_hour_momentum, first_hour_reversal, gap_reversal]
+  hypotheses:
+    long_short: "long-short daily return after cost > 0"
+    long_only: "top decile minus equal-weight universe, after cost > 0"
+  primary: "one-sided date-block bootstrap p per hypothesis"
+  pass_if: {rank_ic_ci_lower_above: 0.0, after_cost_ci_lower_above: 0.0}

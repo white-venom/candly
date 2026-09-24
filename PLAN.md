@@ -385,6 +385,20 @@ The v1 failures stay failures. They are not re-run with tweaks. v2 asks new ques
 
 **Remaining bias.** Stocks delisted before today are missing; Fyers serves listed symbols only. So even a clean pass is an upper bound.
 
+**Blocker, found by the auditor.** Fyers 1D volume is mis-adjusted around splits and bonuses before about 2019: pre-event volume is too small by f².
+- The correction uses NSE corporate-action CSVs, downloaded manually by the user.
+- xs_v2 waits for that correction, which is logged as a revision before any result exists.
+
+## 20e. Edge search v4: more candle ideas (2026-09-24 night)
+
+The user chose to keep testing direction from candles. v4 tests how traders actually use candles. It is pre-registered in `config/edge_search_v4.yaml`:
+- **pv3_levels:** patterns only at support/resistance, with a volume surge (Nifty 200 1D, and the watchlist at 1h/15m/5m).
+- **orb_v1:** opening-range breakout on NIFTY and BANKNIFTY.
+- **gap_v1:** fading opening gaps of 0.5% or more.
+- **xsi_v1:** which Nifty 200 stocks do best from 10:15 to 15:20, from the first hour's candles.
+
+That is 10 more primaries. BH is cumulative over v2 + v3 + v4, 31 in total.
+
 ## 20. Open questions
 
 - Fyers symbol formats, and how `cont_flag` behaves for MCX continuous futures. Verify when the keys arrive.

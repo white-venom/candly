@@ -2,7 +2,13 @@ from pathlib import Path
 
 import pytest
 
-from candly.research.edge_v2_config import SECTIONS, edge_v2_section, edge_v3_section, load_edge_v2
+from candly.research.edge_v2_config import (
+    SECTIONS,
+    edge_v2_section,
+    edge_v3_section,
+    edge_v4_section,
+    load_edge_v2,
+)
 
 REPO_CONFIG = Path(__file__).resolve().parents[2] / "config" / "edge_search_v2.yaml"
 
@@ -25,3 +31,9 @@ def test_v3_file_has_the_point_in_time_retest():
     spec = edge_v3_section("xs_pit", REPO_CONFIG.with_name("edge_search_v3.yaml"))
     assert spec["name"] == "xs_v2" and spec["base"] == "xs_v1"
     assert spec["horizons_days"] == [5, 20]
+
+
+def test_v4_file_has_the_candle_ideas():
+    v4 = REPO_CONFIG.with_name("edge_search_v4.yaml")
+    assert edge_v4_section("opening_range_breakout", v4)["name"] == "orb_v1"
+    assert edge_v4_section("intraday_cross_section", v4)["name"] == "xsi_v1"

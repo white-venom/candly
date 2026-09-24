@@ -1,5 +1,5 @@
-"""Reader for the pre-registered edge search v2 and v3 (config/edge_search_v2.yaml and _v3.yaml, PLAN.md
-§20c-d).
+"""Reader for the pre-registered edge search v2-v4 (config/edge_search_v2.yaml, _v3.yaml, _v4.yaml, PLAN.md
+§20c-e).
 
 Each test module reads its own section and checks the values it implements. The files are binding and must
 never be edited to fit a result; their sha256 goes into every report.
@@ -16,6 +16,7 @@ from candly.core.settings import get_settings
 
 EDGE_V2_FILE = "edge_search_v2.yaml"
 EDGE_V3_FILE = "edge_search_v3.yaml"
+EDGE_V4_FILE = "edge_search_v4.yaml"
 SECTIONS = {
     "family",
     "cross_section_patterns",
@@ -27,6 +28,7 @@ SECTIONS = {
     "patterns_pooled",
 }
 V3_SECTIONS = {"family", "xs_pit"}
+V4_SECTIONS = {"family", "patterns_levels", "opening_range_breakout", "gap_fade", "intraday_cross_section"}
 
 
 def _load(path: Path, sections: set[str]) -> dict:
@@ -73,3 +75,17 @@ def edge_v3_section(name: str, path: Path | None = None) -> dict:
     if name not in V3_SECTIONS:
         raise KeyError(name)
     return load_edge_v3(path)[name]
+
+
+def edge_v4_path() -> Path:
+    return get_settings().config_dir / EDGE_V4_FILE
+
+
+def edge_v4_sha256(path: Path | None = None) -> str:
+    return hashlib.sha256((path or edge_v4_path()).read_bytes()).hexdigest()
+
+
+def edge_v4_section(name: str, path: Path | None = None) -> dict:
+    if name not in V4_SECTIONS:
+        raise KeyError(name)
+    return _load(path or edge_v4_path(), V4_SECTIONS)[name]
