@@ -1,0 +1,54 @@
+# Pivot (Stage A v2), pre-registered 2026-09-24 BEFORE any model below was built, trained or evaluated.
+# Why: go/no-go #1 failed (0 certified candlestick buckets in 12 scorecards; analog_v1 abstained on all
+# 20,099 NSE 1D validation bars) while its 80% bands covered 78% of closes: range is forecastable,
+# direction from candle shapes is not. Candlestick patterns become chart context only. See PLAN.md §21.
+# Changing anything here after seeing results must be logged in PLAN.md with a reason.
+
+data:
+  daily_start: 1999-01-01          # Fyers 1D goes back to ~2000 on NSE; 5m starts 2017-07-03
+  holdout_start: 2025-10-01        # same locked holdout as v1
+  train_end: {1D: 2019-01-01, intraday: 2023-01-01}
+  walk_forward: {retrain_every_months: 6, purge_bars: 10, embargo_bars: 10, expanding: true}
+
+# --- "Expected candle": next-bar high / low / close quantiles -----------------------------------------
+range_model:
+  name: range_v1
+  algo: lightgbm_quantile          # one model per (timeframe, target, quantile), pooled across the exchange
+  quantiles: [0.1, 0.5, 0.9]
+  targets: [high, low, close]      # each relative to the reference close, in ATR(14) units
+  steps: 3
+  timeframes: [5m, 15m, 1h, 1D]
+  exchanges: [NSE, BSE, MCX]       # trained and evaluated per exchange, never pooled across them
+  feature_groups: [volatility, recent_ranges, last_candle_shape, volume, time_of_day, calendar, expiry, trend, market]
+  baselines: [atr_bands, rolling_quantiles, analog_v1]
+  go_no_go_2:                      # NSE slice (equities + indices, excluding INDIAVIX), validation period
+    coverage_80_within: [0.76, 0.84]                 # share of closes inside p10-p90
+    interval_score_improvement_vs_best_baseline: 0.05  # Winkler score (alpha 0.2) at least 5% lower
+    improvement_ci_lower_above: 0.0                  # date-clustered bootstrap, 95%
+    pass_rule: "at least 2 of 4 timeframes pass, and 1D or 1h is one of them"
+
+# --- Direction over days (trend / regime), daily bars only -------------------------------------------
+regime_model:
+  name: regime_v1
+  algo: lightgbm_classifier_isotonic   # calibrated inside training folds only
+  timeframe: 1D
+  horizons_days: [5, 20]
+  target: "close[t+h] > close[t] (flat closes dropped)"
+  feature_groups: [momentum, trend_structure, volatility_regime, distance_from_extremes, market_trend, vix]
+  baselines: [base_rate, trend_rule_ema200, momentum_sign_20d]
+  go_no_go_2:
+    brier_skill_ci_lower_above: 0.0            # vs base rate, date-clustered bootstrap, 95%
+    calibration_min_p: 0.05                    # self-consistency test
+    min_scored: 500
+    top_decile_expectancy_after_cost_positive: true
+    pass_rule: "at least one horizon passes every check"
+
+# --- How we report "expected vs actual candle" (the user's accuracy question) -------------------------
+candle_accuracy:
+  same:  "actual close within 0.25 ATR of the predicted median AND actual high/low inside the predicted range box"
+  close: "actual close inside the p10-p90 band (and not 'same')"
+  wrong: "actual close outside the p10-p90 band"
+  direction: "scored only when the regime model makes a call"
+
+# --- Holdout ---------------------------------------------------------------------------------------------
+holdout_rule: "evaluated exactly once per model, after the validation results are written to docs/test-reports, pass or fail, with no changes in between"

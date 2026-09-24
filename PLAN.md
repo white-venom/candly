@@ -322,6 +322,21 @@ That is about 14–18 weeks to a working alerts tool, and 5–6 months before tr
 
 If it fails, we stop and rethink before building on it. Likely pivots: forecast ranges and volatility (which are forecastable) instead of direction, or drop patterns in favour of regime and trend signals.
 
+## 20a. Go/no-go #1 result and the pivot (2026-09-24)
+
+**Result: FAIL.**
+- 0 certified candlestick buckets in all 12 scorecards (NSE, BSE and MCX × 1D/1h/15m/5m).
+- On the NSE 1D validation period (2019–2025), analog_v1 abstained on every one of 20,099 bars.
+- What worked: its 80% bands held the actual close 78% of the time. That is range/volatility, which is forecastable.
+
+**The pivot (Stage A v2), pre-registered in `config/pivot.yaml` before any model was built:**
+1. **range_v1 (the "expected candle"):** LightGBM quantile models of next-bar high, low and close in ATR units, per exchange and timeframe. They must beat ATR bands, rolling quantiles and analog_v1 on interval score with correct coverage.
+2. **regime_v1 (direction over days):** a calibrated LightGBM classifier for 1D over 5 and 20 days (trend and momentum). It must show positive Brier skill with a CI above 0, pass the calibration test, and have positive top-decile expectancy after costs.
+3. **Candle accuracy report:** each forecast is graded "same / close / wrong" against the real candle.
+4. **Candlestick patterns** stay on the chart as context only; no calls are made from them.
+5. **Holdout:** evaluated once per model, after the validation results are written up.
+6. **Our own ML models produce every number;** Claude only explains.
+
 ## 20. Open questions
 
 - Fyers symbol formats, and how `cont_flag` behaves for MCX continuous futures. Verify when the keys arrive.
