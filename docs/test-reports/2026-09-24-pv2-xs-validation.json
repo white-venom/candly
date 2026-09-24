@@ -1,0 +1,2652 @@
+{
+  "test": "pv2_xs",
+  "period": "validation",
+  "generated_at": "2026-09-24T12:24:19.405835+00:00",
+  "config_sha256": {
+    "edge_search.yaml": "b5e2f46f69c7ce19759b05bf0e2d70ce7b182116cfcaa91aad7c816c5912b702",
+    "edge_search_v2.yaml": "2c7ea1287598d2ac918669edbcf69aafbaaeda7e67c4be6217770f63e16ec4c6",
+    "costs.yaml": "c07fd90cd49a8eb68b5e1bf4ad07fb12aae5e6f697531854f51e4b303b2d791c",
+    "research.yaml": "642e412d15a156732d7a5d726bbf1eb699497b253e24222d6750eb89015bc7d5",
+    "patterns.yaml": "e0464b18601745671b84d3ed8d4fb06e20f4b9f37de48de51f191f19ddaf9254",
+    "universe_nifty200.yaml": "bc1d3f05bbfd9821bb9cc98503a3bf6d5f5f0db91312ab4f5bd05cca95e6f796"
+  },
+  "registered": {
+    "name": "pv2_xs",
+    "base": "xs_v1",
+    "added_feature_group": "candlestick_patterns",
+    "horizons_days": [
+      5,
+      20
+    ],
+    "primary": "rank-IC improvement over xs_v1 (paired, date-block bootstrap), one-sided > 0",
+    "pass_if": {
+      "rank_ic_improvement_ci_lower_above": 0.0,
+      "excess_after_cost_not_worse_than_xs_v1": true
+    },
+    "base_spec_from": "edge_search.yaml"
+  },
+  "split": {
+    "train_end": "2016-01-01",
+    "validation": [
+      "2016-01-01",
+      "2025-10-01"
+    ],
+    "holdout_start": "2025-10-01",
+    "holdout_start_utc": "2025-09-30T18:30:00+00:00",
+    "retrain": "expanding window, refit at the start of every IST calendar year from train_end",
+    "purge_days": 20,
+    "purge_rule": "a training row's signal day is >= purge_days sessions before the last session before the cut AND its label ends before the cut",
+    "horizons": {
+      "5": {
+        "rebalance": "weekly_first_trading_day",
+        "n_rebalances": 508,
+        "first_entry": "2016-01-04T03:45:00+00:00",
+        "last_exit": "2025-09-29T03:45:00+00:00",
+        "folds": [
+          {
+            "fold": 0,
+            "test_start": "2015-12-31T18:30:00+00:00",
+            "test_end": "2016-12-31T18:30:00+00:00",
+            "n_signal_days": 52,
+            "n_test_rows": 7388,
+            "n_train_rows": 375851,
+            "n_train_days": 3970,
+            "fitted": true,
+            "first_train_day": "1999-12-29T03:45:00+00:00",
+            "last_train_day": "2015-12-02T03:45:00+00:00",
+            "last_label_end": "2015-12-10T03:45:00+00:00",
+            "feature_importance_gain": {
+              "rank_reversal_1w": 1086.0450149774551,
+              "rank_return_1m": 724.465328335762,
+              "rank_momentum_12_1": 2045.9735906124115,
+              "rank_volatility_60d": 1121.1875556111336,
+              "rank_distance_52w_high": 721.3927643597126,
+              "rank_volume_change": 520.540653526783,
+              "rank_beta_1y": 934.9613634347916,
+              "rank_sector_relative_return": 1229.8356222510338,
+              "rank_turnover": 1482.7567584514618,
+              "rank_bullish_patterns_5": 403.5747836828232,
+              "rank_bearish_patterns_5": 517.6852414608002,
+              "rank_bullish_patterns_20": 769.2967205792665,
+              "rank_bearish_patterns_20": 526.5370829105377
+            }
+          },
+          {
+            "fold": 1,
+            "test_start": "2016-12-31T18:30:00+00:00",
+            "test_end": "2017-12-31T18:30:00+00:00",
+            "n_signal_days": 52,
+            "n_test_rows": 7622,
+            "n_train_rows": 410940,
+            "n_train_days": 4217,
+            "fitted": true,
+            "first_train_day": "1999-12-29T03:45:00+00:00",
+            "last_train_day": "2016-12-02T03:45:00+00:00",
+            "last_label_end": "2016-12-12T03:45:00+00:00",
+            "feature_importance_gain": {
+              "rank_reversal_1w": 1206.889953494072,
+              "rank_return_1m": 809.7909000515938,
+              "rank_momentum_12_1": 1961.8863430023193,
+              "rank_volatility_60d": 1159.6945012956858,
+              "rank_distance_52w_high": 838.9441957771778,
+              "rank_volume_change": 446.7434034347534,
+              "rank_beta_1y": 853.9149032831192,
+              "rank_sector_relative_return": 1397.4017492830753,
+              "rank_turnover": 1365.1849681437016,
+              "rank_bullish_patterns_5": 410.27396404743195,
+              "rank_bearish_patterns_5": 487.3021327853203,
+              "rank_bullish_patterns_20": 725.0860665440559,
+              "rank_bearish_patterns_20": 543.3606909513474
+            }
+          },
+          {
+            "fold": 2,
+            "test_start": "2017-12-31T18:30:00+00:00",
+            "test_end": "2018-12-31T18:30:00+00:00",
+            "n_signal_days": 53,
+            "n_test_rows": 8139,
+            "n_train_rows": 447234,
+            "n_train_days": 4465,
+            "fitted": true,
+            "first_train_day": "1999-12-29T03:45:00+00:00",
+            "last_train_day": "2017-11-30T03:45:00+00:00",
+            "last_label_end": "2017-12-08T03:45:00+00:00",
+            "feature_importance_gain": {
+              "rank_reversal_1w": 1241.9568217992783,
+              "rank_return_1m": 781.302700817585,
+              "rank_momentum_12_1": 2171.744149148464,
+              "rank_volatility_60d": 1199.3729961514473,
+              "rank_distance_52w_high": 772.5567702054977,
+              "rank_volume_change": 496.37011313438416,
+              "rank_beta_1y": 1044.1748293042183,
+              "rank_sector_relative_return": 1183.9737322926521,
+              "rank_turnover": 1533.5999882817268,
+              "rank_bullish_patterns_5": 457.5263683795929,
+              "rank_bearish_patterns_5": 413.1818979382515,
+              "rank_bullish_patterns_20": 691.0810027718544,
+              "rank_bearish_patterns_20": 569.8140199184418
+            }
+          },
+          {
+            "fold": 3,
+            "test_start": "2018-12-31T18:30:00+00:00",
+            "test_end": "2019-12-31T18:30:00+00:00",
+            "n_signal_days": 52,
+            "n_test_rows": 8389,
+            "n_train_rows": 484774,
+            "n_train_days": 4711,
+            "fitted": true,
+            "first_train_day": "1999-12-29T03:45:00+00:00",
+            "last_train_day": "2018-11-30T03:45:00+00:00",
+            "last_label_end": "2018-12-10T03:45:00+00:00",
+            "feature_importance_gain": {
+              "rank_reversal_1w": 1068.1250804066658,
+              "rank_return_1m": 786.3643743097782,
+              "rank_momentum_12_1": 2239.21000662446,
+              "rank_volatility_60d": 1456.1055288240314,
+              "rank_distance_52w_high": 773.5756627321243,
+              "rank_volume_change": 606.1983198523521,
+              "rank_beta_1y": 914.4677123427391,
+              "rank_sector_relative_return": 1552.4022842645645,
+              "rank_turnover": 1248.5609301924706,
+              "rank_bullish_patterns_5": 468.68119192123413,
+              "rank_bearish_patterns_5": 377.69642478227615,
+              "rank_bullish_patterns_20": 776.4974628388882,
+              "rank_bearish_patterns_20": 557.5359930992126
+            }
+          },
+          {
+            "fold": 4,
+            "test_start": "2019-12-31T18:30:00+00:00",
+            "test_end": "2020-12-31T18:30:00+00:00",
+            "n_signal_days": 52,
+            "n_test_rows": 8576,
+            "n_train_rows": 524219,
+            "n_train_days": 4956,
+            "fitted": true,
+            "first_train_day": "1999-12-29T03:45:00+00:00",
+            "last_train_day": "2019-12-02T03:45:00+00:00",
+            "last_label_end": "2019-12-10T03:45:00+00:00",
+            "feature_importance_gain": {
+              "rank_reversal_1w": 850.4937984347343,
+              "rank_return_1m": 793.2213431596756,
+              "rank_momentum_12_1": 2500.4543633461,
+              "rank_volatility_60d": 1595.4666559696198,
+              "rank_distance_52w_high": 906.6209069490433,
+              "rank_volume_change": 620.6949167251587,
+              "rank_beta_1y": 1083.1989474892616,
+              "rank_sector_relative_return": 1738.1043375730515,
+              "rank_turnover": 1606.1798550486565,
+              "rank_bullish_patterns_5": 462.099929690361,
+              "rank_bearish_patterns_5": 416.1160292029381,
+              "rank_bullish_patterns_20": 922.2640576958656,
+              "rank_bearish_patterns_20": 641.8874463438988
+            }
+          },
+          {
+            "fold": 5,
+            "test_start": "2020-12-31T18:30:00+00:00",
+            "test_end": "2021-12-31T18:30:00+00:00",
+            "n_signal_days": 52,
+            "n_test_rows": 8965,
+            "n_train_rows": 565706,
+            "n_train_days": 5208,
+            "fitted": true,
+            "first_train_day": "1999-12-29T03:45:00+00:00",
+            "last_train_day": "2020-12-02T03:45:00+00:00",
+            "last_label_end": "2020-12-10T03:45:00+00:00",
+            "feature_importance_gain": {
+              "rank_reversal_1w": 1114.185249298811,
+              "rank_return_1m": 722.9338483810425,
+              "rank_momentum_12_1": 2633.0968116521835,
+              "rank_volatility_60d": 1485.552637964487,
+              "rank_distance_52w_high": 840.3442087769508,
+              "rank_volume_change": 775.5937410593033,
+              "rank_beta_1y": 927.2290658354759,
+              "rank_sector_relative_return": 1895.9225157499313,
+              "rank_turnover": 1684.1704197824001,
+              "rank_bullish_patterns_5": 637.6557494401932,
+              "rank_bearish_patterns_5": 430.227338552475,
+              "rank_bullish_patterns_20": 998.4388560652733,
+              "rank_bearish_patterns_20": 747.6501809358597
+            }
+          },
+          {
+            "fold": 6,
+            "test_start": "2021-12-31T18:30:00+00:00",
+            "test_end": "2022-12-31T18:30:00+00:00",
+            "n_signal_days": 52,
+            "n_test_rows": 9240,
+            "n_train_rows": 608359,
+            "n_train_days": 5456,
+            "fitted": true,
+            "first_train_day": "1999-12-29T03:45:00+00:00",
+            "last_train_day": "2021-12-03T03:45:00+00:00",
+            "last_label_end": "2021-12-13T03:45:00+00:00",
+            "feature_importance_gain": {
+              "rank_reversal_1w": 1248.8046290278435,
+              "rank_return_1m": 710.787854552269,
+              "rank_momentum_12_1": 2624.9497784376144,
+              "rank_volatility_60d": 1607.917187511921,
+              "rank_distance_52w_high": 934.8695049285889,
+              "rank_volume_change": 602.5595225393772,
+              "rank_beta_1y": 1182.1757767796516,
+              "rank_sector_relative_return": 1663.9972858428955,
+              "rank_turnover": 1752.6788522005081,
+              "rank_bullish_patterns_5": 549.9216663837433,
+              "rank_bearish_patterns_5": 500.0330308377743,
+              "rank_bullish_patterns_20": 986.4311490654945,
+              "rank_bearish_patterns_20": 816.0331344008446
+            }
+          },
+          {
+            "fold": 7,
+            "test_start": "2022-12-31T18:30:00+00:00",
+            "test_end": "2023-12-31T18:30:00+00:00",
+            "n_signal_days": 52,
+            "n_test_rows": 9489,
+            "n_train_rows": 652304,
+            "n_train_days": 5704,
+            "fitted": true,
+            "first_train_day": "1999-12-29T03:45:00+00:00",
+            "last_train_day": "2022-12-02T03:45:00+00:00",
+            "last_label_end": "2022-12-12T03:45:00+00:00",
+            "feature_importance_gain": {
+              "rank_reversal_1w": 1162.1716252565384,
+              "rank_return_1m": 663.8251715898514,
+              "rank_momentum_12_1": 3142.483950674534,
+              "rank_volatility_60d": 1825.4469708502293,
+              "rank_distance_52w_high": 964.2324302792549,
+              "rank_volume_change": 650.7667250931263,
+              "rank_beta_1y": 1032.9457673728466,
+              "rank_sector_relative_return": 1601.3919610977173,
+              "rank_turnover": 1879.6035635471344,
+              "rank_bullish_patterns_5": 591.6488687992096,
+              "rank_bearish_patterns_5": 390.9615917801857,
+              "rank_bullish_patterns_20": 970.0105961859226,
+              "rank_bearish_patterns_20": 741.9470535218716
+            }
+          },
+          {
+            "fold": 8,
+            "test_start": "2023-12-31T18:30:00+00:00",
+            "test_end": "2024-12-31T18:30:00+00:00",
+            "n_signal_days": 53,
+            "n_test_rows": 9798,
+            "n_train_rows": 697179,
+            "n_train_days": 5950,
+            "fitted": true,
+            "first_train_day": "1999-12-29T03:45:00+00:00",
+            "last_train_day": "2023-11-30T03:45:00+00:00",
+            "last_label_end": "2023-12-08T03:45:00+00:00",
+            "feature_importance_gain": {
+              "rank_reversal_1w": 1563.7305063307285,
+              "rank_return_1m": 780.0184301137924,
+              "rank_momentum_12_1": 3031.42109310627,
+              "rank_volatility_60d": 1818.5576305687428,
+              "rank_distance_52w_high": 850.3079404532909,
+              "rank_volume_change": 660.2714893519878,
+              "rank_beta_1y": 1227.6967361569405,
+              "rank_sector_relative_return": 1573.5362291932106,
+              "rank_turnover": 1863.1187284588814,
+              "rank_bullish_patterns_5": 489.5065407603979,
+              "rank_bearish_patterns_5": 505.04986464977264,
+              "rank_bullish_patterns_20": 921.9223885536194,
+              "rank_bearish_patterns_20": 673.3687392473221
+            }
+          },
+          {
+            "fold": 9,
+            "test_start": "2024-12-31T18:30:00+00:00",
+            "test_end": "2025-09-30T18:30:00+00:00",
+            "n_signal_days": 38,
+            "n_test_rows": 7082,
+            "n_train_rows": 743169,
+            "n_train_days": 6199,
+            "fitted": true,
+            "first_train_day": "1999-12-29T03:45:00+00:00",
+            "last_train_day": "2024-12-02T03:45:00+00:00",
+            "last_label_end": "2024-12-10T03:45:00+00:00",
+            "feature_importance_gain": {
+              "rank_reversal_1w": 1305.8456120491028,
+              "rank_return_1m": 746.6665413379669,
+              "rank_momentum_12_1": 3553.2447360157967,
+              "rank_volatility_60d": 1920.2674746662378,
+              "rank_distance_52w_high": 1038.6772378087044,
+              "rank_volume_change": 760.4260239601135,
+              "rank_beta_1y": 1167.092909514904,
+              "rank_sector_relative_return": 1482.697555243969,
+              "rank_turnover": 2325.355905085802,
+              "rank_bullish_patterns_5": 560.1593947410583,
+              "rank_bearish_patterns_5": 406.37368607521057,
+              "rank_bullish_patterns_20": 959.3220729380846,
+              "rank_bearish_patterns_20": 742.6626856923103
+            }
+          }
+        ]
+      },
+      "20": {
+        "rebalance": "monthly_first_trading_day",
+        "n_rebalances": 116,
+        "first_entry": "2016-01-01T03:45:00+00:00",
+        "last_exit": "2025-09-01T03:45:00+00:00",
+        "folds": [
+          {
+            "fold": 0,
+            "test_start": "2015-12-31T18:30:00+00:00",
+            "test_end": "2016-12-31T18:30:00+00:00",
+            "n_signal_days": 12,
+            "n_test_rows": 1710,
+            "n_train_rows": 375709,
+            "n_train_days": 3969,
+            "fitted": true,
+            "first_train_day": "1999-12-29T03:45:00+00:00",
+            "last_train_day": "2015-12-01T03:45:00+00:00",
+            "last_label_end": "2015-12-31T03:45:00+00:00",
+            "feature_importance_gain": {
+              "rank_reversal_1w": 341.9669178724289,
+              "rank_return_1m": 842.9304605722427,
+              "rank_momentum_12_1": 5031.722488999367,
+              "rank_volatility_60d": 2196.6993941664696,
+              "rank_distance_52w_high": 1828.349273264408,
+              "rank_volume_change": 827.7732485234737,
+              "rank_beta_1y": 3210.6425156593323,
+              "rank_sector_relative_return": 1428.565751850605,
+              "rank_turnover": 5230.846014738083,
+              "rank_bullish_patterns_5": 180.39914989471436,
+              "rank_bearish_patterns_5": 165.9521713256836,
+              "rank_bullish_patterns_20": 926.4556971788406,
+              "rank_bearish_patterns_20": 1261.608468055725
+            }
+          },
+          {
+            "fold": 1,
+            "test_start": "2016-12-31T18:30:00+00:00",
+            "test_end": "2017-12-31T18:30:00+00:00",
+            "n_signal_days": 12,
+            "n_test_rows": 1758,
+            "n_train_rows": 410795,
+            "n_train_days": 4216,
+            "fitted": true,
+            "first_train_day": "1999-12-29T03:45:00+00:00",
+            "last_train_day": "2016-12-01T03:45:00+00:00",
+            "last_label_end": "2016-12-30T03:45:00+00:00",
+            "feature_importance_gain": {
+              "rank_reversal_1w": 316.2070008069277,
+              "rank_return_1m": 793.4878682494164,
+              "rank_momentum_12_1": 4926.1584486961365,
+              "rank_volatility_60d": 2284.0733968764544,
+              "rank_distance_52w_high": 1693.264531314373,
+              "rank_volume_change": 813.605034828186,
+              "rank_beta_1y": 3763.9689956903458,
+              "rank_sector_relative_return": 1930.271292924881,
+              "rank_turnover": 4528.669284701347,
+              "rank_bullish_patterns_5": 161.87720358371735,
+              "rank_bearish_patterns_5": 134.3619294166565,
+              "rank_bullish_patterns_20": 956.133558511734,
+              "rank_bearish_patterns_20": 1188.6756041646004
+            }
+          },
+          {
+            "fold": 2,
+            "test_start": "2017-12-31T18:30:00+00:00",
+            "test_end": "2018-12-31T18:30:00+00:00",
+            "n_signal_days": 12,
+            "n_test_rows": 1839,
+            "n_train_rows": 447086,
+            "n_train_days": 4464,
+            "fitted": true,
+            "first_train_day": "1999-12-29T03:45:00+00:00",
+            "last_train_day": "2017-11-29T03:45:00+00:00",
+            "last_label_end": "2017-12-29T03:45:00+00:00",
+            "feature_importance_gain": {
+              "rank_reversal_1w": 327.5319417119026,
+              "rank_return_1m": 696.6206793785095,
+              "rank_momentum_12_1": 5587.181433200836,
+              "rank_volatility_60d": 2551.195550441742,
+              "rank_distance_52w_high": 2017.3058706521988,
+              "rank_volume_change": 823.6168070584536,
+              "rank_beta_1y": 3640.4789840579033,
+              "rank_sector_relative_return": 1852.1969584226608,
+              "rank_turnover": 5354.488205999136,
+              "rank_bullish_patterns_5": 175.3612421154976,
+              "rank_bearish_patterns_5": 146.83191967010498,
+              "rank_bullish_patterns_20": 878.8994296789169,
+              "rank_bearish_patterns_20": 823.7109098434448
+            }
+          },
+          {
+            "fold": 3,
+            "test_start": "2018-12-31T18:30:00+00:00",
+            "test_end": "2019-12-31T18:30:00+00:00",
+            "n_signal_days": 12,
+            "n_test_rows": 1933,
+            "n_train_rows": 484614,
+            "n_train_days": 4710,
+            "fitted": true,
+            "first_train_day": "1999-12-29T03:45:00+00:00",
+            "last_train_day": "2018-11-29T03:45:00+00:00",
+            "last_label_end": "2018-12-31T03:45:00+00:00",
+            "feature_importance_gain": {
+              "rank_reversal_1w": 338.258181810379,
+              "rank_return_1m": 824.3252782821655,
+              "rank_momentum_12_1": 5381.314895391464,
+              "rank_volatility_60d": 2207.9259831011295,
+              "rank_distance_52w_high": 1781.159450352192,
+              "rank_volume_change": 827.3390697836876,
+              "rank_beta_1y": 3720.042245388031,
+              "rank_sector_relative_return": 2475.0953389406204,
+              "rank_turnover": 5674.027646780014,
+              "rank_bullish_patterns_5": 112.82217001914978,
+              "rank_bearish_patterns_5": 117.20555537939072,
+              "rank_bullish_patterns_20": 1296.0684236586094,
+              "rank_bearish_patterns_20": 1281.635118700564
+            }
+          },
+          {
+            "fold": 4,
+            "test_start": "2019-12-31T18:30:00+00:00",
+            "test_end": "2020-12-31T18:30:00+00:00",
+            "n_signal_days": 12,
+            "n_test_rows": 1978,
+            "n_train_rows": 524055,
+            "n_train_days": 4955,
+            "fitted": true,
+            "first_train_day": "1999-12-29T03:45:00+00:00",
+            "last_train_day": "2019-11-29T03:45:00+00:00",
+            "last_label_end": "2019-12-31T03:45:00+00:00",
+            "feature_importance_gain": {
+              "rank_reversal_1w": 294.61416244506836,
+              "rank_return_1m": 838.3672261238098,
+              "rank_momentum_12_1": 6048.961112380028,
+              "rank_volatility_60d": 2664.8390860557556,
+              "rank_distance_52w_high": 2263.5171908140182,
+              "rank_volume_change": 797.6333046555519,
+              "rank_beta_1y": 3858.1131904125214,
+              "rank_sector_relative_return": 2150.6796719431877,
+              "rank_turnover": 5747.94538281858,
+              "rank_bullish_patterns_5": 130.60837525129318,
+              "rank_bearish_patterns_5": 170.01933896541595,
+              "rank_bullish_patterns_20": 1229.5891468524933,
+              "rank_bearish_patterns_20": 1029.4720972776413
+            }
+          },
+          {
+            "fold": 5,
+            "test_start": "2020-12-31T18:30:00+00:00",
+            "test_end": "2021-12-31T18:30:00+00:00",
+            "n_signal_days": 12,
+            "n_test_rows": 2064,
+            "n_train_rows": 565537,
+            "n_train_days": 5207,
+            "fitted": true,
+            "first_train_day": "1999-12-29T03:45:00+00:00",
+            "last_train_day": "2020-12-01T03:45:00+00:00",
+            "last_label_end": "2020-12-31T03:45:00+00:00",
+            "feature_importance_gain": {
+              "rank_reversal_1w": 329.1842522621155,
+              "rank_return_1m": 737.6467095017433,
+              "rank_momentum_12_1": 6649.844834804535,
+              "rank_volatility_60d": 3540.8283419311047,
+              "rank_distance_52w_high": 1716.5331567525864,
+              "rank_volume_change": 795.4394283741713,
+              "rank_beta_1y": 3983.8820628225803,
+              "rank_sector_relative_return": 2058.872659742832,
+              "rank_turnover": 5859.7933522462845,
+              "rank_bullish_patterns_5": 132.13385951519012,
+              "rank_bearish_patterns_5": 179.29259079694748,
+              "rank_bullish_patterns_20": 1064.048306941986,
+              "rank_bearish_patterns_20": 1229.4338910579681
+            }
+          },
+          {
+            "fold": 6,
+            "test_start": "2021-12-31T18:30:00+00:00",
+            "test_end": "2022-12-31T18:30:00+00:00",
+            "n_signal_days": 12,
+            "n_test_rows": 2129,
+            "n_train_rows": 608184,
+            "n_train_days": 5455,
+            "fitted": true,
+            "first_train_day": "1999-12-29T03:45:00+00:00",
+            "last_train_day": "2021-12-02T03:45:00+00:00",
+            "last_label_end": "2021-12-31T03:45:00+00:00",
+            "feature_importance_gain": {
+              "rank_reversal_1w": 307.13639694452286,
+              "rank_return_1m": 822.933211684227,
+              "rank_momentum_12_1": 7781.964256584644,
+              "rank_volatility_60d": 3651.848552107811,
+              "rank_distance_52w_high": 1924.2955006957054,
+              "rank_volume_change": 710.8817104101181,
+              "rank_beta_1y": 3960.009012877941,
+              "rank_sector_relative_return": 2467.2262259721756,
+              "rank_turnover": 5878.986880451441,
+              "rank_bullish_patterns_5": 102.89653879404068,
+              "rank_bearish_patterns_5": 128.9929394721985,
+              "rank_bullish_patterns_20": 1288.0602425336838,
+              "rank_bearish_patterns_20": 1257.8113948479295
+            }
+          },
+          {
+            "fold": 7,
+            "test_start": "2022-12-31T18:30:00+00:00",
+            "test_end": "2023-12-31T18:30:00+00:00",
+            "n_signal_days": 12,
+            "n_test_rows": 2189,
+            "n_train_rows": 652122,
+            "n_train_days": 5703,
+            "fitted": true,
+            "first_train_day": "1999-12-29T03:45:00+00:00",
+            "last_train_day": "2022-12-01T03:45:00+00:00",
+            "last_label_end": "2022-12-30T03:45:00+00:00",
+            "feature_importance_gain": {
+              "rank_reversal_1w": 395.34479999542236,
+              "rank_return_1m": 817.7033298015594,
+              "rank_momentum_12_1": 8679.310636162758,
+              "rank_volatility_60d": 3645.9063821434975,
+              "rank_distance_52w_high": 1604.940893650055,
+              "rank_volume_change": 899.3575964570045,
+              "rank_beta_1y": 3736.6836086809635,
+              "rank_sector_relative_return": 2379.3970054388046,
+              "rank_turnover": 5507.1650532484055,
+              "rank_bullish_patterns_5": 138.51922929286957,
+              "rank_bearish_patterns_5": 179.10600040107965,
+              "rank_bullish_patterns_20": 1177.9415331482887,
+              "rank_bearish_patterns_20": 1074.6116011366248
+            }
+          },
+          {
+            "fold": 8,
+            "test_start": "2023-12-31T18:30:00+00:00",
+            "test_end": "2024-12-31T18:30:00+00:00",
+            "n_signal_days": 12,
+            "n_test_rows": 2218,
+            "n_train_rows": 696996,
+            "n_train_days": 5949,
+            "fitted": true,
+            "first_train_day": "1999-12-29T03:45:00+00:00",
+            "last_train_day": "2023-11-29T03:45:00+00:00",
+            "last_label_end": "2023-12-29T03:45:00+00:00",
+            "feature_importance_gain": {
+              "rank_reversal_1w": 363.5428935289383,
+              "rank_return_1m": 878.1743565797806,
+              "rank_momentum_12_1": 8386.944542646408,
+              "rank_volatility_60d": 3697.914509832859,
+              "rank_distance_52w_high": 1745.4245227016509,
+              "rank_volume_change": 706.3075402379036,
+              "rank_beta_1y": 4235.764643132687,
+              "rank_sector_relative_return": 2354.339851140976,
+              "rank_turnover": 6401.842923998833,
+              "rank_bullish_patterns_5": 112.25064086914062,
+              "rank_bearish_patterns_5": 212.53881001472473,
+              "rank_bullish_patterns_20": 1127.4099476337433,
+              "rank_bearish_patterns_20": 1318.7134842574596
+            }
+          },
+          {
+            "fold": 9,
+            "test_start": "2024-12-31T18:30:00+00:00",
+            "test_end": "2025-09-30T18:30:00+00:00",
+            "n_signal_days": 8,
+            "n_test_rows": 1490,
+            "n_train_rows": 742983,
+            "n_train_days": 6198,
+            "fitted": true,
+            "first_train_day": "1999-12-29T03:45:00+00:00",
+            "last_train_day": "2024-11-29T03:45:00+00:00",
+            "last_label_end": "2024-12-31T03:45:00+00:00",
+            "feature_importance_gain": {
+              "rank_reversal_1w": 354.66996121406555,
+              "rank_return_1m": 966.3661113530397,
+              "rank_momentum_12_1": 9541.879701554775,
+              "rank_volatility_60d": 3542.0813802480698,
+              "rank_distance_52w_high": 1587.3361141085625,
+              "rank_volume_change": 851.47195571661,
+              "rank_beta_1y": 3745.1428520679474,
+              "rank_sector_relative_return": 2019.6886452436447,
+              "rank_turnover": 7292.010452032089,
+              "rank_bullish_patterns_5": 108.77641025185585,
+              "rank_bearish_patterns_5": 246.93479001522064,
+              "rank_bullish_patterns_20": 1344.6716572493315,
+              "rank_bearish_patterns_20": 1560.9885412454605
+            }
+          }
+        ]
+      }
+    }
+  },
+  "universe": {
+    "universe_file": "config/universe_nifty200.yaml",
+    "n_listed": 200,
+    "n_loaded": 194,
+    "missing": [
+      "NSE:GROWW",
+      "NSE:ICICIAMC",
+      "NSE:LENSKART",
+      "NSE:LGEINDIA",
+      "NSE:TATACAP",
+      "NSE:TMCV"
+    ],
+    "market_calendar": "NSE:NIFTY50",
+    "first_bar": "1999-01-01T03:45:00+00:00",
+    "last_bar": "2025-09-30T03:45:00+00:00",
+    "n_sessions": 6658,
+    "bars_off_calendar_dropped": 0,
+    "n_eligible_rows": 781923,
+    "data_notes_large_moves_in_validation": [
+      {
+        "id": "NSE:PNB",
+        "date": "2017-10-25",
+        "log_return": 0.37981328019091265
+      },
+      {
+        "id": "NSE:CGPOWER",
+        "date": "2019-02-13",
+        "log_return": -0.35413472242037436
+      },
+      {
+        "id": "NSE:TATACOMM",
+        "date": "2019-09-17",
+        "log_return": -0.4277955292719442
+      },
+      {
+        "id": "NSE:YESBANK",
+        "date": "2020-03-06",
+        "log_return": -0.8235777955062198
+      },
+      {
+        "id": "NSE:YESBANK",
+        "date": "2020-03-16",
+        "log_return": 0.37297965296367597
+      },
+      {
+        "id": "NSE:YESBANK",
+        "date": "2020-03-17",
+        "log_return": 0.45797060548609503
+      },
+      {
+        "id": "NSE:IDEA",
+        "date": "2020-03-18",
+        "log_return": -0.43157625211185
+      },
+      {
+        "id": "NSE:CHOLAFIN",
+        "date": "2020-03-23",
+        "log_return": -0.3509622222382758
+      },
+      {
+        "id": "NSE:INDUSINDBK",
+        "date": "2020-03-26",
+        "log_return": 0.36930641310809076
+      }
+    ],
+    "panel_sha256": "116d23e5cdf2ba2cb5b786384e05ac577024d8b9575d61715da6f2eab98ab289"
+  },
+  "costs": {
+    "segment": "equity_delivery (costs.yaml mapping equity.multi_day)",
+    "broker": "fyers",
+    "reference_notional_inr": 100000,
+    "round_trip": 0.003441952,
+    "components": {
+      "brokerage": 0.0004,
+      "dp_charge": 0.000125,
+      "exchange_txn": 5.94e-05,
+      "sebi_fee": 2e-06,
+      "transaction_tax": 0.002,
+      "stamp_duty": 0.00015,
+      "gst": 0.00010555200000000002,
+      "slippage": 0.0006
+    },
+    "costs_as_of": "2026-09-23"
+  },
+  "hyperparameters": {
+    "lightgbm": {
+      "objective": "lambdarank",
+      "learning_rate": 0.05,
+      "num_leaves": 15,
+      "max_depth": 4,
+      "min_data_in_leaf": 1000,
+      "feature_fraction": 0.8,
+      "lambda_l2": 10.0,
+      "seed": 20260924,
+      "deterministic": true,
+      "force_row_wise": true,
+      "num_threads": 2,
+      "verbosity": -1
+    },
+    "num_boost_round": 200,
+    "relevance": "within-day quintile of the forward h-session return, grades 0..4",
+    "label_gain": "LightGBM default (2^grade - 1)",
+    "query": "one per trading day (all eligible stocks with a label)",
+    "min_train_days": 250,
+    "features": "daily percentile ranks of the feature columns",
+    "added_features": [
+      "bullish_patterns_5",
+      "bearish_patterns_5",
+      "bullish_patterns_20",
+      "bearish_patterns_20"
+    ]
+  },
+  "definitions": {
+    "features": {
+      "reversal_1w": "log(Cf_t / Cf_{t-5})",
+      "return_1m": "log(Cf_t / Cf_{t-21})",
+      "momentum_12_1": "log(Cf_{t-21} / Cf_{t-252})",
+      "volatility_60d": "annualised sd of daily log returns, last 60 sessions (>= 40)",
+      "distance_52w_high": "log(Cf_t / max high of the last 252 sessions (>= 200 bars))",
+      "volume_change": "log(mean volume 5 sessions / mean volume 60 sessions)",
+      "beta_1y": "OLS beta of daily log returns on NIFTY 50, last 252 sessions (>= 200 pairs)",
+      "sector_relative_return": "return_1m - mean return_1m of eligible same-industry stocks that day",
+      "turnover": "log mean(close x volume) over 20 sessions (>= 10 bars)",
+      "candlestick_patterns": "counts of confirmed bullish / bearish patterns (candly.patterns, config/patterns.yaml) whose last bar is in the last 5 / 20 sessions (pv2_xs only)",
+      "model_inputs": "every feature as its percentile rank among that day's eligible stocks",
+      "Cf": "last traded close (carried over days without a bar); sessions = NIFTY 50 trading days"
+    },
+    "baselines": {
+      "reversal_1w": "-reversal_1w",
+      "momentum_12_1": "+momentum_12_1",
+      "low_volatility": "-volatility_60d"
+    },
+    "label": "open of t+1 to open of t+1+h (research only)",
+    "portfolio": "top decile = ceil(10% of candidates), equal weight, long only, held to next rebalance",
+    "rank_ic": "Spearman(score, holding-period return) over the candidates of each rebalance",
+    "excess_after_cost": "(1 - cost)(1 + top-decile return) - 1 - benchmark return, per period",
+    "weekly_hit_rate": "share of weeks (first-trading-day open to the next) where net wealth beat the benchmark's",
+    "p_one_sided": "(1 + #{bootstrap statistic <= 0}) / (1 + resamples)"
+  },
+  "horizons": {
+    "5": {
+      "rebalance": "weekly_first_trading_day",
+      "primary": {
+        "statistic": "rank-IC improvement over xs_v1 (paired, date-block bootstrap), one-sided > 0",
+        "value": -0.000424253522750265,
+        "ci": [
+          -0.0028477951624722147,
+          0.0021051510739061
+        ],
+        "p_one_sided": 0.6461769115442278,
+        "bh_q_within_this_run": 0.8345827086456772
+      },
+      "gates": {
+        "rank_ic_improvement_ci_lower_above": {
+          "value": -0.000424253522750265,
+          "ci": [
+            -0.0028477951624722147,
+            0.0021051510739061
+          ],
+          "threshold": 0.0,
+          "pass": false,
+          "diagnostic_quarter_blocks_pass": false
+        },
+        "excess_after_cost_not_worse_than_xs_v1": {
+          "required": true,
+          "pv2_excess_after_cost_annual": 0.14579817613335436,
+          "xs_v1_excess_after_cost_annual": 0.1429834812959348,
+          "pass": true,
+          "paired_difference": {
+            "value": 0.002814694837419569,
+            "ci": [
+              -0.03305599505877406,
+              0.0426021124316835
+            ],
+            "p_one_sided": 0.4387806096951524,
+            "ci_quarter_blocks": [
+              -0.03877549768038272,
+              0.047013339966197616
+            ],
+            "p_one_sided_quarter_blocks": 0.45827086456771615
+          }
+        }
+      },
+      "pass": false,
+      "strategies": {
+        "pv2_xs": {
+          "n_periods": 508,
+          "n_weeks": 508,
+          "mean_candidates": 166.70275590551182,
+          "mean_top": 17.181102362204726,
+          "rank_ic_mean": {
+            "value": 0.032955817712711784,
+            "ci": [
+              0.02137065472778879,
+              0.044105564013227586
+            ],
+            "p_one_sided": 0.0004997501249375312,
+            "ci_quarter_blocks": [
+              0.01928370939993704,
+              0.04621110945621332
+            ],
+            "p_one_sided_quarter_blocks": 0.0004997501249375312
+          },
+          "rank_ic_t": {
+            "value": 5.794643422637129,
+            "ci": [
+              3.782485134435076,
+              7.782852443567586
+            ],
+            "note": "mean / (sd / sqrt(n)) over rebalance periods; bootstrap CI of the same statistic"
+          },
+          "rank_ic_positive_share": 0.6122047244094488,
+          "top_decile_excess_after_cost_annual": {
+            "value": 0.14579817613335436,
+            "ci": [
+              0.07308351270746685,
+              0.22007718841079021
+            ],
+            "p_one_sided": 0.0004997501249375312,
+            "ci_quarter_blocks": [
+              0.06186152836009172,
+              0.23241815401077498
+            ],
+            "p_one_sided_quarter_blocks": 0.0009995002498750624
+          },
+          "top_decile_excess_gross_annual": {
+            "value": 0.2332205181852999,
+            "ci": [
+              0.1603671556637611,
+              0.3073444098137976
+            ],
+            "p_one_sided": 0.0004997501249375312,
+            "ci_quarter_blocks": [
+              0.14902817313670821,
+              0.3194462600517382
+            ],
+            "p_one_sided_quarter_blocks": 0.0004997501249375312
+          },
+          "top_decile_return_after_cost_annual": {
+            "value": 0.3726208194774744,
+            "ci": [
+              0.2020833980265433,
+              0.5295828811613421
+            ],
+            "p_one_sided": 0.0004997501249375312,
+            "ci_quarter_blocks": [
+              0.16599013212425826,
+              0.5710006429221413
+            ],
+            "p_one_sided_quarter_blocks": 0.0004997501249375312
+          },
+          "benchmark_return_annual": {
+            "value": 0.22682264334412003,
+            "ci": [
+              0.10280577089091318,
+              0.3447166100015814
+            ],
+            "ci_quarter_blocks": [
+              0.0855737235502418,
+              0.36480146881332404
+            ]
+          },
+          "top_decile_cagr_after_cost": 0.40281277999174336,
+          "benchmark_cagr": 0.23131827083971368,
+          "information_ratio_after_cost": 1.23650441969247,
+          "weekly_hit_rate_vs_benchmark": {
+            "value": 0.5531496062992126,
+            "ci": [
+              0.5098425196850394,
+              0.5964566929133859
+            ],
+            "ci_quarter_blocks": [
+              0.5029582892549493,
+              0.6015779092702169
+            ]
+          },
+          "period_hit_rate_vs_benchmark": {
+            "value": 0.5531496062992126,
+            "ci": [
+              0.5098425196850394,
+              0.5964566929133859
+            ],
+            "ci_quarter_blocks": [
+              0.5029582892549493,
+              0.6015779092702169
+            ]
+          },
+          "turnover": {
+            "value": 0.48337784381903637,
+            "ci": [
+              0.4744984946064442,
+              0.49234456647513863
+            ],
+            "ci_quarter_blocks": [
+              0.4733579668219029,
+              0.4934813751960189
+            ],
+            "annual": 25.135647878589893,
+            "note": "one-way turnover per rebalance, sum|w+ - w-| / 2"
+          },
+          "cost_annual": {
+            "value": 0.08669185638464602,
+            "ci": [
+              0.0851134298008636,
+              0.0882551114655267
+            ],
+            "ci_quarter_blocks": [
+              0.08486432864110846,
+              0.08855539807031194
+            ]
+          },
+          "max_drawdown_excess": {
+            "value": 0.20420538666883437,
+            "ci": [
+              0.09663982634530131,
+              0.27816910467339423
+            ],
+            "weekly_marks_value": 0.20420538666883425,
+            "note": "drawdown of (1 + net) / (1 + benchmark) chained over periods"
+          },
+          "by_year": {
+            "2016": {
+              "n_periods": 52,
+              "excess_after_cost_sum": 0.1366004549538442,
+              "rank_ic_mean": 0.024474975400104675
+            },
+            "2017": {
+              "n_periods": 52,
+              "excess_after_cost_sum": 0.09706207053195182,
+              "rank_ic_mean": 0.05057334177110396
+            },
+            "2018": {
+              "n_periods": 53,
+              "excess_after_cost_sum": 0.04829249738913699,
+              "rank_ic_mean": 0.018067851245394378
+            },
+            "2019": {
+              "n_periods": 52,
+              "excess_after_cost_sum": -0.018520606925941818,
+              "rank_ic_mean": 0.015218508548255117
+            },
+            "2020": {
+              "n_periods": 52,
+              "excess_after_cost_sum": 0.28969454572296993,
+              "rank_ic_mean": 0.04103251850103333
+            },
+            "2021": {
+              "n_periods": 52,
+              "excess_after_cost_sum": 0.4190880212092032,
+              "rank_ic_mean": 0.05463269325035898
+            },
+            "2022": {
+              "n_periods": 52,
+              "excess_after_cost_sum": 0.10175355378686679,
+              "rank_ic_mean": 0.03683325508302867
+            },
+            "2023": {
+              "n_periods": 52,
+              "excess_after_cost_sum": 0.0764197887453425,
+              "rank_ic_mean": 0.03029742496477752
+            },
+            "2024": {
+              "n_periods": 53,
+              "excess_after_cost_sum": 0.12191162800389876,
+              "rank_ic_mean": 0.031028906774634803
+            },
+            "2025": {
+              "n_periods": 38,
+              "excess_after_cost_sum": 0.15203407496242038,
+              "rank_ic_mean": 0.025793839790147405
+            }
+          }
+        },
+        "xs_v1": {
+          "n_periods": 508,
+          "n_weeks": 508,
+          "mean_candidates": 166.70275590551182,
+          "mean_top": 17.181102362204726,
+          "rank_ic_mean": {
+            "value": 0.03338007123546204,
+            "ci": [
+              0.021670728585071738,
+              0.04452364901259121
+            ],
+            "p_one_sided": 0.0004997501249375312,
+            "ci_quarter_blocks": [
+              0.019471413799325828,
+              0.04714794740614468
+            ],
+            "p_one_sided_quarter_blocks": 0.0004997501249375312
+          },
+          "rank_ic_t": {
+            "value": 5.840997479653354,
+            "ci": [
+              3.838761953772017,
+              7.800637336223802
+            ],
+            "note": "mean / (sd / sqrt(n)) over rebalance periods; bootstrap CI of the same statistic"
+          },
+          "rank_ic_positive_share": 0.6043307086614174,
+          "top_decile_excess_after_cost_annual": {
+            "value": 0.1429834812959348,
+            "ci": [
+              0.07359197883319496,
+              0.21061303000096562
+            ],
+            "p_one_sided": 0.0004997501249375312,
+            "ci_quarter_blocks": [
+              0.06838095900562843,
+              0.21940274999197162
+            ],
+            "p_one_sided_quarter_blocks": 0.0004997501249375312
+          },
+          "top_decile_excess_gross_annual": {
+            "value": 0.23056592648647017,
+            "ci": [
+              0.1606045597060198,
+              0.2983266231461789
+            ],
+            "p_one_sided": 0.0004997501249375312,
+            "ci_quarter_blocks": [
+              0.1546002843073333,
+              0.308065914297908
+            ],
+            "p_one_sided_quarter_blocks": 0.0004997501249375312
+          },
+          "top_decile_return_after_cost_annual": {
+            "value": 0.3698061246400548,
+            "ci": [
+              0.2025214857708948,
+              0.5244429680065463
+            ],
+            "p_one_sided": 0.0004997501249375312,
+            "ci_quarter_blocks": [
+              0.16983460612192958,
+              0.5614101749752478
+            ],
+            "p_one_sided_quarter_blocks": 0.0004997501249375312
+          },
+          "benchmark_return_annual": {
+            "value": 0.22682264334412003,
+            "ci": [
+              0.10280577089091318,
+              0.3447166100015814
+            ],
+            "ci_quarter_blocks": [
+              0.0855737235502418,
+              0.36480146881332404
+            ]
+          },
+          "top_decile_cagr_after_cost": 0.3985732721719697,
+          "benchmark_cagr": 0.23131827083971368,
+          "information_ratio_after_cost": 1.2523653478514745,
+          "weekly_hit_rate_vs_benchmark": {
+            "value": 0.547244094488189,
+            "ci": [
+              0.5058562992125984,
+              0.5905511811023622
+            ],
+            "ci_quarter_blocks": [
+              0.5069575615613251,
+              0.5890498425599483
+            ]
+          },
+          "period_hit_rate_vs_benchmark": {
+            "value": 0.547244094488189,
+            "ci": [
+              0.5058562992125984,
+              0.5905511811023622
+            ],
+            "ci_quarter_blocks": [
+              0.5069575615613251,
+              0.5890498425599483
+            ]
+          },
+          "turnover": {
+            "value": 0.4839351764486902,
+            "ci": [
+              0.4750833522678355,
+              0.49252738745165553
+            ],
+            "ci_quarter_blocks": [
+              0.4717868993281131,
+              0.4954226403384097
+            ],
+            "annual": 25.164629175331893,
+            "note": "one-way turnover per rebalance, sum|w+ - w-| / 2"
+          },
+          "cost_annual": {
+            "value": 0.08679160861692975,
+            "ci": [
+              0.0852579588009391,
+              0.08835653367492474
+            ],
+            "ci_quarter_blocks": [
+              0.08455629568193095,
+              0.0889098838973996
+            ]
+          },
+          "max_drawdown_excess": {
+            "value": 0.20270133319615213,
+            "ci": [
+              0.09417807644918834,
+              0.2794882433254392
+            ],
+            "weekly_marks_value": 0.20270133319615202,
+            "note": "drawdown of (1 + net) / (1 + benchmark) chained over periods"
+          },
+          "by_year": {
+            "2016": {
+              "n_periods": 52,
+              "excess_after_cost_sum": 0.12414592949799408,
+              "rank_ic_mean": 0.028448744820895284
+            },
+            "2017": {
+              "n_periods": 52,
+              "excess_after_cost_sum": 0.1455799146753235,
+              "rank_ic_mean": 0.049859544401974036
+            },
+            "2018": {
+              "n_periods": 53,
+              "excess_after_cost_sum": 0.15287214419845407,
+              "rank_ic_mean": 0.022229300057763107
+            },
+            "2019": {
+              "n_periods": 52,
+              "excess_after_cost_sum": -0.022128044695087556,
+              "rank_ic_mean": 0.016258271551097252
+            },
+            "2020": {
+              "n_periods": 52,
+              "excess_after_cost_sum": 0.18636873317319458,
+              "rank_ic_mean": 0.04520695546744116
+            },
+            "2021": {
+              "n_periods": 52,
+              "excess_after_cost_sum": 0.32821027473773035,
+              "rank_ic_mean": 0.05343230430959957
+            },
+            "2022": {
+              "n_periods": 52,
+              "excess_after_cost_sum": 0.15462935453975013,
+              "rank_ic_mean": 0.03528742019592547
+            },
+            "2023": {
+              "n_periods": 52,
+              "excess_after_cost_sum": 0.06865451472001449,
+              "rank_ic_mean": 0.027428123772565746
+            },
+            "2024": {
+              "n_periods": 53,
+              "excess_after_cost_sum": 0.15496178782122383,
+              "rank_ic_mean": 0.03218455200869851
+            },
+            "2025": {
+              "n_periods": 38,
+              "excess_after_cost_sum": 0.10354401629938104,
+              "rank_ic_mean": 0.020137659817850834
+            }
+          }
+        }
+      },
+      "comparisons": {
+        "pv2_minus_xs_rank_ic": {
+          "value": -0.000424253522750265,
+          "ci": [
+            -0.0028477951624722147,
+            0.0021051510739061
+          ],
+          "p_one_sided": 0.6461769115442278,
+          "ci_quarter_blocks": [
+            -0.0027016397414763166,
+            0.0017942304911370943
+          ],
+          "p_one_sided_quarter_blocks": 0.6571714142928535
+        },
+        "pv2_minus_xs_excess_after_cost_annual": {
+          "value": 0.002814694837419569,
+          "ci": [
+            -0.03305599505877406,
+            0.0426021124316835
+          ],
+          "p_one_sided": 0.4387806096951524,
+          "ci_quarter_blocks": [
+            -0.03877549768038272,
+            0.047013339966197616
+          ],
+          "p_one_sided_quarter_blocks": 0.45827086456771615
+        }
+      },
+      "pattern_feature_gain_share": 0.1738193069583274,
+      "survivorship_diagnostics": {
+        "note": "diagnostics only; not registered and never part of a gate",
+        "survivor_proxies": {
+          "small_turnover": {
+            "rank_ic_mean": {
+              "value": 0.017508890178775185,
+              "ci": [
+                0.006909474177837467,
+                0.02830685197853176
+              ],
+              "p_one_sided": 0.0009995002498750624,
+              "ci_quarter_blocks": [
+                0.008787894584138776,
+                0.026114493154938925
+              ],
+              "p_one_sided_quarter_blocks": 0.0004997501249375312
+            },
+            "top_decile_excess_after_cost_annual": {
+              "value": 0.1550085271974164,
+              "ci": [
+                0.09438985683031406,
+                0.2140159986960424
+              ],
+              "p_one_sided": 0.0004997501249375312,
+              "ci_quarter_blocks": [
+                0.10191236948730291,
+                0.20641203635201513
+              ],
+              "p_one_sided_quarter_blocks": 0.0004997501249375312
+            },
+            "top_decile_excess_gross_annual": {
+              "value": 0.17951475926014807,
+              "ci": [
+                0.11879905133151984,
+                0.23841853724153123
+              ],
+              "p_one_sided": 0.0004997501249375312,
+              "ci_quarter_blocks": [
+                0.12687622334153284,
+                0.23119884018329973
+              ],
+              "p_one_sided_quarter_blocks": 0.0004997501249375312
+            },
+            "turnover": {
+              "value": 0.1349751439970831,
+              "ci": [
+                0.1292161317715671,
+                0.1409979653842125
+              ],
+              "ci_quarter_blocks": [
+                0.12461084555829899,
+                0.14613515261484686
+              ],
+              "annual": 7.018707487848321,
+              "note": "one-way turnover per rebalance, sum|w+ - w-| / 2"
+            }
+          },
+          "young_listing": {
+            "rank_ic_mean": {
+              "value": 0.0034934946393449023,
+              "ci": [
+                -0.00507967028306316,
+                0.011995704223118103
+              ],
+              "p_one_sided": 0.22988505747126436,
+              "ci_quarter_blocks": [
+                -0.004805849655190682,
+                0.01139836784961546
+              ],
+              "p_one_sided_quarter_blocks": 0.17991004497751126
+            },
+            "top_decile_excess_after_cost_annual": {
+              "value": 0.11932185040968704,
+              "ci": [
+                0.058514981681230004,
+                0.17983294837082942
+              ],
+              "p_one_sided": 0.0004997501249375312,
+              "ci_quarter_blocks": [
+                0.060348254101018184,
+                0.18487768200142846
+              ],
+              "p_one_sided_quarter_blocks": 0.0009995002498750624
+            },
+            "top_decile_excess_gross_annual": {
+              "value": 0.12444334265097187,
+              "ci": [
+                0.06347802144302822,
+                0.18543716401677568
+              ],
+              "p_one_sided": 0.0004997501249375312,
+              "ci_quarter_blocks": [
+                0.06581574099149386,
+                0.18999763863380578
+              ],
+              "p_one_sided_quarter_blocks": 0.0009995002498750624
+            },
+            "turnover": {
+              "value": 0.027488197409677378,
+              "ci": [
+                0.024381002192954557,
+                0.031150136986032976
+              ],
+              "ci_quarter_blocks": [
+                0.023648509979496555,
+                0.03246948428459706
+              ],
+              "annual": 1.4293862653032237,
+              "note": "one-way turnover per rebalance, sum|w+ - w-| / 2"
+            }
+          },
+          "momentum_plus_small_turnover": {
+            "rank_ic_mean": {
+              "value": 0.028628394632530897,
+              "ci": [
+                0.016442499595291617,
+                0.04094428143890944
+              ],
+              "p_one_sided": 0.0004997501249375312,
+              "ci_quarter_blocks": [
+                0.016650263330907106,
+                0.03978835396301206
+              ],
+              "p_one_sided_quarter_blocks": 0.0004997501249375312
+            },
+            "top_decile_excess_after_cost_annual": {
+              "value": 0.2194745260700081,
+              "ci": [
+                0.15897899289878045,
+                0.28113034914354285
+              ],
+              "p_one_sided": 0.0004997501249375312,
+              "ci_quarter_blocks": [
+                0.16018573874884579,
+                0.2876372933260601
+              ],
+              "p_one_sided_quarter_blocks": 0.0004997501249375312
+            },
+            "top_decile_excess_gross_annual": {
+              "value": 0.24772097057783654,
+              "ci": [
+                0.18702329077874438,
+                0.3096520371101441
+              ],
+              "p_one_sided": 0.0004997501249375312,
+              "ci_quarter_blocks": [
+                0.18810421902292504,
+                0.31593003550341275
+              ],
+              "p_one_sided_quarter_blocks": 0.0004997501249375312
+            },
+            "turnover": {
+              "value": 0.15547057122617705,
+              "ci": [
+                0.1502394187817146,
+                0.161149908430826
+              ],
+              "ci_quarter_blocks": [
+                0.14777337471432034,
+                0.16345675659680856
+              ],
+              "annual": 8.084469703761206,
+              "note": "one-way turnover per rebalance, sum|w+ - w-| / 2"
+            }
+          }
+        },
+        "liquid_half": {
+          "rule": "candidates with rank_turnover >= 0.5 on the signal day",
+          "mean_candidates": 84.14763779527559,
+          "strategies": {
+            "xs_v1": {
+              "rank_ic_mean": {
+                "value": 0.019130703479382134,
+                "ci": [
+                  0.0023081607962452434,
+                  0.03522865281529524
+                ],
+                "p_one_sided": 0.013493253373313344,
+                "ci_quarter_blocks": [
+                  -0.0009134153949921518,
+                  0.039311805420413494
+                ],
+                "p_one_sided_quarter_blocks": 0.028985507246376812
+              },
+              "top_decile_excess_after_cost_annual": {
+                "value": -0.0010035979030847929,
+                "ci": [
+                  -0.10925255666959417,
+                  0.10251052639268374
+                ],
+                "p_one_sided": 0.5077461269365318,
+                "ci_quarter_blocks": [
+                  -0.11179989704860102,
+                  0.11547205174468289
+                ],
+                "p_one_sided_quarter_blocks": 0.4877561219390305
+              },
+              "top_decile_excess_gross_annual": {
+                "value": 0.0957390894644323,
+                "ci": [
+                  -0.01175258669372207,
+                  0.19997781702019035
+                ],
+                "p_one_sided": 0.03798100949525238,
+                "ci_quarter_blocks": [
+                  -0.01508125490550562,
+                  0.2137337413866828
+                ],
+                "p_one_sided_quarter_blocks": 0.050974512743628186
+              },
+              "turnover": {
+                "value": 0.5365898213680274,
+                "ci": [
+                  0.5239472226069778,
+                  0.5491174152628825
+                ],
+                "ci_quarter_blocks": [
+                  0.5207280570371847,
+                  0.5523924689862713
+                ],
+                "annual": 27.90267071113742,
+                "note": "one-way turnover per rebalance, sum|w+ - w-| / 2"
+              }
+            },
+            "pv2_xs": {
+              "rank_ic_mean": {
+                "value": 0.017526730255872557,
+                "ci": [
+                  0.0012373700195252775,
+                  0.03337505474038918
+                ],
+                "p_one_sided": 0.02048975512243878,
+                "ci_quarter_blocks": [
+                  -0.0018048334345082786,
+                  0.0366459270954407
+                ],
+                "p_one_sided_quarter_blocks": 0.038980509745127435
+              },
+              "top_decile_excess_after_cost_annual": {
+                "value": -0.0032292713869961766,
+                "ci": [
+                  -0.11667461349219445,
+                  0.10538499463537784
+                ],
+                "p_one_sided": 0.5237381309345327,
+                "ci_quarter_blocks": [
+                  -0.11565285967813058,
+                  0.11648977946820276
+                ],
+                "p_one_sided_quarter_blocks": 0.5112443778110944
+              },
+              "top_decile_excess_gross_annual": {
+                "value": 0.09480283163622462,
+                "ci": [
+                  -0.018385310391444473,
+                  0.20238103157182835
+                ],
+                "p_one_sided": 0.04847576211894053,
+                "ci_quarter_blocks": [
+                  -0.017996780497267023,
+                  0.21482873490006815
+                ],
+                "p_one_sided_quarter_blocks": 0.050974512743628186
+              },
+              "turnover": {
+                "value": 0.5441129913038725,
+                "ci": [
+                  0.5316841100487966,
+                  0.5566214378739421
+                ],
+                "ci_quarter_blocks": [
+                  0.52812013322072,
+                  0.559854578690873
+                ],
+                "annual": 28.29387554780137,
+                "note": "one-way turnover per rebalance, sum|w+ - w-| / 2"
+              }
+            },
+            "reversal_1w": {
+              "rank_ic_mean": {
+                "value": 0.03545431786626036,
+                "ci": [
+                  0.019590047967153947,
+                  0.051172681335219274
+                ],
+                "p_one_sided": 0.0004997501249375312,
+                "ci_quarter_blocks": [
+                  0.01685797633019249,
+                  0.05526303821484214
+                ],
+                "p_one_sided_quarter_blocks": 0.0004997501249375312
+              },
+              "top_decile_excess_after_cost_annual": {
+                "value": -0.08985149615964841,
+                "ci": [
+                  -0.18278318558816772,
+                  0.0036993038060064653
+                ],
+                "p_one_sided": 0.9675162418790605,
+                "ci_quarter_blocks": [
+                  -0.19075949160359987,
+                  0.017083328319984676
+                ],
+                "p_one_sided_quarter_blocks": 0.9510244877561219
+              },
+              "top_decile_excess_gross_annual": {
+                "value": 0.06864657234451503,
+                "ci": [
+                  -0.025063557860364575,
+                  0.16232139293874542
+                ],
+                "p_one_sided": 0.0814592703648176,
+                "ci_quarter_blocks": [
+                  -0.03395393463655465,
+                  0.17733719656946503
+                ],
+                "p_one_sided_quarter_blocks": 0.09995002498750624
+              },
+              "turnover": {
+                "value": 0.8803340957964961,
+                "ci": [
+                  0.8692901161868204,
+                  0.8910596947012775
+                ],
+                "ci_quarter_blocks": [
+                  0.8719204268392573,
+                  0.8887296059563398
+                ],
+                "annual": 45.7773729814178,
+                "note": "one-way turnover per rebalance, sum|w+ - w-| / 2"
+              }
+            },
+            "momentum_12_1": {
+              "rank_ic_mean": {
+                "value": 0.017670818992639878,
+                "ci": [
+                  -0.0017172398529213657,
+                  0.03719483841790728
+                ],
+                "p_one_sided": 0.041979010494752625,
+                "ci_quarter_blocks": [
+                  -0.0022021321158977435,
+                  0.03663454082079003
+                ],
+                "p_one_sided_quarter_blocks": 0.041979010494752625
+              },
+              "top_decile_excess_after_cost_annual": {
+                "value": 0.010444669634792236,
+                "ci": [
+                  -0.09645055301981667,
+                  0.1088070768620864
+                ],
+                "p_one_sided": 0.42978510744627685,
+                "ci_quarter_blocks": [
+                  -0.0958536629622341,
+                  0.11866242288227868
+                ],
+                "p_one_sided_quarter_blocks": 0.4127936031984008
+              },
+              "top_decile_excess_gross_annual": {
+                "value": 0.04469912037181061,
+                "ci": [
+                  -0.06174232147056648,
+                  0.14296460649389134
+                ],
+                "p_one_sided": 0.20389805097451275,
+                "ci_quarter_blocks": [
+                  -0.061629713988132294,
+                  0.15318013338945938
+                ],
+                "p_one_sided_quarter_blocks": 0.2048975512243878
+              },
+              "turnover": {
+                "value": 0.1897841181002708,
+                "ci": [
+                  0.1813568505819185,
+                  0.1985928898091448
+                ],
+                "ci_quarter_blocks": [
+                  0.1770626305910028,
+                  0.2027971101190929
+                ],
+                "annual": 9.86877414121408,
+                "note": "one-way turnover per rebalance, sum|w+ - w-| / 2"
+              }
+            },
+            "low_volatility": {
+              "rank_ic_mean": {
+                "value": 0.00818572601353786,
+                "ci": [
+                  -0.013179585344838072,
+                  0.030837563173559644
+                ],
+                "p_one_sided": 0.2288855572213893,
+                "ci_quarter_blocks": [
+                  -0.016377903757567244,
+                  0.03259234330643328
+                ],
+                "p_one_sided_quarter_blocks": 0.2933533233383308
+              },
+              "top_decile_excess_after_cost_annual": {
+                "value": -0.06864399213128192,
+                "ci": [
+                  -0.14613447696261186,
+                  0.01218803283849594
+                ],
+                "p_one_sided": 0.9550224887556222,
+                "ci_quarter_blocks": [
+                  -0.15126181268158517,
+                  0.015077065614286081
+                ],
+                "p_one_sided_quarter_blocks": 0.9460269865067467
+              },
+              "top_decile_excess_gross_annual": {
+                "value": -0.03488083887837137,
+                "ci": [
+                  -0.1125262516179891,
+                  0.045394235405706335
+                ],
+                "p_one_sided": 0.8125937031484258,
+                "ci_quarter_blocks": [
+                  -0.11838513401570173,
+                  0.04926640105059284
+                ],
+                "p_one_sided_quarter_blocks": 0.7916041979010495
+              },
+              "turnover": {
+                "value": 0.18721341253211088,
+                "ci": [
+                  0.17792915230090484,
+                  0.1966587946351772
+                ],
+                "ci_quarter_blocks": [
+                  0.17582234731725116,
+                  0.1987762178538415
+                ],
+                "annual": 9.735097451669766,
+                "note": "one-way turnover per rebalance, sum|w+ - w-| / 2"
+              }
+            }
+          }
+        },
+        "holdings_tilt": {
+          "xs_v1": {
+            "mean_rank_turnover_held": 0.37177729031187423,
+            "mean_rank_momentum_12_1_held": 0.7071919540324592,
+            "median_listing_age_years_held": 14.032854209445585
+          },
+          "pv2_xs": {
+            "mean_rank_turnover_held": 0.3838219099767465,
+            "mean_rank_momentum_12_1_held": 0.7114259991494097,
+            "median_listing_age_years_held": 13.997262149212869
+          },
+          "reversal_1w": {
+            "mean_rank_turnover_held": 0.511979979007954,
+            "mean_rank_momentum_12_1_held": 0.5136208391725727,
+            "median_listing_age_years_held": 17.526351813826146
+          },
+          "momentum_12_1": {
+            "mean_rank_turnover_held": 0.5231225922677987,
+            "mean_rank_momentum_12_1_held": 0.9514454786081517,
+            "median_listing_age_years_held": 14.360027378507871
+          },
+          "low_volatility": {
+            "mean_rank_turnover_held": 0.5319130979589815,
+            "mean_rank_momentum_12_1_held": 0.42754316341358184,
+            "median_listing_age_years_held": 20.238193018480494
+          }
+        },
+        "candidates_median_listing_age_years": 18.3709787816564
+      }
+    },
+    "20": {
+      "rebalance": "monthly_first_trading_day",
+      "primary": {
+        "statistic": "rank-IC improvement over xs_v1 (paired, date-block bootstrap), one-sided > 0",
+        "value": -0.0025530684764332543,
+        "ci": [
+          -0.007828284388198147,
+          0.0028532577408505663
+        ],
+        "p_one_sided": 0.8345827086456772,
+        "bh_q_within_this_run": 0.8345827086456772
+      },
+      "gates": {
+        "rank_ic_improvement_ci_lower_above": {
+          "value": -0.0025530684764332543,
+          "ci": [
+            -0.007828284388198147,
+            0.0028532577408505663
+          ],
+          "threshold": 0.0,
+          "pass": false,
+          "diagnostic_quarter_blocks_pass": false
+        },
+        "excess_after_cost_not_worse_than_xs_v1": {
+          "required": true,
+          "pv2_excess_after_cost_annual": 0.2045674470767745,
+          "xs_v1_excess_after_cost_annual": 0.1975650187411995,
+          "pass": true,
+          "paired_difference": {
+            "value": 0.007002428335575022,
+            "ci": [
+              -0.031865758187997376,
+              0.045411688312146675
+            ],
+            "p_one_sided": 0.3553223388305847,
+            "ci_quarter_blocks": [
+              -0.029030031100284095,
+              0.040279419504175816
+            ],
+            "p_one_sided_quarter_blocks": 0.3408295852073963
+          }
+        }
+      },
+      "pass": false,
+      "strategies": {
+        "pv2_xs": {
+          "n_periods": 116,
+          "n_weeks": 504,
+          "mean_candidates": 166.44827586206895,
+          "mean_top": 17.163793103448278,
+          "rank_ic_mean": {
+            "value": 0.06060097367689665,
+            "ci": [
+              0.03806881620740846,
+              0.08264789533643079
+            ],
+            "p_one_sided": 0.0004997501249375312,
+            "ci_quarter_blocks": [
+              0.03835895861176035,
+              0.08447097480183045
+            ],
+            "p_one_sided_quarter_blocks": 0.0004997501249375312
+          },
+          "rank_ic_t": {
+            "value": 5.243630430545901,
+            "ci": [
+              3.311517793003777,
+              7.439516368778844
+            ],
+            "note": "mean / (sd / sqrt(n)) over rebalance periods; bootstrap CI of the same statistic"
+          },
+          "rank_ic_positive_share": 0.6637931034482759,
+          "top_decile_excess_after_cost_annual": {
+            "value": 0.2045674470767745,
+            "ci": [
+              0.13437820335631603,
+              0.27215846294413326
+            ],
+            "p_one_sided": 0.0004997501249375312,
+            "ci_quarter_blocks": [
+              0.1304931553824941,
+              0.28685719344065247
+            ],
+            "p_one_sided_quarter_blocks": 0.0004997501249375312
+          },
+          "top_decile_excess_gross_annual": {
+            "value": 0.22755895042804022,
+            "ci": [
+              0.15779773769302433,
+              0.29547128340703993
+            ],
+            "p_one_sided": 0.0004997501249375312,
+            "ci_quarter_blocks": [
+              0.15279800864164753,
+              0.3094366373836247
+            ],
+            "p_one_sided_quarter_blocks": 0.0004997501249375312
+          },
+          "top_decile_return_after_cost_annual": {
+            "value": 0.4340442251248159,
+            "ci": [
+              0.28628850163133707,
+              0.5786982376092421
+            ],
+            "p_one_sided": 0.0004997501249375312,
+            "ci_quarter_blocks": [
+              0.25839831822803266,
+              0.6095895156178149
+            ],
+            "p_one_sided_quarter_blocks": 0.0004997501249375312
+          },
+          "benchmark_return_annual": {
+            "value": 0.22947677804804129,
+            "ci": [
+              0.10827219516781943,
+              0.34962861334335377
+            ],
+            "ci_quarter_blocks": [
+              0.09131660110494744,
+              0.36847263695081844
+            ]
+          },
+          "top_decile_cagr_after_cost": 0.4894000438984807,
+          "benchmark_cagr": 0.23075052154987596,
+          "information_ratio_after_cost": 1.8097358787371387,
+          "weekly_hit_rate_vs_benchmark": {
+            "value": 0.6011904761904762,
+            "ci": [
+              0.5577679497275086,
+              0.6415878615420597
+            ],
+            "ci_quarter_blocks": [
+              0.5562130177514792,
+              0.6475338167619579
+            ]
+          },
+          "period_hit_rate_vs_benchmark": {
+            "value": 0.7155172413793104,
+            "ci": [
+              0.6293103448275862,
+              0.7931034482758621
+            ],
+            "ci_quarter_blocks": [
+              0.6324786324786325,
+              0.8
+            ]
+          },
+          "turnover": {
+            "value": 0.5307202926808,
+            "ci": [
+              0.5103057638856517,
+              0.5515963252676385
+            ],
+            "ci_quarter_blocks": [
+              0.5058615097555967,
+              0.5574574081952767
+            ],
+            "annual": 6.3686435121696,
+            "note": "one-way turnover per rebalance, sum|w+ - w-| / 2"
+          },
+          "cost_annual": {
+            "value": 0.022098597273999175,
+            "ci": [
+              0.02121913352569652,
+              0.023042120964794684
+            ],
+            "ci_quarter_blocks": [
+              0.021017103986800373,
+              0.023223353002362647
+            ]
+          },
+          "max_drawdown_excess": {
+            "value": 0.12150900995167924,
+            "ci": [
+              0.05662791479162729,
+              0.17946978757487014
+            ],
+            "weekly_marks_value": 0.12417263931347033,
+            "note": "drawdown of (1 + net) / (1 + benchmark) chained over periods"
+          },
+          "by_year": {
+            "2016": {
+              "n_periods": 12,
+              "excess_after_cost_sum": 0.07533667087179208,
+              "rank_ic_mean": 0.01820638677574557
+            },
+            "2017": {
+              "n_periods": 12,
+              "excess_after_cost_sum": 0.23306909382931118,
+              "rank_ic_mean": 0.09911836211367332
+            },
+            "2018": {
+              "n_periods": 12,
+              "excess_after_cost_sum": 0.10697007928273738,
+              "rank_ic_mean": 0.011308507671306816
+            },
+            "2019": {
+              "n_periods": 12,
+              "excess_after_cost_sum": -0.024635285150568675,
+              "rank_ic_mean": 0.0416612370340513
+            },
+            "2020": {
+              "n_periods": 12,
+              "excess_after_cost_sum": 0.16292554026890216,
+              "rank_ic_mean": 0.068289055593326
+            },
+            "2021": {
+              "n_periods": 12,
+              "excess_after_cost_sum": 0.5220290926832507,
+              "rank_ic_mean": 0.12620225996085455
+            },
+            "2022": {
+              "n_periods": 12,
+              "excess_after_cost_sum": 0.1229846590946555,
+              "rank_ic_mean": 0.04820390301840763
+            },
+            "2023": {
+              "n_periods": 12,
+              "excess_after_cost_sum": 0.25808621701899315,
+              "rank_ic_mean": 0.07806897085552741
+            },
+            "2024": {
+              "n_periods": 12,
+              "excess_after_cost_sum": 0.36664579182437895,
+              "rank_ic_mean": 0.07823769585163573
+            },
+            "2025": {
+              "n_periods": 8,
+              "excess_after_cost_sum": 0.15407346201870087,
+              "rank_ic_mean": 0.024769550003209018
+            }
+          }
+        },
+        "xs_v1": {
+          "n_periods": 116,
+          "n_weeks": 504,
+          "mean_candidates": 166.44827586206895,
+          "mean_top": 17.163793103448278,
+          "rank_ic_mean": {
+            "value": 0.06315404215332991,
+            "ci": [
+              0.040976857055895606,
+              0.08492231220932127
+            ],
+            "p_one_sided": 0.0004997501249375312,
+            "ci_quarter_blocks": [
+              0.040305023545594086,
+              0.08706832889604496
+            ],
+            "p_one_sided_quarter_blocks": 0.0004997501249375312
+          },
+          "rank_ic_t": {
+            "value": 5.529644867277694,
+            "ci": [
+              3.6073164559175015,
+              7.659006794705761
+            ],
+            "note": "mean / (sd / sqrt(n)) over rebalance periods; bootstrap CI of the same statistic"
+          },
+          "rank_ic_positive_share": 0.6810344827586207,
+          "top_decile_excess_after_cost_annual": {
+            "value": 0.1975650187411995,
+            "ci": [
+              0.13245057836349514,
+              0.25927462693341347
+            ],
+            "p_one_sided": 0.0004997501249375312,
+            "ci_quarter_blocks": [
+              0.12826649986397712,
+              0.2716489258283531
+            ],
+            "p_one_sided_quarter_blocks": 0.0004997501249375312
+          },
+          "top_decile_excess_gross_annual": {
+            "value": 0.22024814111857036,
+            "ci": [
+              0.15492333617300919,
+              0.2821980978418282
+            ],
+            "p_one_sided": 0.0004997501249375312,
+            "ci_quarter_blocks": [
+              0.1502037682551173,
+              0.29480823866697164
+            ],
+            "p_one_sided_quarter_blocks": 0.0004997501249375312
+          },
+          "top_decile_return_after_cost_annual": {
+            "value": 0.4270417967892408,
+            "ci": [
+              0.2826266226443718,
+              0.566241456569966
+            ],
+            "p_one_sided": 0.0004997501249375312,
+            "ci_quarter_blocks": [
+              0.2562411778837113,
+              0.5950992133584752
+            ],
+            "p_one_sided_quarter_blocks": 0.0004997501249375312
+          },
+          "benchmark_return_annual": {
+            "value": 0.22947677804804129,
+            "ci": [
+              0.10827219516781943,
+              0.34962861334335377
+            ],
+            "ci_quarter_blocks": [
+              0.09131660110494744,
+              0.36847263695081844
+            ]
+          },
+          "top_decile_cagr_after_cost": 0.4799442075824143,
+          "benchmark_cagr": 0.23075052154987596,
+          "information_ratio_after_cost": 1.936797123238999,
+          "weekly_hit_rate_vs_benchmark": {
+            "value": 0.5992063492063492,
+            "ci": [
+              0.5536053675856307,
+              0.6447105788423154
+            ],
+            "ci_quarter_blocks": [
+              0.5522051861670652,
+              0.6476496336938995
+            ]
+          },
+          "period_hit_rate_vs_benchmark": {
+            "value": 0.6982758620689655,
+            "ci": [
+              0.6120689655172413,
+              0.7844827586206896
+            ],
+            "ci_quarter_blocks": [
+              0.6120689655172413,
+              0.7844827586206896
+            ]
+          },
+          "turnover": {
+            "value": 0.5237218565374032,
+            "ci": [
+              0.5063390692523199,
+              0.5420488411269624
+            ],
+            "ci_quarter_blocks": [
+              0.5012640099344907,
+              0.5465465576807622
+            ],
+            "annual": 6.284662278448838,
+            "note": "one-way turnover per rebalance, sum|w+ - w-| / 2"
+          },
+          "cost_annual": {
+            "value": 0.021809537898631527,
+            "ci": [
+              0.021017560342368263,
+              0.022711399738095984
+            ],
+            "ci_quarter_blocks": [
+              0.020820758071396783,
+              0.022886904452383082
+            ]
+          },
+          "max_drawdown_excess": {
+            "value": 0.08016997225545985,
+            "ci": [
+              0.04277878294757186,
+              0.14305775426593778
+            ],
+            "weekly_marks_value": 0.10503685607610524,
+            "note": "drawdown of (1 + net) / (1 + benchmark) chained over periods"
+          },
+          "by_year": {
+            "2016": {
+              "n_periods": 12,
+              "excess_after_cost_sum": 0.010671275379807499,
+              "rank_ic_mean": 0.02322436578822532
+            },
+            "2017": {
+              "n_periods": 12,
+              "excess_after_cost_sum": 0.20981324936870338,
+              "rank_ic_mean": 0.10117865921606901
+            },
+            "2018": {
+              "n_periods": 12,
+              "excess_after_cost_sum": 0.06046024379672055,
+              "rank_ic_mean": 0.01785501544066175
+            },
+            "2019": {
+              "n_periods": 12,
+              "excess_after_cost_sum": 0.15130816713956163,
+              "rank_ic_mean": 0.06236385719474097
+            },
+            "2020": {
+              "n_periods": 12,
+              "excess_after_cost_sum": 0.15098214239844154,
+              "rank_ic_mean": 0.06665192769565262
+            },
+            "2021": {
+              "n_periods": 12,
+              "excess_after_cost_sum": 0.5264138533182148,
+              "rank_ic_mean": 0.1189185353705026
+            },
+            "2022": {
+              "n_periods": 12,
+              "excess_after_cost_sum": 0.13482829911285732,
+              "rank_ic_mean": 0.044873972292243304
+            },
+            "2023": {
+              "n_periods": 12,
+              "excess_after_cost_sum": 0.25280257890612445,
+              "rank_ic_mean": 0.07663821887270869
+            },
+            "2024": {
+              "n_periods": 12,
+              "excess_after_cost_sum": 0.299964362576854,
+              "rank_ic_mean": 0.08387183965573186
+            },
+            "2025": {
+              "n_periods": 8,
+              "excess_after_cost_sum": 0.11255100916764293,
+              "rank_ic_mean": 0.022369023933479504
+            }
+          }
+        }
+      },
+      "comparisons": {
+        "pv2_minus_xs_rank_ic": {
+          "value": -0.0025530684764332543,
+          "ci": [
+            -0.007828284388198147,
+            0.0028532577408505663
+          ],
+          "p_one_sided": 0.8345827086456772,
+          "ci_quarter_blocks": [
+            -0.007327486251248947,
+            0.001958331092415879
+          ],
+          "p_one_sided_quarter_blocks": 0.8640679660169915
+        },
+        "pv2_minus_xs_excess_after_cost_annual": {
+          "value": 0.007002428335575022,
+          "ci": [
+            -0.031865758187997376,
+            0.045411688312146675
+          ],
+          "p_one_sided": 0.3553223388305847,
+          "ci_quarter_blocks": [
+            -0.029030031100284095,
+            0.040279419504175816
+          ],
+          "p_one_sided_quarter_blocks": 0.3408295852073963
+        }
+      },
+      "pattern_feature_gain_share": 0.09458988794444363,
+      "survivorship_diagnostics": {
+        "note": "diagnostics only; not registered and never part of a gate",
+        "survivor_proxies": {
+          "small_turnover": {
+            "rank_ic_mean": {
+              "value": 0.051414526565978606,
+              "ci": [
+                0.030586931572189825,
+                0.0726905127151374
+              ],
+              "p_one_sided": 0.0004997501249375312,
+              "ci_quarter_blocks": [
+                0.03387708314633248,
+                0.06823953435719984
+              ],
+              "p_one_sided_quarter_blocks": 0.0004997501249375312
+            },
+            "top_decile_excess_after_cost_annual": {
+              "value": 0.16357947623186442,
+              "ci": [
+                0.09897368232913267,
+                0.2263859236809705
+              ],
+              "p_one_sided": 0.0004997501249375312,
+              "ci_quarter_blocks": [
+                0.10899552517994208,
+                0.218571186684951
+              ],
+              "p_one_sided_quarter_blocks": 0.0004997501249375312
+            },
+            "top_decile_excess_gross_annual": {
+              "value": 0.1775818122584613,
+              "ci": [
+                0.11324592106906801,
+                0.24064646863925582
+              ],
+              "p_one_sided": 0.0004997501249375312,
+              "ci_quarter_blocks": [
+                0.12274741223763956,
+                0.23374800684586383
+              ],
+              "p_one_sided_quarter_blocks": 0.0004997501249375312
+            },
+            "turnover": {
+              "value": 0.3237456726312051,
+              "ci": [
+                0.3055937749103845,
+                0.3427391301419521
+              ],
+              "ci_quarter_blocks": [
+                0.30117703382876176,
+                0.34836197670206237
+              ],
+              "annual": 3.8849480715744606,
+              "note": "one-way turnover per rebalance, sum|w+ - w-| / 2"
+            }
+          },
+          "young_listing": {
+            "rank_ic_mean": {
+              "value": 0.022047547295049694,
+              "ci": [
+                0.0048616289085524934,
+                0.0395561097205764
+              ],
+              "p_one_sided": 0.0074962518740629685,
+              "ci_quarter_blocks": [
+                0.004079183458703258,
+                0.03960622531612034
+              ],
+              "p_one_sided_quarter_blocks": 0.0079960019990005
+            },
+            "top_decile_excess_after_cost_annual": {
+              "value": 0.13424286394667245,
+              "ci": [
+                0.07481188896112016,
+                0.19519546511724406
+              ],
+              "p_one_sided": 0.0004997501249375312,
+              "ci_quarter_blocks": [
+                0.07488667223621849,
+                0.1993632254471128
+              ],
+              "p_one_sided_quarter_blocks": 0.0004997501249375312
+            },
+            "top_decile_excess_gross_annual": {
+              "value": 0.13718257416990337,
+              "ci": [
+                0.0777485856142207,
+                0.19817068043493724
+              ],
+              "p_one_sided": 0.0004997501249375312,
+              "ci_quarter_blocks": [
+                0.0779576993209077,
+                0.20248574134470362
+              ],
+              "p_one_sided_quarter_blocks": 0.0004997501249375312
+            },
+            "turnover": {
+              "value": 0.06540749147988177,
+              "ci": [
+                0.056128870509398035,
+                0.0765852125743762
+              ],
+              "ci_quarter_blocks": [
+                0.055917459179629564,
+                0.07665875253329749
+              ],
+              "annual": 0.7848898977585812,
+              "note": "one-way turnover per rebalance, sum|w+ - w-| / 2"
+            }
+          },
+          "momentum_plus_small_turnover": {
+            "rank_ic_mean": {
+              "value": 0.06557877622813443,
+              "ci": [
+                0.04145170603402706,
+                0.08909524563316693
+              ],
+              "p_one_sided": 0.0004997501249375312,
+              "ci_quarter_blocks": [
+                0.03996622630590463,
+                0.09037518208172038
+              ],
+              "p_one_sided_quarter_blocks": 0.0004997501249375312
+            },
+            "top_decile_excess_after_cost_annual": {
+              "value": 0.23333391954620192,
+              "ci": [
+                0.16502132362726546,
+                0.2977347917744926
+              ],
+              "p_one_sided": 0.0004997501249375312,
+              "ci_quarter_blocks": [
+                0.16947855797544684,
+                0.31187655642615303
+              ],
+              "p_one_sided_quarter_blocks": 0.0004997501249375312
+            },
+            "top_decile_excess_gross_annual": {
+              "value": 0.24705722986762318,
+              "ci": [
+                0.17865353926884361,
+                0.31200524265927476
+              ],
+              "p_one_sided": 0.0004997501249375312,
+              "ci_quarter_blocks": [
+                0.18325000748995232,
+                0.32589798285888416
+              ],
+              "p_one_sided_quarter_blocks": 0.0004997501249375312
+            },
+            "turnover": {
+              "value": 0.31499987828032444,
+              "ci": [
+                0.29998468064085965,
+                0.3325884099193863
+              ],
+              "ci_quarter_blocks": [
+                0.2960675048794223,
+                0.33346033260848323
+              ],
+              "annual": 3.779998539363893,
+              "note": "one-way turnover per rebalance, sum|w+ - w-| / 2"
+            }
+          }
+        },
+        "liquid_half": {
+          "rule": "candidates with rank_turnover >= 0.5 on the signal day",
+          "mean_candidates": 84.03448275862068,
+          "strategies": {
+            "xs_v1": {
+              "rank_ic_mean": {
+                "value": 0.02199416168335404,
+                "ci": [
+                  -0.008507352401287494,
+                  0.050643159201457115
+                ],
+                "p_one_sided": 0.07646176911544228,
+                "ci_quarter_blocks": [
+                  -0.00695410297880004,
+                  0.05290845328075472
+                ],
+                "p_one_sided_quarter_blocks": 0.06846576711644178
+              },
+              "top_decile_excess_after_cost_annual": {
+                "value": 0.08236418376050855,
+                "ci": [
+                  -0.012590749847124171,
+                  0.18171254029286046
+                ],
+                "p_one_sided": 0.04547726136931534,
+                "ci_quarter_blocks": [
+                  -0.03009108595263662,
+                  0.2085764477229835
+                ],
+                "p_one_sided_quarter_blocks": 0.07646176911544228
+              },
+              "top_decile_excess_gross_annual": {
+                "value": 0.11273904407893204,
+                "ci": [
+                  0.017447430203101712,
+                  0.21265927545757413
+                ],
+                "p_one_sided": 0.010494752623688156,
+                "ci_quarter_blocks": [
+                  0.000698196287618665,
+                  0.2398404365284134
+                ],
+                "p_one_sided_quarter_blocks": 0.02498750624687656
+              },
+              "turnover": {
+                "value": 0.713245087287125,
+                "ci": [
+                  0.6879183411695778,
+                  0.7384372676524741
+                ],
+                "ci_quarter_blocks": [
+                  0.6829050743046393,
+                  0.7443131573923636
+                ],
+                "annual": 8.5589410474455,
+                "note": "one-way turnover per rebalance, sum|w+ - w-| / 2"
+              }
+            },
+            "pv2_xs": {
+              "rank_ic_mean": {
+                "value": 0.021009820027383903,
+                "ci": [
+                  -0.010946493824750726,
+                  0.052528742669285214
+                ],
+                "p_one_sided": 0.09745127436281859,
+                "ci_quarter_blocks": [
+                  -0.010275171484043466,
+                  0.054337944408263214
+                ],
+                "p_one_sided_quarter_blocks": 0.08995502248875563
+              },
+              "top_decile_excess_after_cost_annual": {
+                "value": 0.043947620226305974,
+                "ci": [
+                  -0.04887255502089058,
+                  0.14513066251980644
+                ],
+                "p_one_sided": 0.18690654672663667,
+                "ci_quarter_blocks": [
+                  -0.05586416118505887,
+                  0.15788933351480097
+                ],
+                "p_one_sided_quarter_blocks": 0.20539730134932535
+              },
+              "top_decile_excess_gross_annual": {
+                "value": 0.07467111467598288,
+                "ci": [
+                  -0.018787736334598928,
+                  0.17693923472292986
+                ],
+                "p_one_sided": 0.05997001499250375,
+                "ci_quarter_blocks": [
+                  -0.025614887648308757,
+                  0.18900926019415693
+                ],
+                "p_one_sided_quarter_blocks": 0.07646176911544228
+              },
+              "turnover": {
+                "value": 0.7237427070510308,
+                "ci": [
+                  0.6981953278997317,
+                  0.7487926503957121
+                ],
+                "ci_quarter_blocks": [
+                  0.6922999326713662,
+                  0.7548930484121629
+                ],
+                "annual": 8.68491248461237,
+                "note": "one-way turnover per rebalance, sum|w+ - w-| / 2"
+              }
+            },
+            "reversal_1w": {
+              "rank_ic_mean": {
+                "value": 0.007427702651454241,
+                "ci": [
+                  -0.019720541843030806,
+                  0.035114975898130736
+                ],
+                "p_one_sided": 0.3173413293353323,
+                "ci_quarter_blocks": [
+                  -0.02422359151359462,
+                  0.04043490396445214
+                ],
+                "p_one_sided_quarter_blocks": 0.31784107946026985
+              },
+              "top_decile_excess_after_cost_annual": {
+                "value": -0.0380415214008709,
+                "ci": [
+                  -0.13519488612575045,
+                  0.05527358928179047
+                ],
+                "p_one_sided": 0.7766116941529235,
+                "ci_quarter_blocks": [
+                  -0.13629736021477692,
+                  0.05213684494202161
+                ],
+                "p_one_sided_quarter_blocks": 0.7851074462768616
+              },
+              "top_decile_excess_gross_annual": {
+                "value": -0.0007230994625865027,
+                "ci": [
+                  -0.0978028984918741,
+                  0.09299407257829605
+                ],
+                "p_one_sided": 0.49775112443778113,
+                "ci_quarter_blocks": [
+                  -0.09921319835282644,
+                  0.08985239070884993
+                ],
+                "p_one_sided_quarter_blocks": 0.49775112443778113
+              },
+              "turnover": {
+                "value": 0.8857365985866384,
+                "ci": [
+                  0.865947217802652,
+                  0.9051500825374525
+                ],
+                "ci_quarter_blocks": [
+                  0.8659396389806381,
+                  0.905985363249362
+                ],
+                "annual": 10.628839183039661,
+                "note": "one-way turnover per rebalance, sum|w+ - w-| / 2"
+              }
+            },
+            "momentum_12_1": {
+              "rank_ic_mean": {
+                "value": 0.014024353762303642,
+                "ci": [
+                  -0.02639164448564972,
+                  0.05512810810440046
+                ],
+                "p_one_sided": 0.24237881059470265,
+                "ci_quarter_blocks": [
+                  -0.028153223063353622,
+                  0.05341003762294552
+                ],
+                "p_one_sided_quarter_blocks": 0.2638680659670165
+              },
+              "top_decile_excess_after_cost_annual": {
+                "value": 0.07312803792519404,
+                "ci": [
+                  -0.028957625766037668,
+                  0.1815968780879198
+                ],
+                "p_one_sided": 0.08545727136431784,
+                "ci_quarter_blocks": [
+                  -0.03180390649934121,
+                  0.1820857110790072
+                ],
+                "p_one_sided_quarter_blocks": 0.08395802098950525
+              },
+              "top_decile_excess_gross_annual": {
+                "value": 0.08948604715001528,
+                "ci": [
+                  -0.01321627527992936,
+                  0.1979703447063881
+                ],
+                "p_one_sided": 0.04847576211894053,
+                "ci_quarter_blocks": [
+                  -0.015231228923300059,
+                  0.19898869637924435
+                ],
+                "p_one_sided_quarter_blocks": 0.047476261869065464
+              },
+              "turnover": {
+                "value": 0.3832779781622947,
+                "ci": [
+                  0.35788471958898654,
+                  0.4095850163688292
+                ],
+                "ci_quarter_blocks": [
+                  0.35465035225937847,
+                  0.41324961973281354
+                ],
+                "annual": 4.599335737947536,
+                "note": "one-way turnover per rebalance, sum|w+ - w-| / 2"
+              }
+            },
+            "low_volatility": {
+              "rank_ic_mean": {
+                "value": -0.011678630334971464,
+                "ci": [
+                  -0.05655718077347708,
+                  0.03263188688978275
+                ],
+                "p_one_sided": 0.6911544227886057,
+                "ci_quarter_blocks": [
+                  -0.05930876538805485,
+                  0.0358166317359624
+                ],
+                "p_one_sided_quarter_blocks": 0.7001499250374813
+              },
+              "top_decile_excess_after_cost_annual": {
+                "value": -0.03656033914915452,
+                "ci": [
+                  -0.11276902642337282,
+                  0.045548957883028
+                ],
+                "p_one_sided": 0.8185907046476761,
+                "ci_quarter_blocks": [
+                  -0.11693339141188268,
+                  0.04345151825474666
+                ],
+                "p_one_sided_quarter_blocks": 0.8340829585207397
+              },
+              "top_decile_excess_gross_annual": {
+                "value": -0.019472428637519516,
+                "ci": [
+                  -0.09539988075030066,
+                  0.06270671684761518
+                ],
+                "p_one_sided": 0.6846576711644178,
+                "ci_quarter_blocks": [
+                  -0.09922911152725412,
+                  0.060412064051365344
+                ],
+                "p_one_sided_quarter_blocks": 0.6991504247876063
+              },
+              "turnover": {
+                "value": 0.40436534075896197,
+                "ci": [
+                  0.378007427704418,
+                  0.4307685433726574
+                ],
+                "ci_quarter_blocks": [
+                  0.3733736334048583,
+                  0.4342720697792206
+                ],
+                "annual": 4.852384089107543,
+                "note": "one-way turnover per rebalance, sum|w+ - w-| / 2"
+              }
+            }
+          }
+        },
+        "holdings_tilt": {
+          "xs_v1": {
+            "mean_rank_turnover_held": 0.2692723667828362,
+            "mean_rank_momentum_12_1_held": 0.7435967836192765,
+            "median_listing_age_years_held": 13.470225872689939
+          },
+          "pv2_xs": {
+            "mean_rank_turnover_held": 0.27009646411453375,
+            "mean_rank_momentum_12_1_held": 0.7384643440737516,
+            "median_listing_age_years_held": 13.842573579739904
+          },
+          "reversal_1w": {
+            "mean_rank_turnover_held": 0.5140959485998536,
+            "mean_rank_momentum_12_1_held": 0.4990667409691347,
+            "median_listing_age_years_held": 17.245722108145106
+          },
+          "momentum_12_1": {
+            "mean_rank_turnover_held": 0.5186349399378675,
+            "mean_rank_momentum_12_1_held": 0.9514332874176157,
+            "median_listing_age_years_held": 14.236824093086927
+          },
+          "low_volatility": {
+            "mean_rank_turnover_held": 0.5240887433071539,
+            "mean_rank_momentum_12_1_held": 0.43002520169320374,
+            "median_listing_age_years_held": 20.15879534565366
+          }
+        },
+        "candidates_median_listing_age_years": 18.321697467488022
+      }
+    }
+  },
+  "primary_p": {
+    "5": 0.6461769115442278,
+    "20": 0.8345827086456772
+  },
+  "pass_rule": "per horizon: every pass_if check; the family decision also needs Benjamini-Hochberg at family.fdr_q across every v2 primary p (done by the lead with the other v2 tests)",
+  "pass": false,
+  "multiple_testing": {
+    "hypotheses_in_this_run": [
+      "xs_v1 h=5",
+      "xs_v1 h=20",
+      "pv2_xs h=5",
+      "pv2_xs h=20"
+    ],
+    "n": 4,
+    "bh_q_within_this_run": {
+      "xs_v1 h=5": 0.0009995002498750624,
+      "xs_v1 h=20": 0.0009995002498750624,
+      "pv2_xs h=5": 0.8345827086456772,
+      "pv2_xs h=20": 0.8345827086456772
+    },
+    "fdr_q": 0.1,
+    "note": "edge_search_v2.yaml requires BH across EVERY v2 primary p (tsmom, im, vol_v2, vrp, pv2_range, pv2_pooled too); these within-run q-values are context only, the lead computes the family q."
+  },
+  "deviations": [
+    "Bootstrap block length is not registered: the gates resample whole rebalance periods (one period = one block of consecutive dates, the house precedent of h-day blocks); a CI resampling IST calendar quarters is reported as a diagnostic and flagged when it disagrees.",
+    "Execution (not registered): signals use bars up to the close of the session before the rebalance day; trades fill at the rebalance day's open and positions are held to the next rebalance day's open (the last traded close before it when a stock has no bar that day). More conservative than same-close fills.",
+    "Holding period = the rebalance interval (weekly for h=5, monthly for h=20), so a 'horizon' is 3-6 or 18-23 sessions; rank IC is measured against the same holding-period return the portfolio earns.",
+    "The benchmark is the equal-weight portfolio of the same candidates, gross of costs (a frictionless index); only the strategy pays costs.",
+    "Eligibility (not registered beyond the price floor): a bar on the signal day and on the entry day, close >= min_price_inr, and reversal_1w, momentum_12_1 and volatility_60d defined (about one year of history). Model, baselines and benchmark all use the same candidates.",
+    "min_price_inr is applied to the stored close, which is split/bonus-adjusted (Fyers history): a stock that later split traded above its adjusted price, so the floor uses information from later corporate actions. There is no unadjusted price in the store to do better.",
+    "Feature definitions are not registered in detail; the definitions fixed before the run are in 'definitions'. beta_1y is against the NIFTY 50 index; sector_relative_return uses today's industry from the universe file and 21-session returns; turnover is log traded value (no share counts exist).",
+    "Model training: every trading day is one lambdarank query (overlapping labels), relevance = within-day quintile of the forward h-session open-to-open return; hyperparameters fixed before the run.",
+    "Annualisation: arithmetic mean per period x 52 (weekly) or x 12 (monthly).",
+    "Periods whose exit would fall on or after the holdout start are dropped (the last week / month of September 2025), never filled from holdout bars.",
+    "Costs: one equity-delivery round trip (costs.yaml, Fyers, at reference_notional_inr per position) per unit of one-way turnover; the first rebalance buys from cash (0.5 turnover) and the final liquidation pays half a round trip.",
+    "excess_after_cost_not_worse_than_xs_v1 is read as the point estimate: pv2_xs excess after cost >= xs_v1's (the stricter reading; 'CI of the difference not entirely below 0' would be looser).",
+    "Pattern counts are ranked among the day's eligible stocks like every other feature; neutral patterns (doji, inside/outside bar) are not counted."
+  ],
+  "caveats": [
+    "SURVIVORSHIP BIAS: the universe is TODAY's Nifty 200. Stocks that were dropped, delisted or merged are missing, and stocks that entered the index later (often after strong runs) are present in history. Every return, excess and IC here is an upper bound on what a point-in-time universe would show.",
+    "Read every headline next to survivorship_diagnostics: signals that only pay because today's list is made of past winners (smallest traded value, most recent listing) and a rerun on the more liquid half of the candidates. A result that the survivor proxies match, or that vanishes in the liquid half, is not evidence of a tradable edge.",
+    "Price returns only: dividends are not in the data. The low-volatility and high-dividend names are understated relative to the benchmark; the excess of a high-yield top decile would be a little higher.",
+    "Demergers are not adjusted in the store (e.g. ADANIENT 2015-06-03, BAJAJHLDNG 2008); such a jump is a fake return in features and labels. data_notes lists every |daily log return| > 0.35 in validation.",
+    "Several costs.yaml rates are marked verify: true. Slippage is 0.03% per side for equity, which is thin for the smaller Nifty 200 names in 2016-2018; real impact on weekly turnover could be larger.",
+    "The industry map is today's classification and the universe is today's list: both are fixed, not point-in-time."
+  ],
+  "runtime_s": 1177.4
+}
