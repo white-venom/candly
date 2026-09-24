@@ -6,7 +6,13 @@ from fastapi.testclient import TestClient
 from candly.api.app import create_app
 from candly.core.log import RedactAuthQuery
 from candly.jobs import pipeline
-from candly.jobs.pipeline import daily_pipeline, intraday_pipeline, nightly_scorecards, register_pipeline_jobs
+from candly.jobs.pipeline import (
+    daily_pipeline,
+    intraday_forecast,
+    intraday_ingest,
+    nightly_scorecards,
+    register_pipeline_jobs,
+)
 
 
 def test_bad_query_param_type_returns_400():
@@ -47,7 +53,8 @@ def test_pipeline_jobs_replace_platform_ingest_jobs():
     scheduler.add_job(lambda: None, "interval", minutes=5, id="intraday_ingest")
     register_pipeline_jobs(scheduler)
     jobs = {job.id: job.func for job in scheduler.get_jobs()}
-    assert jobs["intraday_ingest"] is intraday_pipeline
+    assert jobs["intraday_ingest"] is intraday_ingest
+    assert jobs["intraday_forecast"] is intraday_forecast
     assert jobs["daily_ingest_nse_bse"] is daily_pipeline
     assert jobs["daily_ingest_mcx"] is daily_pipeline
     assert jobs["nightly_scorecards"] is nightly_scorecards
@@ -69,18 +76,24 @@ def _record_calls(monkeypatch, exchanges):
     return calls
 
 
-def test_intraday_pipeline_ingests_before_forecasting_then_grades(monkeypatch):
+def test_intraday_ingest_only_downloads(monkeypatch):
     calls = _record_calls(monkeypatch, ("MCX",))
-    intraday_pipeline()
-    assert [c[0] for c in calls] == ["ingest", "forecast"] * 3 + ["explain", "grade", "alerts"]
+    intraday_ingest()
+    assert calls == [("ingest", tf, ("MCX",)) for tf in ("5m", "15m", "1h")]
+
+
+def test_intraday_forecast_forecasts_then_grades_and_alerts(monkeypatch):
+    calls = _record_calls(monkeypatch, ("MCX",))
+    intraday_forecast()
+    assert [c[0] for c in calls] == ["forecast"] * 3 + ["explain", "grade", "alerts"]
     assert ("explain", "1h") in calls  # only 1D/1h forecasts get explanations
-    assert all(c[2] == ("MCX",) for c in calls if c[0] == "ingest")
     assert all(c[2] == 4 for c in calls if c[0] == "forecast")  # the four MCX instruments
 
 
-def test_intraday_pipeline_does_nothing_when_markets_are_closed(monkeypatch):
+def test_intraday_jobs_do_nothing_when_markets_are_closed(monkeypatch):
     calls = _record_calls(monkeypatch, ())
-    intraday_pipeline()
+    intraday_ingest()
+    intraday_forecast()
     assert calls == []
 
 
