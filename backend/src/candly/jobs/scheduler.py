@@ -16,7 +16,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 from candly.core.calendar import IST, get_calendar
 from candly.core.instruments import EXCHANGES, load_watchlist
 from candly.core.settings import get_settings
-from candly.data import clock
+from candly.data import clock, options
 from candly.data.expiries import refresh_expiries as _refresh_expiries
 from candly.data.ingest import ingest
 from candly.data.sources import SourceError, fyers
@@ -31,6 +31,7 @@ _scheduler: BackgroundScheduler | None = None
 _lock = threading.Lock()
 _blocked_by: str | None = None  # exception class that is currently stopping every ingest run
 _blocked_lock = threading.Lock()
+_options_blocked: str | None = None  # why the last option snapshot run was skipped (warned once)
 
 
 def _note_blocked(tf: str, exc: SourceError) -> None:
@@ -112,6 +113,34 @@ def refresh_expiries() -> dict | None:
         return None
 
 
+def option_snapshots(closing: bool = False) -> dict[str, int]:
+    """Option-chain snapshots of the underlyings whose exchange is open now; with closing=True (the 15:31 IST
+    run), of those whose exchange traded today. Never raises: a failure is logged and the run skipped."""
+    now = clock.utc_now()
+    cal = get_calendar()
+    day = cal.local_date(now)
+    names = [
+        name
+        for name, (exchange, _) in options.UNDERLYINGS.items()
+        if (cal.is_trading_day(exchange, day) if closing else cal.is_open(exchange, now))
+    ]
+    if not names:
+        return {}
+    global _options_blocked
+    try:
+        counts = options.take_snapshots(names)
+    except SourceError as exc:
+        repeat = _options_blocked == str(exc)
+        _options_blocked = str(exc)
+        log.log(logging.DEBUG if repeat else logging.WARNING, "option snapshots skipped: %s", exc)
+        return {}
+    except Exception:
+        log.exception("option snapshots failed")
+        return {}
+    _options_blocked = None
+    return counts
+
+
 def refresh_fyers_session() -> None:
     """Swap an expired access token for a new one via the refresh token, before the market opens."""
     if not get_settings().has_fyers:
@@ -163,6 +192,19 @@ def get_scheduler() -> BackgroundScheduler:
                 CronTrigger(day_of_week="mon-fri", hour=8, minute=40, timezone=IST),
                 args=[EXCHANGES],
                 id="daily_ingest_catchup",
+            )
+            # Second 50 keeps these clear of the ingest (:30) and forecast (:30 a minute later) runs. Every
+            # day: the calendar decides, so special weekend sessions are logged too.
+            scheduler.add_job(
+                option_snapshots,
+                CronTrigger(hour="9-15", minute="*/5", second=50, timezone=IST),
+                id="option_snapshots",
+            )
+            scheduler.add_job(
+                option_snapshots,
+                CronTrigger(hour=15, minute=31, second=50, timezone=IST),
+                kwargs={"closing": True},
+                id="option_snapshots_close",
             )
             scheduler.add_job(
                 refresh_fyers_session,

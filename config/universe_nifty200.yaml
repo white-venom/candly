@@ -1,0 +1,219 @@
+# Nifty 200 constituents: a research universe only. These are NOT on the dashboard watchlist.
+# Source: https://www.niftyindices.com/IndexConstituent/ind_nifty200list.csv
+#   downloaded 2026-09-24 (the file was last modified 2026-09-23). 200 stocks, all series EQ.
+# SURVIVORSHIP BIAS: these are TODAY's constituents. Stocks that were dropped from the index, delisted
+#   or merged before today are missing, so any backtest on this list overstates past results. Treat its
+#   numbers as an upper bound, and say so wherever they are reported.
+# Candles go to the same store as the watchlist (data/candles/NSE/1D/<SYMBOL>.parquet).
+# Ingest: python -m candly.data.ingest --tf 1D --universe nifty200 [--since 1999-01-01]
+# Fields: id and symbol (NSE), name, industry and isin from the CSV, sources.fyers = NSE:<SYMBOL>-EQ.
+
+defaults:
+  timeframes: [1D]
+
+instruments:
+  # --- benchmarks
+  - {id: "NSE:NIFTY200", symbol: NIFTY200, name: "Nifty 200", kind: index, sources: {fyers: "NSE:NIFTY200-INDEX"}}
+  - {id: "NSE:NIFTY50", symbol: NIFTY50, name: "Nifty 50", kind: index, sources: {fyers: "NSE:NIFTY50-INDEX"}}
+
+  # --- constituents
+  - {id: "NSE:360ONE", symbol: "360ONE", name: "360 ONE WAM Ltd.", industry: "Financial Services", isin: "INE466L01038", kind: equity, sources: {fyers: "NSE:360ONE-EQ"}}
+  - {id: "NSE:ABB", symbol: "ABB", name: "ABB India Ltd.", industry: "Capital Goods", isin: "INE117A01022", kind: equity, sources: {fyers: "NSE:ABB-EQ"}}
+  - {id: "NSE:ABCAPITAL", symbol: "ABCAPITAL", name: "Aditya Birla Capital Ltd.", industry: "Financial Services", isin: "INE674K01013", kind: equity, sources: {fyers: "NSE:ABCAPITAL-EQ"}}
+  - {id: "NSE:ADANIENSOL", symbol: "ADANIENSOL", name: "Adani Energy Solutions Ltd.", industry: "Power", isin: "INE931S01010", kind: equity, sources: {fyers: "NSE:ADANIENSOL-EQ"}}
+  - {id: "NSE:ADANIENT", symbol: "ADANIENT", name: "Adani Enterprises Ltd.", industry: "Metals & Mining", isin: "INE423A01024", kind: equity, sources: {fyers: "NSE:ADANIENT-EQ"}}
+  - {id: "NSE:ADANIGREEN", symbol: "ADANIGREEN", name: "Adani Green Energy Ltd.", industry: "Power", isin: "INE364U01010", kind: equity, sources: {fyers: "NSE:ADANIGREEN-EQ"}}
+  - {id: "NSE:ADANIPORTS", symbol: "ADANIPORTS", name: "Adani Ports and Special Economic Zone Ltd.", industry: "Services", isin: "INE742F01042", kind: equity, sources: {fyers: "NSE:ADANIPORTS-EQ"}}
+  - {id: "NSE:ADANIPOWER", symbol: "ADANIPOWER", name: "Adani Power Ltd.", industry: "Power", isin: "INE814H01029", kind: equity, sources: {fyers: "NSE:ADANIPOWER-EQ"}}
+  - {id: "NSE:ALKEM", symbol: "ALKEM", name: "Alkem Laboratories Ltd.", industry: "Healthcare", isin: "INE540L01014", kind: equity, sources: {fyers: "NSE:ALKEM-EQ"}}
+  - {id: "NSE:AMBUJACEM", symbol: "AMBUJACEM", name: "Ambuja Cements Ltd.", industry: "Construction Materials", isin: "INE079A01024", kind: equity, sources: {fyers: "NSE:AMBUJACEM-EQ"}}
+  - {id: "NSE:APLAPOLLO", symbol: "APLAPOLLO", name: "APL Apollo Tubes Ltd.", industry: "Capital Goods", isin: "INE702C01027", kind: equity, sources: {fyers: "NSE:APLAPOLLO-EQ"}}
+  - {id: "NSE:APOLLOHOSP", symbol: "APOLLOHOSP", name: "Apollo Hospitals Enterprise Ltd.", industry: "Healthcare", isin: "INE437A01024", kind: equity, sources: {fyers: "NSE:APOLLOHOSP-EQ"}}
+  - {id: "NSE:ASHOKLEY", symbol: "ASHOKLEY", name: "Ashok Leyland Ltd.", industry: "Capital Goods", isin: "INE208A01029", kind: equity, sources: {fyers: "NSE:ASHOKLEY-EQ"}}
+  - {id: "NSE:ASIANPAINT", symbol: "ASIANPAINT", name: "Asian Paints Ltd.", industry: "Consumer Durables", isin: "INE021A01026", kind: equity, sources: {fyers: "NSE:ASIANPAINT-EQ"}}
+  - {id: "NSE:ASTRAL", symbol: "ASTRAL", name: "Astral Ltd.", industry: "Capital Goods", isin: "INE006I01046", kind: equity, sources: {fyers: "NSE:ASTRAL-EQ"}}
+  - {id: "NSE:ATGL", symbol: "ATGL", name: "Adani Total Gas Ltd.", industry: "Oil Gas & Consumable Fuels", isin: "INE399L01023", kind: equity, sources: {fyers: "NSE:ATGL-EQ"}}
+  - {id: "NSE:AUBANK", symbol: "AUBANK", name: "AU Small Finance Bank Ltd.", industry: "Financial Services", isin: "INE949L01017", kind: equity, sources: {fyers: "NSE:AUBANK-EQ"}}
+  - {id: "NSE:AUROPHARMA", symbol: "AUROPHARMA", name: "Aurobindo Pharma Ltd.", industry: "Healthcare", isin: "INE406A01037", kind: equity, sources: {fyers: "NSE:AUROPHARMA-EQ"}}
+  - {id: "NSE:AXISBANK", symbol: "AXISBANK", name: "Axis Bank Ltd.", industry: "Financial Services", isin: "INE238A01034", kind: equity, sources: {fyers: "NSE:AXISBANK-EQ"}}
+  - {id: "NSE:BAJAJ-AUTO", symbol: "BAJAJ-AUTO", name: "Bajaj Auto Ltd.", industry: "Automobile and Auto Components", isin: "INE917I01010", kind: equity, sources: {fyers: "NSE:BAJAJ-AUTO-EQ"}}
+  - {id: "NSE:BAJAJFINSV", symbol: "BAJAJFINSV", name: "Bajaj Finserv Ltd.", industry: "Financial Services", isin: "INE918I01026", kind: equity, sources: {fyers: "NSE:BAJAJFINSV-EQ"}}
+  - {id: "NSE:BAJAJHLDNG", symbol: "BAJAJHLDNG", name: "Bajaj Holdings & Investment Ltd.", industry: "Financial Services", isin: "INE118A01012", kind: equity, sources: {fyers: "NSE:BAJAJHLDNG-EQ"}}
+  - {id: "NSE:BAJFINANCE", symbol: "BAJFINANCE", name: "Bajaj Finance Ltd.", industry: "Financial Services", isin: "INE296A01032", kind: equity, sources: {fyers: "NSE:BAJFINANCE-EQ"}}
+  - {id: "NSE:BANKBARODA", symbol: "BANKBARODA", name: "Bank of Baroda", industry: "Financial Services", isin: "INE028A01039", kind: equity, sources: {fyers: "NSE:BANKBARODA-EQ"}}
+  - {id: "NSE:BANKINDIA", symbol: "BANKINDIA", name: "Bank of India", industry: "Financial Services", isin: "INE084A01016", kind: equity, sources: {fyers: "NSE:BANKINDIA-EQ"}}
+  - {id: "NSE:BDL", symbol: "BDL", name: "Bharat Dynamics Ltd.", industry: "Capital Goods", isin: "INE171Z01026", kind: equity, sources: {fyers: "NSE:BDL-EQ"}}
+  - {id: "NSE:BEL", symbol: "BEL", name: "Bharat Electronics Ltd.", industry: "Capital Goods", isin: "INE263A01024", kind: equity, sources: {fyers: "NSE:BEL-EQ"}}
+  - {id: "NSE:BHARATFORG", symbol: "BHARATFORG", name: "Bharat Forge Ltd.", industry: "Automobile and Auto Components", isin: "INE465A01025", kind: equity, sources: {fyers: "NSE:BHARATFORG-EQ"}}
+  - {id: "NSE:BHARTIARTL", symbol: "BHARTIARTL", name: "Bharti Airtel Ltd.", industry: "Telecommunication", isin: "INE397D01024", kind: equity, sources: {fyers: "NSE:BHARTIARTL-EQ"}}
+  - {id: "NSE:BHEL", symbol: "BHEL", name: "Bharat Heavy Electricals Ltd.", industry: "Capital Goods", isin: "INE257A01026", kind: equity, sources: {fyers: "NSE:BHEL-EQ"}}
+  - {id: "NSE:BIOCON", symbol: "BIOCON", name: "Biocon Ltd.", industry: "Healthcare", isin: "INE376G01013", kind: equity, sources: {fyers: "NSE:BIOCON-EQ"}}
+  - {id: "NSE:BLUESTARCO", symbol: "BLUESTARCO", name: "Blue Star Ltd.", industry: "Consumer Durables", isin: "INE472A01039", kind: equity, sources: {fyers: "NSE:BLUESTARCO-EQ"}}
+  - {id: "NSE:BOSCHLTD", symbol: "BOSCHLTD", name: "Bosch Ltd.", industry: "Automobile and Auto Components", isin: "INE323A01026", kind: equity, sources: {fyers: "NSE:BOSCHLTD-EQ"}}
+  - {id: "NSE:BPCL", symbol: "BPCL", name: "Bharat Petroleum Corporation Ltd.", industry: "Oil Gas & Consumable Fuels", isin: "INE029A01011", kind: equity, sources: {fyers: "NSE:BPCL-EQ"}}
+  - {id: "NSE:BRITANNIA", symbol: "BRITANNIA", name: "Britannia Industries Ltd.", industry: "Fast Moving Consumer Goods", isin: "INE216A01030", kind: equity, sources: {fyers: "NSE:BRITANNIA-EQ"}}
+  - {id: "NSE:BSE", symbol: "BSE", name: "BSE Ltd.", industry: "Financial Services", isin: "INE118H01025", kind: equity, sources: {fyers: "NSE:BSE-EQ"}}
+  - {id: "NSE:CANBK", symbol: "CANBK", name: "Canara Bank", industry: "Financial Services", isin: "INE476A01022", kind: equity, sources: {fyers: "NSE:CANBK-EQ"}}
+  - {id: "NSE:CGPOWER", symbol: "CGPOWER", name: "CG Power and Industrial Solutions Ltd.", industry: "Capital Goods", isin: "INE067A01029", kind: equity, sources: {fyers: "NSE:CGPOWER-EQ"}}
+  - {id: "NSE:CHOLAFIN", symbol: "CHOLAFIN", name: "Cholamandalam Investment and Finance Company Ltd.", industry: "Financial Services", isin: "INE121A01024", kind: equity, sources: {fyers: "NSE:CHOLAFIN-EQ"}}
+  - {id: "NSE:CIPLA", symbol: "CIPLA", name: "Cipla Ltd.", industry: "Healthcare", isin: "INE059A01026", kind: equity, sources: {fyers: "NSE:CIPLA-EQ"}}
+  - {id: "NSE:COALINDIA", symbol: "COALINDIA", name: "Coal India Ltd.", industry: "Oil Gas & Consumable Fuels", isin: "INE522F01014", kind: equity, sources: {fyers: "NSE:COALINDIA-EQ"}}
+  - {id: "NSE:COCHINSHIP", symbol: "COCHINSHIP", name: "Cochin Shipyard Ltd.", industry: "Capital Goods", isin: "INE704P01025", kind: equity, sources: {fyers: "NSE:COCHINSHIP-EQ"}}
+  - {id: "NSE:COFORGE", symbol: "COFORGE", name: "Coforge Ltd.", industry: "Information Technology", isin: "INE591G01025", kind: equity, sources: {fyers: "NSE:COFORGE-EQ"}}
+  - {id: "NSE:COLPAL", symbol: "COLPAL", name: "Colgate Palmolive (India) Ltd.", industry: "Fast Moving Consumer Goods", isin: "INE259A01022", kind: equity, sources: {fyers: "NSE:COLPAL-EQ"}}
+  - {id: "NSE:CONCOR", symbol: "CONCOR", name: "Container Corporation of India Ltd.", industry: "Services", isin: "INE111A01025", kind: equity, sources: {fyers: "NSE:CONCOR-EQ"}}
+  - {id: "NSE:COROMANDEL", symbol: "COROMANDEL", name: "Coromandel International Ltd.", industry: "Chemicals", isin: "INE169A01031", kind: equity, sources: {fyers: "NSE:COROMANDEL-EQ"}}
+  - {id: "NSE:CUMMINSIND", symbol: "CUMMINSIND", name: "Cummins India Ltd.", industry: "Capital Goods", isin: "INE298A01020", kind: equity, sources: {fyers: "NSE:CUMMINSIND-EQ"}}
+  - {id: "NSE:DABUR", symbol: "DABUR", name: "Dabur India Ltd.", industry: "Fast Moving Consumer Goods", isin: "INE016A01026", kind: equity, sources: {fyers: "NSE:DABUR-EQ"}}
+  - {id: "NSE:DIVISLAB", symbol: "DIVISLAB", name: "Divi's Laboratories Ltd.", industry: "Healthcare", isin: "INE361B01024", kind: equity, sources: {fyers: "NSE:DIVISLAB-EQ"}}
+  - {id: "NSE:DIXON", symbol: "DIXON", name: "Dixon Technologies (India) Ltd.", industry: "Consumer Durables", isin: "INE935N01020", kind: equity, sources: {fyers: "NSE:DIXON-EQ"}}
+  - {id: "NSE:DLF", symbol: "DLF", name: "DLF Ltd.", industry: "Realty", isin: "INE271C01023", kind: equity, sources: {fyers: "NSE:DLF-EQ"}}
+  - {id: "NSE:DMART", symbol: "DMART", name: "Avenue Supermarts Ltd.", industry: "Consumer Services", isin: "INE192R01011", kind: equity, sources: {fyers: "NSE:DMART-EQ"}}
+  - {id: "NSE:DRREDDY", symbol: "DRREDDY", name: "Dr. Reddy's Laboratories Ltd.", industry: "Healthcare", isin: "INE089A01031", kind: equity, sources: {fyers: "NSE:DRREDDY-EQ"}}
+  - {id: "NSE:EICHERMOT", symbol: "EICHERMOT", name: "Eicher Motors Ltd.", industry: "Automobile and Auto Components", isin: "INE066A01021", kind: equity, sources: {fyers: "NSE:EICHERMOT-EQ"}}
+  - {id: "NSE:ENRIN", symbol: "ENRIN", name: "Siemens Energy India Ltd.", industry: "Capital Goods", isin: "INE1NPP01017", kind: equity, sources: {fyers: "NSE:ENRIN-EQ"}}
+  - {id: "NSE:ETERNAL", symbol: "ETERNAL", name: "Eternal Ltd.", industry: "Consumer Services", isin: "INE758T01015", kind: equity, sources: {fyers: "NSE:ETERNAL-EQ"}}
+  - {id: "NSE:EXIDEIND", symbol: "EXIDEIND", name: "Exide Industries Ltd.", industry: "Automobile and Auto Components", isin: "INE302A01020", kind: equity, sources: {fyers: "NSE:EXIDEIND-EQ"}}
+  - {id: "NSE:FEDERALBNK", symbol: "FEDERALBNK", name: "Federal Bank Ltd.", industry: "Financial Services", isin: "INE171A01029", kind: equity, sources: {fyers: "NSE:FEDERALBNK-EQ"}}
+  - {id: "NSE:FORTIS", symbol: "FORTIS", name: "Fortis Healthcare Ltd.", industry: "Healthcare", isin: "INE061F01013", kind: equity, sources: {fyers: "NSE:FORTIS-EQ"}}
+  - {id: "NSE:GAIL", symbol: "GAIL", name: "GAIL (India) Ltd.", industry: "Oil Gas & Consumable Fuels", isin: "INE129A01019", kind: equity, sources: {fyers: "NSE:GAIL-EQ"}}
+  - {id: "NSE:GLENMARK", symbol: "GLENMARK", name: "Glenmark Pharmaceuticals Ltd.", industry: "Healthcare", isin: "INE935A01035", kind: equity, sources: {fyers: "NSE:GLENMARK-EQ"}}
+  - {id: "NSE:GMRAIRPORT", symbol: "GMRAIRPORT", name: "GMR Airports Ltd.", industry: "Services", isin: "INE776C01039", kind: equity, sources: {fyers: "NSE:GMRAIRPORT-EQ"}}
+  - {id: "NSE:GODFRYPHLP", symbol: "GODFRYPHLP", name: "Godfrey Phillips India Ltd.", industry: "Fast Moving Consumer Goods", isin: "INE260B01028", kind: equity, sources: {fyers: "NSE:GODFRYPHLP-EQ"}}
+  - {id: "NSE:GODREJCP", symbol: "GODREJCP", name: "Godrej Consumer Products Ltd.", industry: "Fast Moving Consumer Goods", isin: "INE102D01028", kind: equity, sources: {fyers: "NSE:GODREJCP-EQ"}}
+  - {id: "NSE:GODREJPROP", symbol: "GODREJPROP", name: "Godrej Properties Ltd.", industry: "Realty", isin: "INE484J01027", kind: equity, sources: {fyers: "NSE:GODREJPROP-EQ"}}
+  - {id: "NSE:GRASIM", symbol: "GRASIM", name: "Grasim Industries Ltd.", industry: "Construction Materials", isin: "INE047A01021", kind: equity, sources: {fyers: "NSE:GRASIM-EQ"}}
+  - {id: "NSE:GROWW", symbol: "GROWW", name: "Billionbrains Garage Ventures Ltd.", industry: "Financial Services", isin: "INE0HOQ01053", kind: equity, sources: {fyers: "NSE:GROWW-EQ"}}
+  - {id: "NSE:GVT&D", symbol: "GVT&D", name: "GE Vernova T&D India Ltd.", industry: "Capital Goods", isin: "INE200A01026", kind: equity, sources: {fyers: "NSE:GVT&D-EQ"}}
+  - {id: "NSE:HAL", symbol: "HAL", name: "Hindustan Aeronautics Ltd.", industry: "Capital Goods", isin: "INE066F01020", kind: equity, sources: {fyers: "NSE:HAL-EQ"}}
+  - {id: "NSE:HAVELLS", symbol: "HAVELLS", name: "Havells India Ltd.", industry: "Consumer Durables", isin: "INE176B01034", kind: equity, sources: {fyers: "NSE:HAVELLS-EQ"}}
+  - {id: "NSE:HCLTECH", symbol: "HCLTECH", name: "HCL Technologies Ltd.", industry: "Information Technology", isin: "INE860A01027", kind: equity, sources: {fyers: "NSE:HCLTECH-EQ"}}
+  - {id: "NSE:HDFCAMC", symbol: "HDFCAMC", name: "HDFC Asset Management Company Ltd.", industry: "Financial Services", isin: "INE127D01025", kind: equity, sources: {fyers: "NSE:HDFCAMC-EQ"}}
+  - {id: "NSE:HDFCBANK", symbol: "HDFCBANK", name: "HDFC Bank Ltd.", industry: "Financial Services", isin: "INE040A01034", kind: equity, sources: {fyers: "NSE:HDFCBANK-EQ"}}
+  - {id: "NSE:HDFCLIFE", symbol: "HDFCLIFE", name: "HDFC Life Insurance Company Ltd.", industry: "Financial Services", isin: "INE795G01014", kind: equity, sources: {fyers: "NSE:HDFCLIFE-EQ"}}
+  - {id: "NSE:HEROMOTOCO", symbol: "HEROMOTOCO", name: "Hero MotoCorp Ltd.", industry: "Automobile and Auto Components", isin: "INE158A01026", kind: equity, sources: {fyers: "NSE:HEROMOTOCO-EQ"}}
+  - {id: "NSE:HINDALCO", symbol: "HINDALCO", name: "Hindalco Industries Ltd.", industry: "Metals & Mining", isin: "INE038A01020", kind: equity, sources: {fyers: "NSE:HINDALCO-EQ"}}
+  - {id: "NSE:HINDPETRO", symbol: "HINDPETRO", name: "Hindustan Petroleum Corporation Ltd.", industry: "Oil Gas & Consumable Fuels", isin: "INE094A01015", kind: equity, sources: {fyers: "NSE:HINDPETRO-EQ"}}
+  - {id: "NSE:HINDUNILVR", symbol: "HINDUNILVR", name: "Hindustan Unilever Ltd.", industry: "Fast Moving Consumer Goods", isin: "INE030A01027", kind: equity, sources: {fyers: "NSE:HINDUNILVR-EQ"}}
+  - {id: "NSE:HINDZINC", symbol: "HINDZINC", name: "Hindustan Zinc Ltd.", industry: "Metals & Mining", isin: "INE267A01025", kind: equity, sources: {fyers: "NSE:HINDZINC-EQ"}}
+  - {id: "NSE:HUDCO", symbol: "HUDCO", name: "Housing & Urban Development Corporation Ltd.", industry: "Financial Services", isin: "INE031A01017", kind: equity, sources: {fyers: "NSE:HUDCO-EQ"}}
+  - {id: "NSE:HYUNDAI", symbol: "HYUNDAI", name: "Hyundai Motor India Ltd.", industry: "Automobile and Auto Components", isin: "INE0V6F01027", kind: equity, sources: {fyers: "NSE:HYUNDAI-EQ"}}
+  - {id: "NSE:ICICIAMC", symbol: "ICICIAMC", name: "ICICI Prudential Asset Management Company Ltd.", industry: "Financial Services", isin: "INE346A01027", kind: equity, sources: {fyers: "NSE:ICICIAMC-EQ"}}
+  - {id: "NSE:ICICIBANK", symbol: "ICICIBANK", name: "ICICI Bank Ltd.", industry: "Financial Services", isin: "INE090A01021", kind: equity, sources: {fyers: "NSE:ICICIBANK-EQ"}}
+  - {id: "NSE:ICICIGI", symbol: "ICICIGI", name: "ICICI Lombard General Insurance Company Ltd.", industry: "Financial Services", isin: "INE765G01017", kind: equity, sources: {fyers: "NSE:ICICIGI-EQ"}}
+  - {id: "NSE:IDEA", symbol: "IDEA", name: "Vodafone Idea Ltd.", industry: "Telecommunication", isin: "INE669E01016", kind: equity, sources: {fyers: "NSE:IDEA-EQ"}}
+  - {id: "NSE:IDFCFIRSTB", symbol: "IDFCFIRSTB", name: "IDFC First Bank Ltd.", industry: "Financial Services", isin: "INE092T01019", kind: equity, sources: {fyers: "NSE:IDFCFIRSTB-EQ"}}
+  - {id: "NSE:INDHOTEL", symbol: "INDHOTEL", name: "Indian Hotels Co. Ltd.", industry: "Consumer Services", isin: "INE053A01029", kind: equity, sources: {fyers: "NSE:INDHOTEL-EQ"}}
+  - {id: "NSE:INDIANB", symbol: "INDIANB", name: "Indian Bank", industry: "Financial Services", isin: "INE562A01011", kind: equity, sources: {fyers: "NSE:INDIANB-EQ"}}
+  - {id: "NSE:INDIGO", symbol: "INDIGO", name: "InterGlobe Aviation Ltd.", industry: "Services", isin: "INE646L01027", kind: equity, sources: {fyers: "NSE:INDIGO-EQ"}}
+  - {id: "NSE:INDUSINDBK", symbol: "INDUSINDBK", name: "IndusInd Bank Ltd.", industry: "Financial Services", isin: "INE095A01012", kind: equity, sources: {fyers: "NSE:INDUSINDBK-EQ"}}
+  - {id: "NSE:INDUSTOWER", symbol: "INDUSTOWER", name: "Indus Towers Ltd.", industry: "Telecommunication", isin: "INE121J01017", kind: equity, sources: {fyers: "NSE:INDUSTOWER-EQ"}}
+  - {id: "NSE:INFY", symbol: "INFY", name: "Infosys Ltd.", industry: "Information Technology", isin: "INE009A01021", kind: equity, sources: {fyers: "NSE:INFY-EQ"}}
+  - {id: "NSE:IOC", symbol: "IOC", name: "Indian Oil Corporation Ltd.", industry: "Oil Gas & Consumable Fuels", isin: "INE242A01010", kind: equity, sources: {fyers: "NSE:IOC-EQ"}}
+  - {id: "NSE:IRCTC", symbol: "IRCTC", name: "Indian Railway Catering And Tourism Corporation Ltd.", industry: "Consumer Services", isin: "INE335Y01020", kind: equity, sources: {fyers: "NSE:IRCTC-EQ"}}
+  - {id: "NSE:IREDA", symbol: "IREDA", name: "Indian Renewable Energy Development Agency Ltd.", industry: "Financial Services", isin: "INE202E01016", kind: equity, sources: {fyers: "NSE:IREDA-EQ"}}
+  - {id: "NSE:IRFC", symbol: "IRFC", name: "Indian Railway Finance Corporation Ltd.", industry: "Financial Services", isin: "INE053F01010", kind: equity, sources: {fyers: "NSE:IRFC-EQ"}}
+  - {id: "NSE:ITC", symbol: "ITC", name: "ITC Ltd.", industry: "Fast Moving Consumer Goods", isin: "INE154A01025", kind: equity, sources: {fyers: "NSE:ITC-EQ"}}
+  - {id: "NSE:JINDALSTEL", symbol: "JINDALSTEL", name: "Jindal Steel Ltd.", industry: "Metals & Mining", isin: "INE749A01030", kind: equity, sources: {fyers: "NSE:JINDALSTEL-EQ"}}
+  - {id: "NSE:JIOFIN", symbol: "JIOFIN", name: "Jio Financial Services Ltd.", industry: "Financial Services", isin: "INE758E01017", kind: equity, sources: {fyers: "NSE:JIOFIN-EQ"}}
+  - {id: "NSE:JSWENERGY", symbol: "JSWENERGY", name: "JSW Energy Ltd.", industry: "Power", isin: "INE121E01018", kind: equity, sources: {fyers: "NSE:JSWENERGY-EQ"}}
+  - {id: "NSE:JSWSTEEL", symbol: "JSWSTEEL", name: "JSW Steel Ltd.", industry: "Metals & Mining", isin: "INE019A01038", kind: equity, sources: {fyers: "NSE:JSWSTEEL-EQ"}}
+  - {id: "NSE:JUBLFOOD", symbol: "JUBLFOOD", name: "Jubilant Foodworks Ltd.", industry: "Consumer Services", isin: "INE797F01020", kind: equity, sources: {fyers: "NSE:JUBLFOOD-EQ"}}
+  - {id: "NSE:KALYANKJIL", symbol: "KALYANKJIL", name: "Kalyan Jewellers India Ltd.", industry: "Consumer Durables", isin: "INE303R01014", kind: equity, sources: {fyers: "NSE:KALYANKJIL-EQ"}}
+  - {id: "NSE:KEI", symbol: "KEI", name: "KEI Industries Ltd.", industry: "Capital Goods", isin: "INE878B01027", kind: equity, sources: {fyers: "NSE:KEI-EQ"}}
+  - {id: "NSE:KOTAKBANK", symbol: "KOTAKBANK", name: "Kotak Mahindra Bank Ltd.", industry: "Financial Services", isin: "INE237A01036", kind: equity, sources: {fyers: "NSE:KOTAKBANK-EQ"}}
+  - {id: "NSE:KPITTECH", symbol: "KPITTECH", name: "KPIT Technologies Ltd.", industry: "Information Technology", isin: "INE04I401011", kind: equity, sources: {fyers: "NSE:KPITTECH-EQ"}}
+  - {id: "NSE:LAURUSLABS", symbol: "LAURUSLABS", name: "Laurus Labs Ltd.", industry: "Healthcare", isin: "INE947Q01028", kind: equity, sources: {fyers: "NSE:LAURUSLABS-EQ"}}
+  - {id: "NSE:LENSKART", symbol: "LENSKART", name: "Lenskart Solutions Ltd.", industry: "Consumer Services", isin: "INE956O01016", kind: equity, sources: {fyers: "NSE:LENSKART-EQ"}}
+  - {id: "NSE:LGEINDIA", symbol: "LGEINDIA", name: "LG Electronics India Ltd.", industry: "Consumer Durables", isin: "INE324D01010", kind: equity, sources: {fyers: "NSE:LGEINDIA-EQ"}}
+  - {id: "NSE:LICHSGFIN", symbol: "LICHSGFIN", name: "LIC Housing Finance Ltd.", industry: "Financial Services", isin: "INE115A01026", kind: equity, sources: {fyers: "NSE:LICHSGFIN-EQ"}}
+  - {id: "NSE:LODHA", symbol: "LODHA", name: "Lodha Developers Ltd.", industry: "Realty", isin: "INE670K01029", kind: equity, sources: {fyers: "NSE:LODHA-EQ"}}
+  - {id: "NSE:LT", symbol: "LT", name: "Larsen & Toubro Ltd.", industry: "Construction", isin: "INE018A01030", kind: equity, sources: {fyers: "NSE:LT-EQ"}}
+  - {id: "NSE:LTF", symbol: "LTF", name: "L&T Finance Ltd.", industry: "Financial Services", isin: "INE498L01015", kind: equity, sources: {fyers: "NSE:LTF-EQ"}}
+  - {id: "NSE:LTM", symbol: "LTM", name: "LTM Ltd.", industry: "Information Technology", isin: "INE214T01019", kind: equity, sources: {fyers: "NSE:LTM-EQ"}}
+  - {id: "NSE:LUPIN", symbol: "LUPIN", name: "Lupin Ltd.", industry: "Healthcare", isin: "INE326A01037", kind: equity, sources: {fyers: "NSE:LUPIN-EQ"}}
+  - {id: "NSE:M&M", symbol: "M&M", name: "Mahindra & Mahindra Ltd.", industry: "Automobile and Auto Components", isin: "INE101A01026", kind: equity, sources: {fyers: "NSE:M&M-EQ"}}
+  - {id: "NSE:M&MFIN", symbol: "M&MFIN", name: "Mahindra & Mahindra Financial Services Ltd.", industry: "Financial Services", isin: "INE774D01024", kind: equity, sources: {fyers: "NSE:M&MFIN-EQ"}}
+  - {id: "NSE:MANKIND", symbol: "MANKIND", name: "Mankind Pharma Ltd.", industry: "Healthcare", isin: "INE634S01028", kind: equity, sources: {fyers: "NSE:MANKIND-EQ"}}
+  - {id: "NSE:MARICO", symbol: "MARICO", name: "Marico Ltd.", industry: "Fast Moving Consumer Goods", isin: "INE196A01026", kind: equity, sources: {fyers: "NSE:MARICO-EQ"}}
+  - {id: "NSE:MARUTI", symbol: "MARUTI", name: "Maruti Suzuki India Ltd.", industry: "Automobile and Auto Components", isin: "INE585B01010", kind: equity, sources: {fyers: "NSE:MARUTI-EQ"}}
+  - {id: "NSE:MAXHEALTH", symbol: "MAXHEALTH", name: "Max Healthcare Institute Ltd.", industry: "Healthcare", isin: "INE027H01010", kind: equity, sources: {fyers: "NSE:MAXHEALTH-EQ"}}
+  - {id: "NSE:MAZDOCK", symbol: "MAZDOCK", name: "Mazagoan Dock Shipbuilders Ltd.", industry: "Capital Goods", isin: "INE249Z01020", kind: equity, sources: {fyers: "NSE:MAZDOCK-EQ"}}
+  - {id: "NSE:MCX", symbol: "MCX", name: "Multi Commodity Exchange of India Ltd.", industry: "Financial Services", isin: "INE745G01043", kind: equity, sources: {fyers: "NSE:MCX-EQ"}}
+  - {id: "NSE:MFSL", symbol: "MFSL", name: "Max Financial Services Ltd.", industry: "Financial Services", isin: "INE180A01020", kind: equity, sources: {fyers: "NSE:MFSL-EQ"}}
+  - {id: "NSE:MOTHERSON", symbol: "MOTHERSON", name: "Samvardhana Motherson International Ltd.", industry: "Automobile and Auto Components", isin: "INE775A01035", kind: equity, sources: {fyers: "NSE:MOTHERSON-EQ"}}
+  - {id: "NSE:MOTILALOFS", symbol: "MOTILALOFS", name: "Motilal Oswal Financial Services Ltd.", industry: "Financial Services", isin: "INE338I01027", kind: equity, sources: {fyers: "NSE:MOTILALOFS-EQ"}}
+  - {id: "NSE:MPHASIS", symbol: "MPHASIS", name: "MphasiS Ltd.", industry: "Information Technology", isin: "INE356A01018", kind: equity, sources: {fyers: "NSE:MPHASIS-EQ"}}
+  - {id: "NSE:MRF", symbol: "MRF", name: "MRF Ltd.", industry: "Automobile and Auto Components", isin: "INE883A01011", kind: equity, sources: {fyers: "NSE:MRF-EQ"}}
+  - {id: "NSE:MUTHOOTFIN", symbol: "MUTHOOTFIN", name: "Muthoot Finance Ltd.", industry: "Financial Services", isin: "INE414G01012", kind: equity, sources: {fyers: "NSE:MUTHOOTFIN-EQ"}}
+  - {id: "NSE:NATIONALUM", symbol: "NATIONALUM", name: "National Aluminium Co. Ltd.", industry: "Metals & Mining", isin: "INE139A01034", kind: equity, sources: {fyers: "NSE:NATIONALUM-EQ"}}
+  - {id: "NSE:NAUKRI", symbol: "NAUKRI", name: "Info Edge (India) Ltd.", industry: "Consumer Services", isin: "INE663F01032", kind: equity, sources: {fyers: "NSE:NAUKRI-EQ"}}
+  - {id: "NSE:NESTLEIND", symbol: "NESTLEIND", name: "Nestle India Ltd.", industry: "Fast Moving Consumer Goods", isin: "INE239A01024", kind: equity, sources: {fyers: "NSE:NESTLEIND-EQ"}}
+  - {id: "NSE:NHPC", symbol: "NHPC", name: "NHPC Ltd.", industry: "Power", isin: "INE848E01016", kind: equity, sources: {fyers: "NSE:NHPC-EQ"}}
+  - {id: "NSE:NMDC", symbol: "NMDC", name: "NMDC Ltd.", industry: "Metals & Mining", isin: "INE584A01023", kind: equity, sources: {fyers: "NSE:NMDC-EQ"}}
+  - {id: "NSE:NTPC", symbol: "NTPC", name: "NTPC Ltd.", industry: "Power", isin: "INE733E01010", kind: equity, sources: {fyers: "NSE:NTPC-EQ"}}
+  - {id: "NSE:NYKAA", symbol: "NYKAA", name: "FSN E-Commerce Ventures Ltd.", industry: "Consumer Services", isin: "INE388Y01029", kind: equity, sources: {fyers: "NSE:NYKAA-EQ"}}
+  - {id: "NSE:OBEROIRLTY", symbol: "OBEROIRLTY", name: "Oberoi Realty Ltd.", industry: "Realty", isin: "INE093I01010", kind: equity, sources: {fyers: "NSE:OBEROIRLTY-EQ"}}
+  - {id: "NSE:OFSS", symbol: "OFSS", name: "Oracle Financial Services Software Ltd.", industry: "Information Technology", isin: "INE881D01027", kind: equity, sources: {fyers: "NSE:OFSS-EQ"}}
+  - {id: "NSE:OIL", symbol: "OIL", name: "Oil India Ltd.", industry: "Oil Gas & Consumable Fuels", isin: "INE274J01014", kind: equity, sources: {fyers: "NSE:OIL-EQ"}}
+  - {id: "NSE:ONGC", symbol: "ONGC", name: "Oil & Natural Gas Corporation Ltd.", industry: "Oil Gas & Consumable Fuels", isin: "INE213A01029", kind: equity, sources: {fyers: "NSE:ONGC-EQ"}}
+  - {id: "NSE:PAGEIND", symbol: "PAGEIND", name: "Page Industries Ltd.", industry: "Textiles", isin: "INE761H01022", kind: equity, sources: {fyers: "NSE:PAGEIND-EQ"}}
+  - {id: "NSE:PATANJALI", symbol: "PATANJALI", name: "Patanjali Foods Ltd.", industry: "Fast Moving Consumer Goods", isin: "INE619A01035", kind: equity, sources: {fyers: "NSE:PATANJALI-EQ"}}
+  - {id: "NSE:PAYTM", symbol: "PAYTM", name: "One 97 Communications Ltd.", industry: "Financial Services", isin: "INE982J01020", kind: equity, sources: {fyers: "NSE:PAYTM-EQ"}}
+  - {id: "NSE:PERSISTENT", symbol: "PERSISTENT", name: "Persistent Systems Ltd.", industry: "Information Technology", isin: "INE262H01021", kind: equity, sources: {fyers: "NSE:PERSISTENT-EQ"}}
+  - {id: "NSE:PFC", symbol: "PFC", name: "Power Finance Corporation Ltd.", industry: "Financial Services", isin: "INE134E01011", kind: equity, sources: {fyers: "NSE:PFC-EQ"}}
+  - {id: "NSE:PHOENIXLTD", symbol: "PHOENIXLTD", name: "Phoenix Mills Ltd.", industry: "Realty", isin: "INE211B01039", kind: equity, sources: {fyers: "NSE:PHOENIXLTD-EQ"}}
+  - {id: "NSE:PIDILITIND", symbol: "PIDILITIND", name: "Pidilite Industries Ltd.", industry: "Chemicals", isin: "INE318A01026", kind: equity, sources: {fyers: "NSE:PIDILITIND-EQ"}}
+  - {id: "NSE:PIIND", symbol: "PIIND", name: "PI Industries Ltd.", industry: "Chemicals", isin: "INE603J01030", kind: equity, sources: {fyers: "NSE:PIIND-EQ"}}
+  - {id: "NSE:PNB", symbol: "PNB", name: "Punjab National Bank", industry: "Financial Services", isin: "INE160A01022", kind: equity, sources: {fyers: "NSE:PNB-EQ"}}
+  - {id: "NSE:POLICYBZR", symbol: "POLICYBZR", name: "PB Fintech Ltd.", industry: "Financial Services", isin: "INE417T01026", kind: equity, sources: {fyers: "NSE:POLICYBZR-EQ"}}
+  - {id: "NSE:POLYCAB", symbol: "POLYCAB", name: "Polycab India Ltd.", industry: "Capital Goods", isin: "INE455K01017", kind: equity, sources: {fyers: "NSE:POLYCAB-EQ"}}
+  - {id: "NSE:POWERGRID", symbol: "POWERGRID", name: "Power Grid Corporation of India Ltd.", industry: "Power", isin: "INE752E01010", kind: equity, sources: {fyers: "NSE:POWERGRID-EQ"}}
+  - {id: "NSE:POWERINDIA", symbol: "POWERINDIA", name: "Hitachi Energy India Ltd.", industry: "Capital Goods", isin: "INE07Y701011", kind: equity, sources: {fyers: "NSE:POWERINDIA-EQ"}}
+  - {id: "NSE:PREMIERENE", symbol: "PREMIERENE", name: "Premier Energies Ltd.", industry: "Capital Goods", isin: "INE0BS701011", kind: equity, sources: {fyers: "NSE:PREMIERENE-EQ"}}
+  - {id: "NSE:PRESTIGE", symbol: "PRESTIGE", name: "Prestige Estates Projects Ltd.", industry: "Realty", isin: "INE811K01011", kind: equity, sources: {fyers: "NSE:PRESTIGE-EQ"}}
+  - {id: "NSE:RADICO", symbol: "RADICO", name: "Radico Khaitan Ltd", industry: "Fast Moving Consumer Goods", isin: "INE944F01028", kind: equity, sources: {fyers: "NSE:RADICO-EQ"}}
+  - {id: "NSE:RECLTD", symbol: "RECLTD", name: "REC Ltd.", industry: "Financial Services", isin: "INE020B01018", kind: equity, sources: {fyers: "NSE:RECLTD-EQ"}}
+  - {id: "NSE:RELIANCE", symbol: "RELIANCE", name: "Reliance Industries Ltd.", industry: "Oil Gas & Consumable Fuels", isin: "INE002A01018", kind: equity, sources: {fyers: "NSE:RELIANCE-EQ"}}
+  - {id: "NSE:RVNL", symbol: "RVNL", name: "Rail Vikas Nigam Ltd.", industry: "Construction", isin: "INE415G01027", kind: equity, sources: {fyers: "NSE:RVNL-EQ"}}
+  - {id: "NSE:SAIL", symbol: "SAIL", name: "Steel Authority of India Ltd.", industry: "Metals & Mining", isin: "INE114A01011", kind: equity, sources: {fyers: "NSE:SAIL-EQ"}}
+  - {id: "NSE:SBICARD", symbol: "SBICARD", name: "SBI Cards and Payment Services Ltd.", industry: "Financial Services", isin: "INE018E01016", kind: equity, sources: {fyers: "NSE:SBICARD-EQ"}}
+  - {id: "NSE:SBILIFE", symbol: "SBILIFE", name: "SBI Life Insurance Company Ltd.", industry: "Financial Services", isin: "INE123W01016", kind: equity, sources: {fyers: "NSE:SBILIFE-EQ"}}
+  - {id: "NSE:SBIN", symbol: "SBIN", name: "State Bank of India", industry: "Financial Services", isin: "INE062A01020", kind: equity, sources: {fyers: "NSE:SBIN-EQ"}}
+  - {id: "NSE:SHREECEM", symbol: "SHREECEM", name: "Shree Cement Ltd.", industry: "Construction Materials", isin: "INE070A01015", kind: equity, sources: {fyers: "NSE:SHREECEM-EQ"}}
+  - {id: "NSE:SHRIRAMFIN", symbol: "SHRIRAMFIN", name: "Shriram Finance Ltd.", industry: "Financial Services", isin: "INE721A01047", kind: equity, sources: {fyers: "NSE:SHRIRAMFIN-EQ"}}
+  - {id: "NSE:SIEMENS", symbol: "SIEMENS", name: "Siemens Ltd.", industry: "Capital Goods", isin: "INE003A01024", kind: equity, sources: {fyers: "NSE:SIEMENS-EQ"}}
+  - {id: "NSE:SOLARINDS", symbol: "SOLARINDS", name: "Solar Industries India Ltd.", industry: "Chemicals", isin: "INE343H01029", kind: equity, sources: {fyers: "NSE:SOLARINDS-EQ"}}
+  - {id: "NSE:SRF", symbol: "SRF", name: "SRF Ltd.", industry: "Chemicals", isin: "INE647A01010", kind: equity, sources: {fyers: "NSE:SRF-EQ"}}
+  - {id: "NSE:SUNPHARMA", symbol: "SUNPHARMA", name: "Sun Pharmaceutical Industries Ltd.", industry: "Healthcare", isin: "INE044A01036", kind: equity, sources: {fyers: "NSE:SUNPHARMA-EQ"}}
+  - {id: "NSE:SUPREMEIND", symbol: "SUPREMEIND", name: "Supreme Industries Ltd.", industry: "Capital Goods", isin: "INE195A01028", kind: equity, sources: {fyers: "NSE:SUPREMEIND-EQ"}}
+  - {id: "NSE:SUZLON", symbol: "SUZLON", name: "Suzlon Energy Ltd.", industry: "Capital Goods", isin: "INE040H01021", kind: equity, sources: {fyers: "NSE:SUZLON-EQ"}}
+  - {id: "NSE:SWIGGY", symbol: "SWIGGY", name: "Swiggy Ltd.", industry: "Consumer Services", isin: "INE00H001014", kind: equity, sources: {fyers: "NSE:SWIGGY-EQ"}}
+  - {id: "NSE:TATACAP", symbol: "TATACAP", name: "Tata Capital Ltd.", industry: "Financial Services", isin: "INE976I01016", kind: equity, sources: {fyers: "NSE:TATACAP-EQ"}}
+  - {id: "NSE:TATACOMM", symbol: "TATACOMM", name: "Tata Communications Ltd.", industry: "Telecommunication", isin: "INE151A01013", kind: equity, sources: {fyers: "NSE:TATACOMM-EQ"}}
+  - {id: "NSE:TATACONSUM", symbol: "TATACONSUM", name: "Tata Consumer Products Ltd.", industry: "Fast Moving Consumer Goods", isin: "INE192A01025", kind: equity, sources: {fyers: "NSE:TATACONSUM-EQ"}}
+  - {id: "NSE:TATAELXSI", symbol: "TATAELXSI", name: "Tata Elxsi Ltd.", industry: "Information Technology", isin: "INE670A01012", kind: equity, sources: {fyers: "NSE:TATAELXSI-EQ"}}
+  - {id: "NSE:TATAINVEST", symbol: "TATAINVEST", name: "Tata Investment Corporation Ltd.", industry: "Financial Services", isin: "INE672A01026", kind: equity, sources: {fyers: "NSE:TATAINVEST-EQ"}}
+  - {id: "NSE:TATAPOWER", symbol: "TATAPOWER", name: "Tata Power Co. Ltd.", industry: "Power", isin: "INE245A01021", kind: equity, sources: {fyers: "NSE:TATAPOWER-EQ"}}
+  - {id: "NSE:TATASTEEL", symbol: "TATASTEEL", name: "Tata Steel Ltd.", industry: "Metals & Mining", isin: "INE081A01020", kind: equity, sources: {fyers: "NSE:TATASTEEL-EQ"}}
+  - {id: "NSE:TCS", symbol: "TCS", name: "Tata Consultancy Services Ltd.", industry: "Information Technology", isin: "INE467B01029", kind: equity, sources: {fyers: "NSE:TCS-EQ"}}
+  - {id: "NSE:TECHM", symbol: "TECHM", name: "Tech Mahindra Ltd.", industry: "Information Technology", isin: "INE669C01036", kind: equity, sources: {fyers: "NSE:TECHM-EQ"}}
+  - {id: "NSE:TIINDIA", symbol: "TIINDIA", name: "Tube Investments of India Ltd.", industry: "Automobile and Auto Components", isin: "INE974X01010", kind: equity, sources: {fyers: "NSE:TIINDIA-EQ"}}
+  - {id: "NSE:TITAN", symbol: "TITAN", name: "Titan Company Ltd.", industry: "Consumer Durables", isin: "INE280A01028", kind: equity, sources: {fyers: "NSE:TITAN-EQ"}}
+  - {id: "NSE:TMCV", symbol: "TMCV", name: "Tata Motors Ltd.", industry: "Capital Goods", isin: "INE1TAE01010", kind: equity, sources: {fyers: "NSE:TMCV-EQ"}}
+  - {id: "NSE:TMPV", symbol: "TMPV", name: "Tata Motors Passenger Vehicles Ltd.", industry: "Automobile and Auto Components", isin: "INE155A01022", kind: equity, sources: {fyers: "NSE:TMPV-EQ"}}
+  - {id: "NSE:TORNTPHARM", symbol: "TORNTPHARM", name: "Torrent Pharmaceuticals Ltd.", industry: "Healthcare", isin: "INE685A01028", kind: equity, sources: {fyers: "NSE:TORNTPHARM-EQ"}}
+  - {id: "NSE:TRENT", symbol: "TRENT", name: "Trent Ltd.", industry: "Consumer Services", isin: "INE849A01020", kind: equity, sources: {fyers: "NSE:TRENT-EQ"}}
+  - {id: "NSE:TVSMOTOR", symbol: "TVSMOTOR", name: "TVS Motor Company Ltd.", industry: "Automobile and Auto Components", isin: "INE494B01023", kind: equity, sources: {fyers: "NSE:TVSMOTOR-EQ"}}
+  - {id: "NSE:ULTRACEMCO", symbol: "ULTRACEMCO", name: "UltraTech Cement Ltd.", industry: "Construction Materials", isin: "INE481G01011", kind: equity, sources: {fyers: "NSE:ULTRACEMCO-EQ"}}
+  - {id: "NSE:UNIONBANK", symbol: "UNIONBANK", name: "Union Bank of India", industry: "Financial Services", isin: "INE692A01016", kind: equity, sources: {fyers: "NSE:UNIONBANK-EQ"}}
+  - {id: "NSE:UNITDSPR", symbol: "UNITDSPR", name: "United Spirits Ltd.", industry: "Fast Moving Consumer Goods", isin: "INE854D01024", kind: equity, sources: {fyers: "NSE:UNITDSPR-EQ"}}
+  - {id: "NSE:UPL", symbol: "UPL", name: "UPL Ltd.", industry: "Chemicals", isin: "INE628A01036", kind: equity, sources: {fyers: "NSE:UPL-EQ"}}
+  - {id: "NSE:VBL", symbol: "VBL", name: "Varun Beverages Ltd.", industry: "Fast Moving Consumer Goods", isin: "INE200M01039", kind: equity, sources: {fyers: "NSE:VBL-EQ"}}
+  - {id: "NSE:VEDL", symbol: "VEDL", name: "Vedanta Ltd.", industry: "Metals & Mining", isin: "INE205A01025", kind: equity, sources: {fyers: "NSE:VEDL-EQ"}}
+  - {id: "NSE:VMM", symbol: "VMM", name: "Vishal Mega Mart Ltd.", industry: "Consumer Services", isin: "INE01EA01019", kind: equity, sources: {fyers: "NSE:VMM-EQ"}}
+  - {id: "NSE:VOLTAS", symbol: "VOLTAS", name: "Voltas Ltd.", industry: "Consumer Durables", isin: "INE226A01021", kind: equity, sources: {fyers: "NSE:VOLTAS-EQ"}}
+  - {id: "NSE:WAAREEENER", symbol: "WAAREEENER", name: "Waaree Energies Ltd.", industry: "Capital Goods", isin: "INE377N01017", kind: equity, sources: {fyers: "NSE:WAAREEENER-EQ"}}
+  - {id: "NSE:WIPRO", symbol: "WIPRO", name: "Wipro Ltd.", industry: "Information Technology", isin: "INE075A01022", kind: equity, sources: {fyers: "NSE:WIPRO-EQ"}}
+  - {id: "NSE:YESBANK", symbol: "YESBANK", name: "Yes Bank Ltd.", industry: "Financial Services", isin: "INE528G01035", kind: equity, sources: {fyers: "NSE:YESBANK-EQ"}}
+  - {id: "NSE:ZYDUSLIFE", symbol: "ZYDUSLIFE", name: "Zydus Lifesciences Ltd.", industry: "Healthcare", isin: "INE010B01027", kind: equity, sources: {fyers: "NSE:ZYDUSLIFE-EQ"}}

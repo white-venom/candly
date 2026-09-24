@@ -59,6 +59,15 @@ def test_pipeline_jobs_replace_platform_ingest_jobs():
     assert jobs["daily_ingest_mcx"] is daily_pipeline
     assert jobs["nightly_scorecards"] is nightly_scorecards
     assert jobs["tag_news"] is pipeline.tag_news
+    assert jobs["universe_daily_ingest"] is pipeline.universe_daily_ingest
+
+
+def test_universe_ingest_uses_the_research_universe(monkeypatch):
+    seen = {}
+    monkeypatch.setattr(pipeline, "load_universe", lambda name: [f"NSE:{name.upper()}-X"])
+    monkeypatch.setattr(pipeline, "ingest", lambda tf, instruments: seen.update(tf=tf, instruments=instruments))
+    pipeline.universe_daily_ingest()
+    assert seen == {"tf": "1D", "instruments": ["NSE:NIFTY200-X"]}
 
 
 def _record_calls(monkeypatch, exchanges):

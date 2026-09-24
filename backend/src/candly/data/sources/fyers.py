@@ -44,6 +44,8 @@ AUTHCODE_URL = f"{API_BASE}/generate-authcode"
 VALIDATE_AUTHCODE_URL = f"{API_BASE}/validate-authcode"
 REFRESH_TOKEN_URL = f"{API_BASE}/validate-refresh-token"
 HISTORY_URL = f"{DATA_BASE}/history"
+# Checked 2026-09-24 against the fyers-apiv3 SDK (Config.option_chain) and fyers-skills market-data.md.
+OPTION_CHAIN_URL = f"{DATA_BASE}/options-chain-v3"
 SYMBOL_MASTER_URL = "https://public.fyers.in/sym_details/{segment}.csv"
 
 # --- documented limits and conventions ------------------------------------------------------
@@ -51,6 +53,7 @@ RESOLUTIONS = {"5m": "5", "1D": "D"}
 # Documented maximum per request: 100 days for minute resolutions, 366 for daily. Stay one day inside.
 MAX_SPAN = {"5m": pd.Timedelta(days=99), "1D": pd.Timedelta(days=365)}
 MINUTE_DATA_START = pd.Timestamp("2017-07-03", tz=IST).tz_convert("UTC")
+MAX_STRIKECOUNT = 50  # option chain: strikes each side of ATM per request
 DERIVED_TFS = ("15m", "1h")
 AUTH_ERROR_CODES = {-8, -15, -16, -17}
 RATE_LIMITED_CODE = -429
@@ -103,11 +106,14 @@ class FyersAuthError(FyersError):
 # --- rate limiting ---------------------------------------------------------------------------
 
 
+RATE_PER_SECOND, RATE_PER_MINUTE = 8, 150
+
+
 class RateLimiter:
     """Client-side pacing below the documented 10/s and 200/min. Breaching the per-minute cap
     more than 3 times in a day blocks the user for the rest of the day, so stay well under it."""
 
-    def __init__(self, per_second: int = 8, per_minute: int = 150):
+    def __init__(self, per_second: int = RATE_PER_SECOND, per_minute: int = RATE_PER_MINUTE):
         self.per_second, self.per_minute = per_second, per_minute
         self._stamps: deque[float] = deque()
         self._lock = threading.Lock()
@@ -130,6 +136,13 @@ class RateLimiter:
 
 
 _limiter = RateLimiter()
+
+
+def set_rate_limit(per_minute: int) -> None:
+    """Slow this process down, e.g. a long CLI backfill running beside the API server: each process
+    paces itself, but Fyers counts both against the same per-minute cap."""
+    global _limiter
+    _limiter = RateLimiter(per_second=max(1, min(RATE_PER_SECOND, per_minute // 20)), per_minute=per_minute)
 
 
 def _backoff(attempt: int, response: httpx.Response | None = None) -> float:
@@ -619,9 +632,8 @@ def _get_data(client: httpx.Client, url: str, params: dict) -> dict:
             continue
         if body.get("s") in ("ok", "no_data"):
             return body
-        raise FyersError(
-            f"Fyers history error {body.get('code')}: {body.get('message') or response.status_code}"
-        )
+        message = body.get("message") or response.status_code
+        raise FyersError(f"Fyers data error {body.get('code')}: {message}")
     raise FyersNotConnected("Fyers rejected the session: use Connect Fyers in the dashboard to log in again")
 
 
@@ -646,6 +658,26 @@ def history(symbol: str, tf: str, start: pd.Timestamp, end: pd.Timestamp, *, oi:
             rows.extend(_get_data(client, HISTORY_URL, params).get("candles") or [])
             chunk_start = chunk_end
     return rows
+
+
+def option_chain(symbol: str, strikecount: int, expiry: int | None = None) -> dict:
+    """The `data` of one options-chain-v3 response, greeks (incl. iv) requested: optionsChain holds the
+    underlying's row (option_type "", strike_price -1, ltp, fp) plus a CE and a PE row per strike for
+    ATM ± strikecount; expiryData lists the expiries ({date, expiry epoch, expiry_flag}).
+    `expiry` is an expiry epoch from expiryData; None means the nearest expiry."""
+    if not 1 <= strikecount <= MAX_STRIKECOUNT:
+        raise ValueError(f"strikecount must be 1..{MAX_STRIKECOUNT}")
+    params = {
+        "symbol": symbol,
+        "strikecount": str(strikecount),
+        "timestamp": "" if expiry is None else str(expiry),
+        "greeks": "1",
+    }
+    with _client() as client:
+        data = _get_data(client, OPTION_CHAIN_URL, params).get("data")
+    if not isinstance(data, dict) or not isinstance(data.get("optionsChain"), list):
+        raise FyersError(f"Fyers option chain for {symbol} came back without optionsChain")
+    return data
 
 
 def to_candles(rows: list[list], tf: str, exchange: str, kind: str | None = None) -> pd.DataFrame:

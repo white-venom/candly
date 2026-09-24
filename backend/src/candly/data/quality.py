@@ -42,9 +42,10 @@ def _closed(exchange: str, d: date, now: pd.Timestamp) -> bool:
     return get_calendar().session_times(exchange, d)[1] <= now
 
 
-def missing_daily_sessions(instrument_id: str) -> list[date]:
-    """Closed sessions (IST dates) that exist in the stored intraday data but have no 1D bar."""
-    inst = get_instrument(instrument_id)
+def missing_daily_sessions(instrument: str | Instrument) -> list[date]:
+    """Closed sessions (IST dates) that exist in the stored intraday data but have no 1D bar.
+    Takes an id (watchlist) or an Instrument (e.g. from a research universe)."""
+    inst = instrument if isinstance(instrument, Instrument) else get_instrument(instrument)
     daily = set(_local_dates(load_ts(inst.id, "1D")))
     intraday: set[date] = set()
     for tf in inst.timeframes:

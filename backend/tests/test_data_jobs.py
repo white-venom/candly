@@ -113,9 +113,17 @@ def test_scheduler_is_not_started_on_import_and_registers_jobs():
             "daily_ingest_nse_bse",
             "daily_ingest_mcx",
             "daily_ingest_catchup",
+            "option_snapshots",
+            "option_snapshots_close",
             "refresh_fyers_session",
             "refresh_expiries",
         }
+        snaps = {f.name: str(f) for f in sched.get_job("option_snapshots").trigger.fields}
+        assert [snaps[k] for k in ("day_of_week", "hour", "minute", "second")] == ["*", "9-15", "*/5", "50"]
+        close = sched.get_job("option_snapshots_close")
+        fields = {f.name: str(f) for f in close.trigger.fields}
+        assert (fields["hour"], fields["minute"], fields["second"]) == ("15", "31", "50")
+        assert close.kwargs == {"closing": True}
         catchup = sched.get_job("daily_ingest_catchup")
         assert catchup.args == (("NSE", "BSE", "MCX"),)
         assert str(catchup.trigger.fields[6]) == "40" and str(catchup.trigger.fields[5]) == "8"
@@ -132,8 +140,8 @@ def test_scheduler_is_not_started_on_import_and_registers_jobs():
 def test_starting_the_scheduler_refreshes_expiries_at_once(monkeypatch):
     ran = threading.Event()
     monkeypatch.setattr(scheduler, "refresh_expiries", ran.set)
-    for job in ("poll_news", "intraday_cycle", "daily_ingest", "refresh_fyers_session"):
-        monkeypatch.setattr(scheduler, job, lambda *args: None)
+    for job in ("poll_news", "intraday_cycle", "daily_ingest", "refresh_fyers_session", "option_snapshots"):
+        monkeypatch.setattr(scheduler, job, lambda *args, **kwargs: None)
     scheduler.stop_scheduler()
     try:
         scheduler.start_scheduler()

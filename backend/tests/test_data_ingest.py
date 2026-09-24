@@ -6,6 +6,7 @@ import pandas as pd
 import pytest
 
 from candly.core.calendar import IST, get_calendar
+from candly.core.instruments import UnknownInstrument, load_watchlist
 from candly.core.settings import get_settings
 from candly.data import clock, ingest
 from candly.data.sources import SourceError, fyers
@@ -294,3 +295,34 @@ def test_cli(fake, monkeypatch, capsys):
     assert "NSE:RELIANCE" in out and "16" in out
     assert "MCX:GOLD" in out and "not available on yahoo" in out
     assert ingest.main(["--tf", "1D", "--instrument", "NSE:NOPE"]) == 2
+
+
+def test_nifty200_universe_is_research_only():
+    universe = ingest.load_universe("nifty200")
+    ids = [i.id for i in universe]
+    assert len(ids) == 202 and len(set(ids)) == 202
+    assert ids[:2] == ["NSE:NIFTY200", "NSE:NIFTY50"]
+    stocks = [i for i in universe if i.kind == "equity"]
+    assert len(stocks) == 200
+    assert all(i.source_symbol("fyers") == f"NSE:{i.symbol}-EQ" and i.timeframes == ("1D",) for i in stocks)
+    assert "NSE:ABB" in ids and "NSE:ABB" not in {i.id for i in load_watchlist()}
+    with pytest.raises(UnknownInstrument):
+        ingest.load_universe("nope")
+
+
+def test_cli_ingests_a_universe_that_is_not_on_the_watchlist(fake, monkeypatch, capsys, fake_fyers_keys):
+    monkeypatch.setattr(ingest, "setup_logging", lambda: None)
+    monkeypatch.setattr(fyers, "ensure_token", lambda: None)
+    limits: list[int] = []
+    monkeypatch.setattr(fyers, "set_rate_limit", limits.append)
+    universe = ingest.load_universe("nifty200")[:3]
+    monkeypatch.setattr(ingest, "load_universe", {"nifty200": universe}.__getitem__)
+    args = ["--tf", "1D", "--universe", "nifty200", "--source", "fyers", "--since", "2026-09-01"]
+    assert ingest.main([*args, "--max-per-minute", "100"]) == 0
+    assert limits == [100]
+    assert [call[1] for call in fake.calls] == ["NSE:NIFTY200", "NSE:NIFTY50", "NSE:360ONE"]
+    assert series_stats("NSE:360ONE", "1D")["bars"] == 16
+    assert "NSE:360ONE" in capsys.readouterr().out
+    for bad in (["--instrument", "NSE:RELIANCE"], ["--max-per-minute", "500"]):
+        with pytest.raises(SystemExit):
+            ingest.main([*args, *bad])

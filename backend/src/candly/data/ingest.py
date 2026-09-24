@@ -1,8 +1,8 @@
 """Candle ingestion: backfill empty series, then update incrementally from the last stored bar.
 Every 1D run also re-reads the last few sessions and re-fetches daily bars missing next to intraday data.
 
-CLI: python -m candly.data.ingest --tf 1D [--instrument NSE:RELIANCE ...] [--source auto|fyers|yahoo]
-     [--since 2015-01-01]
+CLI: python -m candly.data.ingest --tf 1D [--instrument NSE:RELIANCE ... | --universe nifty200]
+     [--source auto|fyers|yahoo] [--since 2015-01-01] [--max-per-minute 100]
      python -m candly.data.ingest --tf 1D --clean-existing   (re-clean stored NSE/BSE series, no download)
      python -m candly.data.ingest --archive-source yahoo     (move Yahoo series to data/archive/, no download)
 """
@@ -116,7 +116,7 @@ def _update_start(inst: Instrument, tf: str, since: pd.Timestamp | None) -> pd.T
 def _refetch_missing_daily(inst: Instrument, source: str) -> int:
     """Re-fetch the 1D bar of sessions the intraday series have but the daily series lacks, e.g. a close
     the source published late. Best effort: the main update has already been saved."""
-    missing = missing_daily_sessions(inst.id)[-MISSING_REFETCH_LIMIT:]
+    missing = missing_daily_sessions(inst)[-MISSING_REFETCH_LIMIT:]
     count = 0
     for day in missing:
         start, end = clock.ist_midnight(day), clock.ist_midnight(day + timedelta(days=1))
@@ -127,7 +127,7 @@ def _refetch_missing_daily(inst: Instrument, source: str) -> int:
         except Exception as exc:
             log.warning("%s 1D: re-fetching %s failed: %s", inst.id, day, exc)
     if missing:
-        still = sorted(set(missing) & set(missing_daily_sessions(inst.id)))
+        still = sorted(set(missing) & set(missing_daily_sessions(inst)))
         log.log(
             logging.WARNING if still else logging.INFO,
             "%s 1D: re-fetched %d sessions present intraday but missing daily; still missing: %s",
@@ -184,6 +184,15 @@ def backfill(inst: Instrument, tf: str, source: str, start: date | None = None) 
     return count
 
 
+def load_universe(name: str) -> list[Instrument]:
+    """A research universe from config/universe_{name}.yaml (same format as the watchlist). Its instruments
+    share the candle store but are not on the dashboard."""
+    path = get_settings().config_dir / f"universe_{name}.yaml"
+    if not path.exists():
+        raise UnknownInstrument(f"no universe {name!r} ({path.name} not found)")
+    return load_watchlist(path)
+
+
 def _instruments(instruments: Iterable[str | Instrument] | None) -> list[Instrument]:
     if instruments is None:
         return load_watchlist()
@@ -203,7 +212,7 @@ def run_ingest(
     if source == "fyers":
         fyers.ensure_token()  # fail once, clearly, instead of once per instrument
     report = IngestReport()
-    for inst in targets:
+    for n, inst in enumerate(targets, 1):
         if tf not in inst.timeframes:
             report.skipped[inst.id] = f"{tf} is not configured for this instrument"
             continue
@@ -225,7 +234,9 @@ def run_ingest(
         report.counts[inst.id] = count
         stats = series_stats(inst.id, tf)
         log.info(
-            "%s %s via %s: %d rows added/changed; %d bars %s -> %s",
+            "[%d/%d] %s %s via %s: %d rows added/changed; %d bars %s -> %s",
+            n,
+            len(targets),
             inst.id,
             tf,
             source,
@@ -255,8 +266,21 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m candly.data.ingest", description="Download candles.")
     parser.add_argument("--tf", choices=list(TIMEFRAMES))
     parser.add_argument("--instrument", dest="instruments", nargs="+", action="extend", metavar="ID")
+    parser.add_argument(
+        "--universe",
+        metavar="NAME",
+        help="every instrument in config/universe_NAME.yaml (research only, e.g. nifty200) instead of the "
+        "watchlist",
+    )
     parser.add_argument("--source", choices=["auto", *SOURCES], default="auto")
     parser.add_argument("--since", type=date.fromisoformat, metavar="YYYY-MM-DD")
+    parser.add_argument(
+        "--max-per-minute",
+        type=int,
+        metavar="N",
+        help=f"Fyers requests per minute for this process (default {fyers.RATE_PER_MINUTE}). Lower it when "
+        "the API server is fetching too: every process has its own limiter, but Fyers counts them together",
+    )
     parser.add_argument(
         "--clean-existing",
         action="store_true",
@@ -274,7 +298,13 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--archive-source runs on its own; run the ingest afterwards")
     if not args.archive_source and not args.tf:
         parser.error("--tf is required")
+    if args.universe and args.instruments:
+        parser.error("use --universe or --instrument, not both")
+    if args.max_per_minute is not None and not 1 <= args.max_per_minute <= fyers.RATE_PER_MINUTE:
+        parser.error(f"--max-per-minute must be 1..{fyers.RATE_PER_MINUTE}")
     setup_logging()
+    if args.max_per_minute:
+        fyers.set_rate_limit(args.max_per_minute)
     if args.archive_source:
         moved = archive_source(args.archive_source)
         data_dir = get_settings().data_dir
@@ -289,7 +319,8 @@ def main(argv: list[str] | None = None) -> int:
             print(f"{instrument_id:<18} {count:>7}")
         return 0
     try:
-        report = run_ingest(args.tf, args.instruments, args.source, args.since)
+        targets = load_universe(args.universe) if args.universe else args.instruments
+        report = run_ingest(args.tf, targets, args.source, args.since)
     except (SourceError, UnknownInstrument) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2

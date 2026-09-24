@@ -423,6 +423,18 @@ type SyncStatus = { status: "idle" | "running" | "done" | "error"; step: string 
 // GET  /api/alerts/preview?kind=pre_market|post_market -> { kind: string; text: string }
 ```
 
+**Option chains and the research universe (2026-09-24)**
+- `data.options`: `take_snapshots()`, `load_chain(underlying, date)`, `load_summary(underlying, date)`.
+  - Underlyings: NIFTY, BANKNIFTY and SENSEX, the 2 nearest expiries, ATM ± 15 strikes.
+  - Scheduled every 5 minutes, 09:00–15:55 IST (second 50), plus a snapshot at 15:31:50.
+  - Stored as `data/options/{UNDERLYING}/{date}.parquet` and `.../summary/{date}.parquet`. `ts` is our fetch time.
+  - Summary fields: PCR by OI and by volume, max pain and ATM IV (all over the logged strikes only), and 25Δ skew using Fyers' delta.
+  - `fyers.option_chain()` calls `GET https://api-t1.fyers.in/data/options-chain-v3` (symbol, strikecount ≤ 50, timestamp = expiry epoch, greeks = 1).
+- Research universe: `config/universe_nifty200.yaml` (current constituents, so it carries survivorship bias).
+  - Ingest takes `--universe nifty200`, `--max-per-minute N` (to share the Fyers cap with the API server), and prints `[n/N]` progress.
+  - A nightly `universe_daily_ingest` job runs at 16:05 IST on weekdays.
+- FII/DII flows are **not** collected. The exchanges' terms forbid automated collection, and no clean source exists.
+
 **Signals and calls**
 - `ScannerRow` excludes instruments with `tradable=false` (e.g. INDIAVIX).
 - A directional call (`abstain=false`) always has a non-null `invalidation` at least `patterns.min_stop_atr` ATR from the reference close. Otherwise the forecast abstains.
@@ -464,3 +476,51 @@ These are used by the ledger and the Accuracy page.
 - `match_score` (display only, never used as a model input): `100 × mean over steps of (0.4·range_iou + 0.3·max(0, 1 − close_err_atr) + 0.3·color_match)`.
 - Abstained forecasts are graded but excluded from hit rate, Brier and calibration. They are counted in `n_abstained`.
 - **Bars are matched by time, never by position.** A step whose predicted bar time never appears as a bar keeps the forecast `pending`. It becomes `void` at last target close + 7 days, and the reason is stored internally. Grading only ever updates rows that are still pending.
+
+### Stage A v2 (pivot): range_v1, the expected candle
+
+Pre-registered in `config/pivot.yaml` (PLAN.md §20a). Added by quant-engineer on 2026-09-24.
+
+**Forecast**
+- `GET /api/forecast?instrument=&tf=&steps=&method=`
+  - `method` is optional: `range_v1` (the default) or `analog_v1`. Any other value returns 400.
+  - Without a saved range model for the instrument's exchange and timeframe, the default falls back to `analog_v1`, and the response's `method` says which one ran. An explicit `method=range_v1` returns 503 in that case.
+- A `range_v1` Forecast:
+  - `ghost_candles` follow the p50 high, low and close of each step. Step 1 opens at the reference close and each later step opens at the previous ghost close; high and low are widened when needed so the candle stays a valid OHLC.
+  - `bands` are the close's p10/p50/p90.
+  - `expected_move_pct` is the last step's p50 close versus the reference close (signed).
+  - `horizon_bars` is the number of steps (3).
+  - `n_analogs` is 0.
+  - Direction comes only from a **validated** regime_v1 call on the same daily bar (1D only). regime_v1 failed go/no-go #2, so today every range_v1 forecast has `abstain: true`, `abstain_reason: "direction unclear: range forecast only"`, and null `p_up`, `base_rate`, `confidence`, `invalidation` and `trade`. Its ghost candles and bands are still present.
+  - `drivers`: "Expected range", "Volatility", "Expiry" (on or one day before an expiry), "Direction", and "Regime (N sessions)". The Regime driver says why no call is made and never shows an unvalidated probability.
+- `ScannerRow` gains `expected_move_pct: number | null` (the same value as the forecast's).
+- Scanner rows come from the forecasts the forecast cycle keeps in memory (`candly.forecast.latest`). A row is computed on request only when its kept forecast is missing or older than the last bar due.
+  - range_v1 rows have `abstain: true`, `score: 0` and `direction: "neutral"`.
+  - An intraday row appears only when a range model covers the instrument, because analog_v1 runs on 1D only.
+
+**Ledger and accuracy**
+- `StepGrade` gains `category: "same" | "close" | "wrong" | null`, following pivot.yaml `candle_accuracy`:
+  - `wrong`: the actual close is outside p10–p90. This is checked first, so `same + close` equals band coverage.
+  - `same`: |close − p50| ≤ 0.25 ATR, and the bar's high and low stay inside the ghost candle's high and low (the "predicted range box").
+  - `close`: any other close inside the band.
+  - null when the step has no band. Grades made before this change have no category.
+- `AccuracyResponse` gains a top-level `category_shares: { same: number; close: number; wrong: number } | null`: shares from 0 to 1 over graded steps that have a category.
+- `/api/ledger` and `/api/accuracy` accept `method=range_v1`. Accuracy still defaults to `analog_v1`.
+
+**Python**
+- `candly.forecast.make_range_forecast(instrument_id, tf, candles, now=None, *, steps=None, load=None, check_stale=True, model=None) -> Forecast`
+  - raises `RangeUnavailable` when no saved model covers the instrument, and `ValueError` when there are no closed candles;
+  - `load(instrument_id, tf)` supplies the context series (the market index and India VIX).
+- `run_forecast_cycle(tf)` records range_v1 plus the baselines wherever a model covers the instrument, and analog_v1 on 1D only.
+  - Counts gain `range_recorded`, `range_unavailable` and `seconds`.
+  - The cycle fills `candly.forecast.latest`.
+- `candly.api.routes.analytics.warm_scanner(tfs=("1D", "5m", "15m", "1h")) -> {tf: seconds}` is meant for a background thread at app startup. Without it, the first scanner request after a restart computes every row (8–11 s).
+- `candly.research.pivot_config.load_pivot_config()` is the one strict reader of pivot.yaml, for both range_v1 and regime_v1.
+- Training:
+  - CLI `python -m candly.research.range_model [--exchange NSE ...] [--tf 1D ...]`;
+  - models go to `data/models/range_v1/{EXCHANGE}_{tf}/` (27 LightGBM text files plus `meta.json`, which holds the config and code hashes);
+  - walk-forward predictions go to `data/derived/range_v1/walk_forward_{EXCHANGE}_{tf}.npz`.
+- Evaluation:
+  - `candly.research.range_eval.evaluate_range(tf, exchange, period="validation" | "holdout", allow_holdout=False)`;
+  - `period="holdout"` needs `allow_holdout=True` and uses the saved production model;
+  - CLI `python -m candly.research.range_eval` writes `docs/test-reports/2026-09-24-range-v1-validation.{json,md}`.

@@ -13,6 +13,7 @@ from candly.alerts.jobs import register_alert_jobs, run_alert_checks
 from candly.core.calendar import IST
 from candly.core.instruments import EXCHANGES, load_watchlist
 from candly.data import clock
+from candly.data.ingest import ingest, load_universe
 from candly.forecast.jobs import grade_pending_job, rebuild_scorecard, run_forecast_cycle
 from candly.jobs.scheduler import INTRADAY_TFS, exchanges_with_closed_bar, ingest_incremental
 
@@ -69,6 +70,14 @@ def tag_news() -> None:
     llm.tag_pending_news()
 
 
+def universe_daily_ingest() -> None:
+    """Keeps the research universe (Nifty 200, not on the dashboard) up to date for cross-sectional tests."""
+    try:
+        ingest("1D", load_universe("nifty200"))
+    except Exception:
+        log.exception("Nifty 200 daily ingest failed")
+
+
 def nightly_scorecards() -> None:
     """Every timeframe's scorecard for each exchange (built separately: stats never mix exchanges)."""
     for tf in SCORECARD_TFS:
@@ -109,6 +118,11 @@ def register_pipeline_jobs(scheduler: BackgroundScheduler) -> None:
     )
     scheduler.add_job(
         nightly_scorecards, CronTrigger(hour=2, minute=0, timezone=IST), id="nightly_scorecards"
+    )
+    scheduler.add_job(
+        universe_daily_ingest,
+        CronTrigger(day_of_week="mon-fri", hour=16, minute=5, timezone=IST),
+        id="universe_daily_ingest",
     )
     # Runs between news polls; a no-op until ANTHROPIC_API_KEY is set.
     scheduler.add_job(tag_news, IntervalTrigger(minutes=5, start_date=None, timezone=IST), id="tag_news")
