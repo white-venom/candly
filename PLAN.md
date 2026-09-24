@@ -348,6 +348,31 @@ The search moves to where edges are documented. The tests are pre-registered in 
 
 A pass is a lead, not a strategy. Real option prices, margins and tail risk come before any money.
 
+**Results so far:**
+- vol_v1: FAIL. It beats HAR and EWMA, but not India VIX once VIX's bias is corrected.
+- range_v1: PASS on 5m, 15m and 1h validation; 1D fails.
+
+## 20c. Edge search v2 (2026-09-24 evening)
+
+The v1 failures stay failures. They are not re-run with tweaks. v2 asks new questions where published evidence says an edge can exist. Everything is pre-registered in `config/edge_search_v2.yaml` and committed before any test ran:
+- **Candle patterns:**
+  - **pv2_range:** do patterns sharpen the range forecast that works?
+  - **pv2_pooled:** the v1 scorecard on 200 stocks, for about 20× the events.
+  - **pv2_xs:** patterns as extra inputs to the xs_v1 stock ranking.
+- **Trend:**
+  - **xs_v1:** cross-sectional stock ranking.
+  - **tsmom_v1:** 12-month time-series momentum on indices and MCX, monthly.
+  - **im_v1:** the first half-hour predicts the last half-hour, on NIFTY and BANKNIFTY.
+- **Volatility:**
+  - **vol_v2:** HAR on 5m realised variance plus VIX, judged against a *bias-corrected* VIX.
+  - **vrp_v1:** does the variance risk premium predict NIFTY returns 1–3 months ahead?
+  - Real straddle P&L waits for the logged option chains.
+
+**How results are judged:**
+- Each test gives one primary p-value.
+- A test passes only if it meets its own rule *and* survives Benjamini–Hochberg at q = 0.10 across the whole v2 family.
+- Validation only. The holdout is run once, and only for a survivor.
+
 ## 20. Open questions
 
 - Fyers symbol formats, and how `cont_flag` behaves for MCX continuous futures. Verify when the keys arrive.

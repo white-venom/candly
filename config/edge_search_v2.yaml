@@ -1,0 +1,106 @@
+# Edge search v2, pre-registered 2026-09-24 evening, committed BEFORE any test below was run.
+# v1 failures (candlestick scorecards, analog_v1, regime_v1, vol_v1) are results, not bugs: the v1 tests
+# are not re-run with tweaks. v2 asks new questions where published evidence says an edge can exist.
+#
+# Rules for every test here:
+# - validation only (train/validation splits below); the holdout (>= 2025-10-01) stays locked and is run
+#   once, only for a test that passes validation AND survives the family FDR below, on explicit request
+# - costs from config/costs.yaml, all returns after costs; bootstrap settings from edge_search.yaml common
+# - features causal, each with a truncation test; no parameter is tuned on validation
+# - each test reports ONE primary one-sided p-value; a test passes only if it meets its own pass_if AND
+#   survives Benjamini-Hochberg at family.fdr_q across every primary p-value in this file
+
+family:
+  fdr_q: 0.10
+  earlier_attempts: [candlestick_scorecards_v1, analog_v1, regime_v1, vol_v1, range_v1]   # reported alongside
+
+# --- Direction 1: which stocks beat the market -----------------------------------------------------
+# xs_v1 itself is pre-registered in edge_search.yaml (cross_section) and is run exactly as written there.
+# Its two horizons enter this family with p = one-sided p of top-decile excess after cost > 0.
+cross_section_patterns:
+  name: pv2_xs
+  base: xs_v1                      # same universe, splits, model, portfolio, costs
+  added_feature_group: candlestick_patterns   # per stock: counts of confirmed bullish/bearish patterns over the last 5 and 20 sessions
+  horizons_days: [5, 20]
+  primary: "rank-IC improvement over xs_v1 (paired, date-block bootstrap), one-sided > 0"
+  pass_if: {rank_ic_improvement_ci_lower_above: 0.0, excess_after_cost_not_worse_than_xs_v1: true}
+
+# --- Direction 2: time-series momentum on indices and commodities ----------------------------------
+tsmom:
+  name: tsmom_v1                   # Moskowitz, Ooi & Pedersen (2012); rule-based, nothing fitted
+  universe: [NSE:NIFTY50, NSE:BANKNIFTY, BSE:SENSEX, MCX:CRUDEOIL, MCX:NATURALGAS, MCX:GOLD, MCX:SILVER]
+  signal: "sign of the close-to-close return from t-252 to t-21 trading days"
+  sizing: "per instrument, target 10% annualised vol using 60-day EWMA of daily returns (causal); equal risk"
+  rebalance: monthly_first_trading_day
+  holding: "until the next rebalance"
+  index_futures_return: "spot index return minus 5% a year carry (futures proxy, applied to both strategy and baseline)"
+  mcx_roll_rule: "on the first trading day of a new front contract (detected from the MCX expiry calendar, or from the
+    series itself before any strategy number is computed), use that day's open-to-close return instead of close-to-close"
+  costs: "futures segment, one round trip per position change plus one roll per month per open position"
+  evaluation: {indices_from: 2008-01-01, mcx_from: 2019-01-01, until: holdout_start}   # first year of each is signal warm-up
+  baselines: [buy_and_hold_equal_risk, always_flat]
+  primary: "annualised Sharpe after cost of the combined portfolio, one-sided > 0"
+  pass_if: {sharpe_after_cost_ci_lower_above: 0.0, sharpe_beats_buy_and_hold_point: true}
+
+# --- Direction 3: intraday momentum (the first half-hour predicts the last half-hour) ------------
+intraday_momentum:
+  name: im_v1                      # Gao, Han, Li & Zhou (2018, JFE) "Market intraday momentum"
+  instruments: [NSE:NIFTY50, NSE:BANKNIFTY]   # 5m spot bars as the futures proxy
+  times_ist: {first_end: "09:45", second_last: ["14:30", "15:00"], last: ["15:00", "15:30"]}
+  r1: "previous session close to the close of the 09:40 bar (includes the overnight gap)"
+  r12: "14:30 to 15:00"
+  target: "15:00 to 15:30 (the last 5m bar's close)"
+  split: {train: [2017-07-17, 2023-01-01], validation: [2023-01-01, holdout_start]}
+  variants:
+    sign_r1: "at 15:00 go long if r1 > 0 else short; exit at 15:30"
+    agree: "trade only when sign(r1) == sign(r12), in that direction; flat otherwise"
+  costs: "index futures intraday, one round trip per trade, from config/costs.yaml incl. slippage"
+  skip_days: "special sessions, and days with a missing bar in any of the windows"
+  primary: "mean after-cost return per trading day (flat days count as 0), one-sided > 0; one p per instrument x variant"
+  pass_if: {mean_after_cost_ci_lower_above: 0.0, train_period_same_sign: true}
+
+# --- Volatility vs VIX, v2: better realised-vol inputs, judged against a FAIR VIX ------------------
+vol_intraday:
+  name: vol_v2
+  underlying: NSE:NIFTY50
+  implied: NSE:INDIAVIX
+  horizons_days: [5, 20]
+  target: "same realised-variance target as vol_v1"
+  model: "OLS in logs: HAR on 5m realised variance (1d, 5d, 22d components) + overnight squared return + log VIX^2"
+  baseline: "recalibrated VIX: OLS of log target on log VIX^2, fitted on train (the bias-corrected VIX vol_v1 matched)"
+  split: {train: [2017-07-17, 2021-01-01], validation: [2021-01-01, holdout_start]}
+  primary: "QLIKE improvement over recalibrated VIX, one-sided > 0; one p per horizon"
+  pass_if:
+    qlike_improvement_vs_recalibrated_vix_ci_lower_above: 0.0
+    conditional_vs_always_short_sharpe_ci_lower_above: 0.0   # short the variance-swap proxy only when VIX^2 > forecast
+  caveat: "variance-swap proxy only; real straddle P&L waits for logged option chains (vol_v3, pre-registered later)"
+
+vrp_direction:
+  name: vrp_v1                     # Bollerslev, Tauchen & Zhou (2009): the variance risk premium predicts index returns
+  underlying: NSE:NIFTY50
+  vrp: "VIX^2 (monthly variance units) minus realised variance of the last 22 sessions from daily returns"
+  horizons_days: [21, 63]
+  model: "OLS of the next-h log return on vrp, expanding window refitted yearly; benchmark = expanding historical mean"
+  split: {train: [2009-01-01, 2016-01-01], validation: [2016-01-01, holdout_start]}
+  primary: "Clark-West test of out-of-sample R^2 > 0 (HAC, lags = h), one-sided; one p per horizon"
+  pass_if: {clark_west_p_below: 0.05, timing_sharpe_after_cost_beats_buy_and_hold_point: true}
+  timing_rule: "long NIFTY futures proxy when the forecast exceeds round-trip cost, else flat"
+
+# --- Candlestick patterns, v2 -----------------------------------------------------------------------
+patterns_range:
+  name: pv2_range                  # do patterns help the part that works (range_v1)?
+  base: range_v1                   # same data, splits, sample, hyperparameters, seeds; only the feature group is added
+  added_feature_group: candlestick_patterns   # confirmed pattern on the last 1-3 bars (one-hot) + forming flag
+  timeframes: [5m, 15m, 1h]
+  exchange: NSE
+  primary: "Winkler improvement over range_v1 (paired, date-block bootstrap), one-sided > 0; one p per timeframe"
+  pass_if: {improvement_point_min: 0.01, ci_lower_above: 0.0, rule: "at least 2 of 3 timeframes"}
+
+patterns_pooled:
+  name: pv2_pooled                 # direction again, with ~20x the events
+  universe: config/universe_nifty200.yaml
+  tf: 1D
+  method: "the v1 scorecard unchanged (research.yaml stats, context buckets, BH within the scorecard, train_end 1D)"
+  primary: "Simes global p = the smallest BH-adjusted bucket p-value"
+  pass_if: {certified_buckets_min: 1}
+  caveat: "current Nifty 200 constituents: survivorship-biased, so a pass is an upper bound"
