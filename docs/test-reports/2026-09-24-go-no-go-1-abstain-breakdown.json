@@ -1,0 +1,22 @@
+{
+  "n_in_population": 7166,
+  "reasons": {
+    "edge below minimum": 5109,
+    "reward below risk": 1040,
+    "edge below costs": 947,
+    "too few analogs": 70
+  },
+  "edge_quantiles": {
+    "count": 7166.0,
+    "mean": 0.0228,
+    "std": 0.0179,
+    "min": 0.0,
+    "50%": 0.0187,
+    "90%": 0.0472,
+    "99%": 0.0825,
+    "max": 0.1319
+  },
+  "confidence": {
+    "null": 7166
+  }
+}
