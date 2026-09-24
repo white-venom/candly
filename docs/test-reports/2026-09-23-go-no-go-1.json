@@ -1,0 +1,324 @@
+{
+  "analog_v1": {
+    "tf": "1D",
+    "method": "analog_v1",
+    "period": "validation",
+    "start": "2018-12-31T18:30:00+00:00",
+    "end": "2025-09-30T18:30:00+00:00",
+    "instruments": [
+      "NSE:NIFTY50",
+      "NSE:BANKNIFTY",
+      "NSE:RELIANCE",
+      "NSE:HDFCBANK",
+      "NSE:ICICIBANK",
+      "NSE:INFY",
+      "NSE:TCS",
+      "NSE:SBIN",
+      "NSE:BHARTIARTL",
+      "NSE:ITC",
+      "NSE:LT",
+      "NSE:AXISBANK"
+    ],
+    "population": "pattern_bars",
+    "n_forecasts": 20099,
+    "n_not_recorded": 0,
+    "n_abstained": 20099,
+    "n_graded": 20060,
+    "n_void": 3,
+    "n_unresolved": 36,
+    "n_in_population": 7166,
+    "n_scored": 0,
+    "brier": null,
+    "brier_baseline": null,
+    "skill": null,
+    "skill_ci": null,
+    "ci_level": 0.95,
+    "ece": null,
+    "ece_bins": 10,
+    "ece_binning": "quantile",
+    "calibration_p": null,
+    "calibration_sims": 2000,
+    "bootstrap_resamples": 2000,
+    "seed": 20260923,
+    "hit_rate": null,
+    "band_coverage_80": 0.7816367829074309,
+    "n_certified": 0,
+    "gates": {
+      "certified_buckets": false,
+      "brier_skill": false,
+      "calibration": false
+    },
+    "gate_details": {
+      "certified_buckets": {
+        "value": 0,
+        "required": 1,
+        "pass": false
+      },
+      "brier_skill": {
+        "value": null,
+        "ci": null,
+        "ci_level": 0.95,
+        "ci_method": "date_clustered_bootstrap",
+        "above": 0.0,
+        "pass": false
+      },
+      "calibration": {
+        "test": "self_consistency",
+        "ece": null,
+        "p_value": null,
+        "min_p": 0.05,
+        "n_scored": 0,
+        "min_scored": 500,
+        "sims": 2000,
+        "pass": false
+      }
+    },
+    "runtime_s": 1475.4
+  },
+  "baseline_base_rate": {
+    "tf": "1D",
+    "method": "baseline_base_rate",
+    "period": "validation",
+    "start": "2018-12-31T18:30:00+00:00",
+    "end": "2025-09-30T18:30:00+00:00",
+    "instruments": [
+      "NSE:NIFTY50",
+      "NSE:BANKNIFTY",
+      "NSE:RELIANCE",
+      "NSE:HDFCBANK",
+      "NSE:ICICIBANK",
+      "NSE:INFY",
+      "NSE:TCS",
+      "NSE:SBIN",
+      "NSE:BHARTIARTL",
+      "NSE:ITC",
+      "NSE:LT",
+      "NSE:AXISBANK"
+    ],
+    "population": "pattern_bars",
+    "n_forecasts": 20099,
+    "n_not_recorded": 0,
+    "n_abstained": 0,
+    "n_graded": 20060,
+    "n_void": 3,
+    "n_unresolved": 36,
+    "n_in_population": 7166,
+    "n_scored": 7153,
+    "brier": 0.24971064505234106,
+    "brier_baseline": 0.24971064505234106,
+    "skill": 0.0,
+    "skill_ci": [
+      0.0,
+      0.0
+    ],
+    "ci_level": 0.95,
+    "ece": 0.016548566457170434,
+    "ece_bins": 10,
+    "ece_binning": "quantile",
+    "calibration_p": 0.2915,
+    "calibration_sims": 2000,
+    "bootstrap_resamples": 2000,
+    "seed": 20260923,
+    "hit_rate": null,
+    "band_coverage_80": null,
+    "n_certified": null,
+    "gates": {
+      "certified_buckets": false,
+      "brier_skill": false,
+      "calibration": true
+    },
+    "gate_details": {
+      "certified_buckets": {
+        "value": null,
+        "required": 1,
+        "pass": false
+      },
+      "brier_skill": {
+        "value": 0.0,
+        "ci": [
+          0.0,
+          0.0
+        ],
+        "ci_level": 0.95,
+        "ci_method": "date_clustered_bootstrap",
+        "above": 0.0,
+        "pass": false
+      },
+      "calibration": {
+        "test": "self_consistency",
+        "ece": 0.016548566457170434,
+        "p_value": 0.2915,
+        "min_p": 0.05,
+        "n_scored": 7153,
+        "min_scored": 500,
+        "sims": 2000,
+        "pass": true
+      }
+    },
+    "runtime_s": 285.2
+  },
+  "baseline_persistence": {
+    "tf": "1D",
+    "method": "baseline_persistence",
+    "period": "validation",
+    "start": "2018-12-31T18:30:00+00:00",
+    "end": "2025-09-30T18:30:00+00:00",
+    "instruments": [
+      "NSE:NIFTY50",
+      "NSE:BANKNIFTY",
+      "NSE:RELIANCE",
+      "NSE:HDFCBANK",
+      "NSE:ICICIBANK",
+      "NSE:INFY",
+      "NSE:TCS",
+      "NSE:SBIN",
+      "NSE:BHARTIARTL",
+      "NSE:ITC",
+      "NSE:LT",
+      "NSE:AXISBANK"
+    ],
+    "population": "pattern_bars",
+    "n_forecasts": 20099,
+    "n_not_recorded": 0,
+    "n_abstained": 0,
+    "n_graded": 20060,
+    "n_void": 3,
+    "n_unresolved": 36,
+    "n_in_population": 7166,
+    "n_scored": 7153,
+    "brier": 0.513124313051241,
+    "brier_baseline": 0.24971064505234106,
+    "skill": -1.0548756058985256,
+    "skill_ci": [
+      -1.1099582363293012,
+      -0.9978661664836923
+    ],
+    "ci_level": 0.95,
+    "ece": 0.4774395151608131,
+    "ece_bins": 10,
+    "ece_binning": "quantile",
+    "calibration_p": 0.0,
+    "calibration_sims": 2000,
+    "bootstrap_resamples": 2000,
+    "seed": 20260923,
+    "hit_rate": 0.4850232034875545,
+    "band_coverage_80": null,
+    "n_certified": null,
+    "gates": {
+      "certified_buckets": false,
+      "brier_skill": false,
+      "calibration": false
+    },
+    "gate_details": {
+      "certified_buckets": {
+        "value": null,
+        "required": 1,
+        "pass": false
+      },
+      "brier_skill": {
+        "value": -1.0548756058985256,
+        "ci": [
+          -1.1099582363293012,
+          -0.9978661664836923
+        ],
+        "ci_level": 0.95,
+        "ci_method": "date_clustered_bootstrap",
+        "above": 0.0,
+        "pass": false
+      },
+      "calibration": {
+        "test": "self_consistency",
+        "ece": 0.4774395151608131,
+        "p_value": 0.0,
+        "min_p": 0.05,
+        "n_scored": 7153,
+        "min_scored": 500,
+        "sims": 2000,
+        "pass": false
+      }
+    },
+    "runtime_s": 284.1
+  },
+  "baseline_random_walk": {
+    "tf": "1D",
+    "method": "baseline_random_walk",
+    "period": "validation",
+    "start": "2018-12-31T18:30:00+00:00",
+    "end": "2025-09-30T18:30:00+00:00",
+    "instruments": [
+      "NSE:NIFTY50",
+      "NSE:BANKNIFTY",
+      "NSE:RELIANCE",
+      "NSE:HDFCBANK",
+      "NSE:ICICIBANK",
+      "NSE:INFY",
+      "NSE:TCS",
+      "NSE:SBIN",
+      "NSE:BHARTIARTL",
+      "NSE:ITC",
+      "NSE:LT",
+      "NSE:AXISBANK"
+    ],
+    "population": "pattern_bars",
+    "n_forecasts": 20099,
+    "n_not_recorded": 0,
+    "n_abstained": 0,
+    "n_graded": 20060,
+    "n_void": 3,
+    "n_unresolved": 36,
+    "n_in_population": 7166,
+    "n_scored": 7153,
+    "brier": 0.25,
+    "brier_baseline": 0.24971064505234106,
+    "skill": -0.0011587609635075324,
+    "skill_ci": [
+      -0.005952616019480816,
+      0.0033547023255745723
+    ],
+    "ci_level": 0.95,
+    "ece": 0.022438137844261144,
+    "ece_bins": 10,
+    "ece_binning": "quantile",
+    "calibration_p": 0.023,
+    "calibration_sims": 2000,
+    "bootstrap_resamples": 2000,
+    "seed": 20260923,
+    "hit_rate": 0.4784006710471131,
+    "band_coverage_80": 0.8490610000466005,
+    "n_certified": null,
+    "gates": {
+      "certified_buckets": false,
+      "brier_skill": false,
+      "calibration": false
+    },
+    "gate_details": {
+      "certified_buckets": {
+        "value": null,
+        "required": 1,
+        "pass": false
+      },
+      "brier_skill": {
+        "value": -0.0011587609635075324,
+        "ci": [
+          -0.005952616019480816,
+          0.0033547023255745723
+        ],
+        "ci_level": 0.95,
+        "ci_method": "date_clustered_bootstrap",
+        "above": 0.0,
+        "pass": false
+      },
+      "calibration": {
+        "test": "self_consistency",
+        "ece": 0.022438137844261144,
+        "p_value": 0.023,
+        "min_p": 0.05,
+        "n_scored": 7153,
+        "min_scored": 500,
+        "sims": 2000,
+        "pass": false
+      }
+    },
+    "runtime_s": 283.6
+  }
+}
