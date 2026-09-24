@@ -373,6 +373,18 @@ The v1 failures stay failures. They are not re-run with tweaks. v2 asks new ques
 - A test passes only if it meets its own rule *and* survives Benjamini–Hochberg at q = 0.10 across the whole v2 family.
 - Validation only. The holdout is run once, and only for a survivor.
 
+**Result:** 15 of 17 primaries fail; see `docs/test-reports/2026-09-24-edge-v2-family.md`.
+- Only xs_v1 survives the family FDR (q = 0.004 at both horizons).
+- Its own diagnostics say the pass matches survivorship rules, so it is not trusted yet.
+
+## 20d. Edge search v3: point-in-time re-test of xs_v1 (2026-09-24 night)
+
+**xs_v2** runs the same model, unchanged, on a universe rebuilt at every rebalance. The universe is the 200 most-traded NSE equities as of that date, drawn from every stock listed today. It is pre-registered in `config/edge_search_v3.yaml` before the all-NSE data was downloaded.
+
+**Survivorship canary.** The canary rules are "buy the smallest" and "buy the newest". If either still earns significant excess, the result is **inconclusive**, not a pass.
+
+**Remaining bias.** Stocks delisted before today are missing; Fyers serves listed symbols only. So even a clean pass is an upper bound.
+
 ## 20. Open questions
 
 - Fyers symbol formats, and how `cont_flag` behaves for MCX continuous futures. Verify when the keys arrive.

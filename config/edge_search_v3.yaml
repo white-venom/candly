@@ -1,0 +1,32 @@
+# Edge search v3, pre-registered 2026-09-24 night, BEFORE the all-NSE equity data was downloaded.
+# Motivation: xs_v1 passed validation (and the v2 family FDR), but its universe is today's Nifty 200, and
+# its own diagnostics say the pass matches survivorship rules ("buy the smallest", "buy the newest").
+# xs_pit re-tests the SAME model with a point-in-time universe. Nothing about the model may change.
+# Rules as in edge_search_v2.yaml: validation only, holdout locked, costs from costs.yaml, causal features.
+
+family:
+  fdr_q: 0.10
+  includes: edge_search_v2.yaml    # BH runs over the 17 v2 primaries plus the 4 below (21 in total)
+
+xs_pit:
+  name: xs_v2
+  base: xs_v1                      # identical features, LightGBM settings, seeds, splits, purge, rebalance,
+                                   # portfolio, costs, min price, bootstrap and execution as run for xs_v1
+                                   # (docs/test-reports/2026-09-24-xs-v1-validation.json, commit 13dbd19)
+  candidates: "every NSE equity (EQ series) in the Fyers NSE_CM symbol master on 2026-09-24; ETFs, indices,
+    REITs/InvITs and SME listings excluded"
+  universe_rule: "at each rebalance, the 200 candidates with the highest median daily traded value
+    (close x volume) over the previous 126 sessions, among those with at least 252 sessions of history"
+  horizons_days: [5, 20]
+  hypotheses:
+    model: "xs_v1 model on the point-in-time universe: top-decile excess after cost > 0"
+    momentum: "plain momentum_12_1 top decile on the same universe: excess after cost > 0"
+  primary: "one-sided date-block bootstrap p of top-decile excess after cost > 0; one p per hypothesis x horizon"
+  pass_if:
+    rank_ic_ci_lower_above: 0.0            # model only
+    top_decile_excess_after_cost_ci_lower_above: 0.0
+  survivorship_canary:             # if a pure survivor rule still earns significant excess, the universe is
+                                   # still biased and a pass is declared INCONCLUSIVE, not a pass
+    rules: [smallest_traded_value_decile, newest_listing_decile]
+    inconclusive_if: "either canary's top-decile excess after cost has CI lower bound above 0"
+  residual_bias: "stocks delisted or merged before 2026-09-24 are missing (Fyers serves listed symbols only)"
