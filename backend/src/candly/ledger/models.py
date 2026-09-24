@@ -9,6 +9,7 @@ from pydantic import BaseModel
 from candly.forecast.models import Band, Candle
 
 Status = Literal["pending", "graded", "void"]
+Category = Literal["same", "close", "wrong"]
 GroupBy = Literal["instrument", "tf", "pattern", "session_phase", "vol_regime"]
 
 
@@ -22,6 +23,7 @@ class StepGrade(BaseModel):
     body_iou: float
     color_match: bool
     in_band_80: bool
+    category: Category | None = None  # pivot.yaml candle_accuracy; None for a step without a band
 
 
 class Grade(BaseModel):
@@ -47,6 +49,14 @@ class LedgerEntry(BaseModel):
     actual: list[Candle]
     status: Status
     grade: Grade | None
+
+
+class CategoryShares(BaseModel):
+    """Shares of graded steps in each pivot.yaml candle-accuracy category (they sum to 1)."""
+
+    same: float
+    close: float
+    wrong: float
 
 
 class AccuracySummary(BaseModel):
@@ -91,3 +101,4 @@ class AccuracyResponse(BaseModel):
     calibration: list[CalibrationBin]
     rolling: list[RollingPoint]
     by_group: list[GroupStat]
+    category_shares: CategoryShares | None = None  # over graded steps that have a category

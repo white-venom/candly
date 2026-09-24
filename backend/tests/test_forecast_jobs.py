@@ -1,9 +1,10 @@
 import pandas as pd
+import pytest
 
 from candly.core.calendar import get_calendar
 from candly.core.schema import empty_candles
 from candly.data import clock
-from candly.forecast import jobs
+from candly.forecast import jobs, latest
 from candly.forecast.jobs import grade_pending_job, rebuild_scorecard, run_forecast_cycle
 from candly.ledger import Ledger
 from candly.research.synthetic import synthetic_candles
@@ -15,6 +16,13 @@ FULL = {
 }
 CUT = pd.Timestamp("2024-06-28 03:45", tz="UTC")
 NOW = cal.bar_close_time("NSE", CUT, "1D") + pd.Timedelta(minutes=2)
+
+
+@pytest.fixture(autouse=True)
+def no_kept_forecasts():
+    latest.clear()
+    yield
+    latest.clear()
 
 
 def loader(until: pd.Timestamp):

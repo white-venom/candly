@@ -1,0 +1,5963 @@
+{
+  "model": "range_v1",
+  "period": "validation",
+  "generated_at": "2026-09-24T10:41:50+00:00",
+  "config_sha256": {
+    "research.yaml": "642e412d15a156732d7a5d726bbf1eb699497b253e24222d6750eb89015bc7d5",
+    "patterns.yaml": "e0464b18601745671b84d3ed8d4fb06e20f4b9f37de48de51f191f19ddaf9254",
+    "costs.yaml": "c07fd90cd49a8eb68b5e1bf4ad07fb12aae5e6f697531854f51e4b303b2d791c",
+    "expiry.yaml": "a47b2a6277c49b331b87b821c16eed0101242f391090785f95c24f8ebd54d3b0",
+    "markets.yaml": "f73c5ab9315caf35cb79d5ce509a0fc0a1b4fda3f7623fb39a7e984dca83e77c",
+    "watchlist.yaml": "0be3a783d10a75d3dd72002306efd0a0da844e146f19d33b27610156d9bfb0a6",
+    "holidays_observed.json": "965345a57c0b05fe8946563212fca5855582142ed34781033628cfc3774c0159",
+    "pivot.yaml": "92e098c668be2324a6f532acfba298503d8088e78d4db6b53efd4e1c2b2e5075"
+  },
+  "training_settings": {
+    "config_sha256": {
+      "research.yaml": "642e412d15a156732d7a5d726bbf1eb699497b253e24222d6750eb89015bc7d5",
+      "patterns.yaml": "e0464b18601745671b84d3ed8d4fb06e20f4b9f37de48de51f191f19ddaf9254",
+      "costs.yaml": "c07fd90cd49a8eb68b5e1bf4ad07fb12aae5e6f697531854f51e4b303b2d791c",
+      "expiry.yaml": "a47b2a6277c49b331b87b821c16eed0101242f391090785f95c24f8ebd54d3b0",
+      "markets.yaml": "f73c5ab9315caf35cb79d5ce509a0fc0a1b4fda3f7623fb39a7e984dca83e77c",
+      "watchlist.yaml": "0be3a783d10a75d3dd72002306efd0a0da844e146f19d33b27610156d9bfb0a6",
+      "holidays_observed.json": "965345a57c0b05fe8946563212fca5855582142ed34781033628cfc3774c0159",
+      "pivot.yaml": "92e098c668be2324a6f532acfba298503d8088e78d4db6b53efd4e1c2b2e5075"
+    },
+    "hyperparameters": {
+      "objective": "quantile",
+      "learning_rate": 0.05,
+      "num_leaves": 15,
+      "min_data_in_leaf": 300,
+      "feature_fraction": 0.8,
+      "bagging_fraction": 0.7,
+      "bagging_freq": 1,
+      "lambda_l2": 1.0,
+      "force_col_wise": true,
+      "deterministic": true,
+      "num_threads": 4,
+      "verbose": -1
+    },
+    "dataset_params": {
+      "max_bin": 127,
+      "verbose": -1
+    },
+    "num_rounds": 200,
+    "max_train_rows": 120000,
+    "seed": 20260924,
+    "code_sha256": "def96ee18f8c007d",
+    "lightgbm": "4.7.0"
+  },
+  "pass_rule": "at least 2 of 4 timeframes pass, and 1D or 1h is one of them",
+  "go_no_go_2": {
+    "timeframes": {
+      "5m": true,
+      "15m": true,
+      "1h": true,
+      "1D": false
+    },
+    "missing": [],
+    "n_pass": 3,
+    "min_passing": 2,
+    "required_any": [
+      "1D",
+      "1h"
+    ],
+    "required_any_passes": true,
+    "pass": true
+  },
+  "multiple_testing": {
+    "n_comparisons_gated": 12,
+    "n_comparisons_all": 36,
+    "n_timeframes_gated": 4,
+    "note": "A timeframe passes only if range_v1 clears the bar against every baseline (the gate uses the baseline it improves on least), an intersection-union test, so more baselines make a pass harder, not easier; no FDR adjustment applies. The pass rule then asks for 2 of 4 timeframes, 1D or 1h among them."
+  },
+  "same_close_atr": 0.25,
+  "bootstrap_resamples": 2000,
+  "notes": [
+    "analog_v1 is replayed on every validation bar for 1D and on a seeded sample of 2000 bars per instrument intraday; its comparison uses only the bars where it drew bands (it draws none below abstain.min_analogs analogs).",
+    "atr_bands is refitted on each walk-forward window's training rows, like range_v1.",
+    "rolling_quantiles uses the last 250 realised targets per instrument that had closed by the reference bar.",
+    "Intraday fits use a seeded uniform sample of at most range_model.MAX_TRAIN_ROWS training bars.",
+    "Only the NSE slice (equities and indices, INDIAVIX excluded) is gated; BSE (SENSEX only) and MCX are reported for information. MCX continuous futures are not roll-adjusted, so roll gaps stay in the targets.",
+    "Watchlist instruments are today's large caps (survivorship bias): treat results as an upper bound."
+  ],
+  "failures": [],
+  "results": [
+    {
+      "model": "range_v1",
+      "exchange": "NSE",
+      "tf": "5m",
+      "period": "validation",
+      "start": "2022-12-31T18:30:00+00:00",
+      "end": "2025-09-30T18:30:00+00:00",
+      "instruments": [
+        "NSE:NIFTY50",
+        "NSE:BANKNIFTY",
+        "NSE:RELIANCE",
+        "NSE:HDFCBANK",
+        "NSE:ICICIBANK",
+        "NSE:INFY",
+        "NSE:TCS",
+        "NSE:SBIN",
+        "NSE:BHARTIARTL",
+        "NSE:ITC",
+        "NSE:LT",
+        "NSE:AXISBANK"
+      ],
+      "in_go_no_go_slice": true,
+      "units": "ATR(14) at the reference bar",
+      "steps": 3,
+      "n_forecasts": 610652,
+      "n_dates": 680,
+      "interval_alpha": 0.2,
+      "same_close_atr": 0.25,
+      "methods": {
+        "range_v1": {
+          "n": 610652,
+          "coverage_80": 0.8031055331023235,
+          "coverage_by_step": [
+            0.8030842443814152,
+            0.8036148248102029,
+            0.8026175301153521
+          ],
+          "winkler": 3.370930617921715,
+          "winkler_by_step": [
+            2.390031686748468,
+            3.441840054838732,
+            4.280920112177945
+          ],
+          "pinball_close": 0.2279562314104555,
+          "pinball_all": 0.20368349351176276,
+          "range_iou": 0.38360720038550805,
+          "close_mae_atr": 0.69355126487839,
+          "categories": {
+            "same": 0.07130957293734129,
+            "close": 0.7317959601649822,
+            "wrong": 0.1968944668976766
+          },
+          "categories_step1": {
+            "same": 0.09994563188198843,
+            "close": 0.7031386124994269,
+            "wrong": 0.19691575561858474
+          }
+        },
+        "atr_bands": {
+          "n": 610652,
+          "coverage_80": 0.8096417162857623,
+          "coverage_by_step": [
+            0.8087650576760578,
+            0.8095936801975593,
+            0.8105664109836699
+          ],
+          "winkler": 3.645967118290626,
+          "winkler_by_step": [
+            2.561768236810146,
+            3.7236445946786594,
+            4.652488523383072
+          ],
+          "pinball_close": 0.23730698553417062,
+          "pinball_all": 0.21483015727544452,
+          "range_iou": 0.3724757757650505,
+          "close_mae_atr": 0.6946484895468984,
+          "categories": {
+            "same": 0.07728679073078175,
+            "close": 0.7323549255549806,
+            "wrong": 0.19035828371423769
+          },
+          "categories_step1": {
+            "same": 0.10980230966245914,
+            "close": 0.6989627480135986,
+            "wrong": 0.19123494232394228
+          },
+          "details": {
+            "k_by_fold": {
+              "0": [
+                0.7587,
+                1.0846,
+                1.3426
+              ],
+              "1": [
+                0.7576,
+                1.0824,
+                1.3399
+              ],
+              "2": [
+                0.7568,
+                1.0804,
+                1.3366
+              ],
+              "3": [
+                0.755,
+                1.0779,
+                1.3329
+              ],
+              "4": [
+                0.7534,
+                1.0758,
+                1.3296
+              ],
+              "5": [
+                0.7526,
+                1.0748,
+                1.3281
+              ]
+            }
+          }
+        },
+        "rolling_quantiles": {
+          "n": 610652,
+          "coverage_80": 0.792054503492442,
+          "coverage_by_step": [
+            0.7943132913672599,
+            0.7918585380871593,
+            0.7899916810229066
+          ],
+          "winkler": 3.6751463810490983,
+          "winkler_by_step": [
+            2.5726603261341134,
+            3.7510674729086215,
+            4.701711344104558
+          ],
+          "pinball_close": 0.23875666523928318,
+          "pinball_all": 0.2159882856383793,
+          "range_iou": 0.3752175762091863,
+          "close_mae_atr": 0.6975107152258795,
+          "categories": {
+            "same": 0.08288681605890098,
+            "close": 0.709167687433541,
+            "wrong": 0.20794549650755803
+          },
+          "categories_step1": {
+            "same": 0.11587778309086026,
+            "close": 0.6784355082763996,
+            "wrong": 0.20568670863274008
+          },
+          "details": {
+            "window_bars": 250
+          }
+        },
+        "analog_v1": {
+          "n": 23999,
+          "coverage_80": 0.8094226148311735,
+          "coverage_by_step": [
+            0.8083670152923038,
+            0.8089503729322055,
+            0.8109504562690112
+          ],
+          "winkler": 3.6585986272065596,
+          "winkler_by_step": [
+            2.5787616101822004,
+            3.7468387269748407,
+            4.650195544462638
+          ],
+          "pinball_close": 0.23822688425497338,
+          "pinball_all": null,
+          "range_iou": 0.28870936412235637,
+          "close_mae_atr": 0.6976415800885283,
+          "categories": {
+            "same": 0.018986902232037445,
+            "close": 0.790435712599136,
+            "wrong": 0.19057738516882647
+          },
+          "categories_step1": {
+            "same": 0.024959373307221134,
+            "close": 0.7834076419850827,
+            "wrong": 0.19163298470769616
+          },
+          "details": {
+            "replayed": 24000,
+            "with_bands": 23999,
+            "sampled": true,
+            "sample_per_instrument": 2000,
+            "pooled_library_read": true
+          }
+        }
+      },
+      "comparisons": {
+        "atr_bands": {
+          "n": 610652,
+          "n_dates": 680,
+          "n_months": 33,
+          "winkler_model": 10.112791853765145,
+          "winkler_baseline": 10.937901354871878,
+          "improvement": 0.07543581481828032,
+          "ci": [
+            0.07214221522702292,
+            0.07892646637976196
+          ],
+          "ci_month_blocks": [
+            0.07079466402156426,
+            0.08012413439035727
+          ]
+        },
+        "rolling_quantiles": {
+          "n": 610652,
+          "n_dates": 680,
+          "n_months": 33,
+          "winkler_model": 10.112791853765145,
+          "winkler_baseline": 11.025439143147294,
+          "improvement": 0.08277650237173473,
+          "ci": [
+            0.07956700899174836,
+            0.0860471972655186
+          ],
+          "ci_month_blocks": [
+            0.07840665737838841,
+            0.08728605300158028
+          ]
+        },
+        "analog_v1": {
+          "n": 23999,
+          "n_dates": 680,
+          "n_months": 33,
+          "winkler_model": 10.171410476915776,
+          "winkler_baseline": 10.975795881619678,
+          "improvement": 0.07328720517215015,
+          "ci": [
+            0.06615551592847793,
+            0.08000204808977186
+          ],
+          "ci_month_blocks": [
+            0.0653453992405406,
+            0.08091734177061341
+          ]
+        }
+      },
+      "best_baseline": "analog_v1",
+      "gate": {
+        "coverage_80": 0.8031055331023235,
+        "coverage_within": [
+          0.76,
+          0.84
+        ],
+        "best_baseline": "analog_v1",
+        "improvement": 0.07328720517215015,
+        "min_improvement": 0.05,
+        "ci": [
+          0.06615551592847793,
+          0.08000204808977186
+        ],
+        "ci_level": 0.95,
+        "ci_lower_above": 0.0,
+        "checks": {
+          "coverage": true,
+          "improvement": true,
+          "ci_lower": true
+        },
+        "pass": true
+      },
+      "by_fold": [
+        {
+          "fold": 0,
+          "n": 109800,
+          "coverage_80": 0.8034122647237402,
+          "winkler": 3.300918968509437,
+          "test_start": "2022-12-31T18:30:00+00:00",
+          "test_end": "2023-06-30T18:30:00+00:00"
+        },
+        {
+          "fold": 1,
+          "n": 110692,
+          "coverage_80": 0.7989556607523579,
+          "winkler": 3.386617181713056,
+          "test_start": "2023-06-30T18:30:00+00:00",
+          "test_end": "2023-12-31T18:30:00+00:00"
+        },
+        {
+          "fold": 2,
+          "n": 109404,
+          "coverage_80": 0.80793206829732,
+          "winkler": 3.3385833853213374,
+          "test_start": "2023-12-31T18:30:00+00:00",
+          "test_end": "2024-06-30T18:30:00+00:00"
+        },
+        {
+          "fold": 3,
+          "n": 112500,
+          "coverage_80": 0.8026133333333333,
+          "winkler": 3.3570938580689607,
+          "test_start": "2024-06-30T18:30:00+00:00",
+          "test_end": "2024-12-31T18:30:00+00:00"
+        },
+        {
+          "fold": 4,
+          "n": 110692,
+          "coverage_80": 0.7990610583119527,
+          "winkler": 3.502928529090291,
+          "test_start": "2024-12-31T18:30:00+00:00",
+          "test_end": "2025-06-30T18:30:00+00:00"
+        },
+        {
+          "fold": 5,
+          "n": 57564,
+          "coverage_80": 0.8100664767331434,
+          "winkler": 3.309005479329046,
+          "test_start": "2025-06-30T18:30:00+00:00",
+          "test_end": "2025-09-30T18:30:00+00:00"
+        }
+      ],
+      "by_instrument": [
+        {
+          "instrument": "NSE:NIFTY50",
+          "n": 50889,
+          "coverage_80": 0.8078956159484368,
+          "winkler": 3.650202973676921,
+          "categories": {
+            "same": 0.06555444202086895,
+            "close": 0.7423411739275678,
+            "wrong": 0.19210438405156322
+          },
+          "improvement_vs_best": 0.08013068782079935
+        },
+        {
+          "instrument": "NSE:BANKNIFTY",
+          "n": 50889,
+          "coverage_80": 0.8086750902290606,
+          "winkler": 3.447766513450696,
+          "categories": {
+            "same": 0.06869853995951974,
+            "close": 0.7399765502695409,
+            "wrong": 0.19132490977093936
+          },
+          "improvement_vs_best": 0.07098467282121534
+        },
+        {
+          "instrument": "NSE:RELIANCE",
+          "n": 50881,
+          "coverage_80": 0.8038167488846524,
+          "winkler": 3.340165640421073,
+          "categories": {
+            "same": 0.06974443636458927,
+            "close": 0.7340723125200631,
+            "wrong": 0.19618325111534757
+          },
+          "improvement_vs_best": 0.07388315670277346
+        },
+        {
+          "instrument": "NSE:HDFCBANK",
+          "n": 50889,
+          "coverage_80": 0.8052100322925059,
+          "winkler": 3.2358741164500278,
+          "categories": {
+            "same": 0.07044744443789425,
+            "close": 0.7347625878546117,
+            "wrong": 0.1947899677074941
+          },
+          "improvement_vs_best": 0.07824373535900597
+        },
+        {
+          "instrument": "NSE:ICICIBANK",
+          "n": 50889,
+          "coverage_80": 0.8116816338828955,
+          "winkler": 3.18187668840776,
+          "categories": {
+            "same": 0.07140377422756719,
+            "close": 0.7402778596553282,
+            "wrong": 0.18831836611710454
+          },
+          "improvement_vs_best": 0.0761536424043644
+        },
+        {
+          "instrument": "NSE:INFY",
+          "n": 50889,
+          "coverage_80": 0.7988563343748157,
+          "winkler": 3.5350359830991986,
+          "categories": {
+            "same": 0.07100421178119698,
+            "close": 0.7278521225936188,
+            "wrong": 0.20114366562518424
+          },
+          "improvement_vs_best": 0.09274200281624756
+        },
+        {
+          "instrument": "NSE:TCS",
+          "n": 50889,
+          "coverage_80": 0.7981947637668914,
+          "winkler": 3.4045541727378588,
+          "categories": {
+            "same": 0.07122036851447923,
+            "close": 0.7269743952524121,
+            "wrong": 0.20180523623310867
+          },
+          "improvement_vs_best": 0.09785928144971057
+        },
+        {
+          "instrument": "NSE:SBIN",
+          "n": 50889,
+          "coverage_80": 0.8051379800480785,
+          "winkler": 3.2871687224375,
+          "categories": {
+            "same": 0.06947801424014358,
+            "close": 0.7356599658079349,
+            "wrong": 0.1948620199519215
+          },
+          "improvement_vs_best": 0.060161881433689834
+        },
+        {
+          "instrument": "NSE:BHARTIARTL",
+          "n": 50889,
+          "coverage_80": 0.799439302534274,
+          "winkler": 3.342990588683724,
+          "categories": {
+            "same": 0.07665703786672955,
+            "close": 0.7227822646675444,
+            "wrong": 0.20056069746572605
+          },
+          "improvement_vs_best": 0.07637699986533841
+        },
+        {
+          "instrument": "NSE:ITC",
+          "n": 50881,
+          "coverage_80": 0.8003773510740748,
+          "winkler": 3.3236153250959912,
+          "categories": {
+            "same": 0.0781562207241734,
+            "close": 0.7222211303499014,
+            "wrong": 0.1996226489259252
+          },
+          "improvement_vs_best": 0.05429086242232661
+        },
+        {
+          "instrument": "NSE:LT",
+          "n": 50889,
+          "coverage_80": 0.7956532845998153,
+          "winkler": 3.437917479031323,
+          "categories": {
+            "same": 0.07536664767107495,
+            "close": 0.7202866369287403,
+            "wrong": 0.2043467154001847
+          },
+          "improvement_vs_best": 0.05973781189966332
+        },
+        {
+          "instrument": "NSE:AXISBANK",
+          "n": 50889,
+          "coverage_80": 0.8023279425154094,
+          "winkler": 3.263986936967659,
+          "categories": {
+            "same": 0.06798456771928446,
+            "close": 0.7343433747961249,
+            "wrong": 0.19767205748459066
+          },
+          "improvement_vs_best": 0.05415745560660612
+        }
+      ],
+      "walk_forward_cached": true,
+      "training_folds": [
+        {
+          "fold": 0,
+          "test_start": "2022-12-31T18:30:00+00:00",
+          "test_end": "2023-06-30T18:30:00+00:00",
+          "train_rows": 1218811,
+          "train_rows_used": 120000,
+          "train_last_ts": "2022-12-30T08:15:00+00:00",
+          "fit_seconds": 33.9
+        },
+        {
+          "fold": 1,
+          "test_start": "2023-06-30T18:30:00+00:00",
+          "test_end": "2023-12-31T18:30:00+00:00",
+          "train_rows": 1328611,
+          "train_rows_used": 120000,
+          "train_last_ts": "2023-06-30T08:15:00+00:00",
+          "fit_seconds": 37.9
+        },
+        {
+          "fold": 2,
+          "test_start": "2023-12-31T18:30:00+00:00",
+          "test_end": "2024-06-30T18:30:00+00:00",
+          "train_rows": 1439303,
+          "train_rows_used": 120000,
+          "train_last_ts": "2023-12-29T08:15:00+00:00",
+          "fit_seconds": 49.3
+        },
+        {
+          "fold": 3,
+          "test_start": "2024-06-30T18:30:00+00:00",
+          "test_end": "2024-12-31T18:30:00+00:00",
+          "train_rows": 1548707,
+          "train_rows_used": 120000,
+          "train_last_ts": "2024-06-28T08:15:00+00:00",
+          "fit_seconds": 53.4
+        },
+        {
+          "fold": 4,
+          "test_start": "2024-12-31T18:30:00+00:00",
+          "test_end": "2025-06-30T18:30:00+00:00",
+          "train_rows": 1661207,
+          "train_rows_used": 120000,
+          "train_last_ts": "2024-12-31T08:15:00+00:00",
+          "fit_seconds": 44.7
+        },
+        {
+          "fold": 5,
+          "test_start": "2025-06-30T18:30:00+00:00",
+          "test_end": "2025-09-30T18:30:00+00:00",
+          "train_rows": 1771899,
+          "train_rows_used": 120000,
+          "train_last_ts": "2025-06-30T08:15:00+00:00",
+          "fit_seconds": 52.3
+        }
+      ],
+      "training_seconds": 271.5,
+      "runtime_seconds": {
+        "panel": 18.2,
+        "range_v1": 1.3,
+        "atr_bands": 3.5,
+        "rolling_quantiles": 36.1,
+        "analog_v1": 360.4,
+        "total": 440.9
+      },
+      "bootstrap_resamples": 2000,
+      "seed": 20260924
+    },
+    {
+      "model": "range_v1",
+      "exchange": "NSE",
+      "tf": "15m",
+      "period": "validation",
+      "start": "2022-12-31T18:30:00+00:00",
+      "end": "2025-09-30T18:30:00+00:00",
+      "instruments": [
+        "NSE:NIFTY50",
+        "NSE:BANKNIFTY",
+        "NSE:RELIANCE",
+        "NSE:HDFCBANK",
+        "NSE:ICICIBANK",
+        "NSE:INFY",
+        "NSE:TCS",
+        "NSE:SBIN",
+        "NSE:BHARTIARTL",
+        "NSE:ITC",
+        "NSE:LT",
+        "NSE:AXISBANK"
+      ],
+      "in_go_no_go_slice": true,
+      "units": "ATR(14) at the reference bar",
+      "steps": 3,
+      "n_forecasts": 203528,
+      "n_dates": 680,
+      "interval_alpha": 0.2,
+      "same_close_atr": 0.25,
+      "methods": {
+        "range_v1": {
+          "n": 203528,
+          "coverage_80": 0.7986796247526958,
+          "coverage_by_step": [
+            0.7995902283715263,
+            0.7980965763924374,
+            0.7983520694941236
+          ],
+          "winkler": 3.446884477653401,
+          "winkler_by_step": [
+            2.401631202953032,
+            3.5207246510292705,
+            4.418297578977902
+          ],
+          "pinball_close": 0.23264118226367453,
+          "pinball_all": 0.2089261941815191,
+          "range_iou": 0.38103143406556383,
+          "close_mae_atr": 0.7064701980513669,
+          "categories": {
+            "same": 0.07205888133328092,
+            "close": 0.7266207434194148,
+            "wrong": 0.20132037524730423
+          },
+          "categories_step1": {
+            "same": 0.10128827483196415,
+            "close": 0.6983019535395621,
+            "wrong": 0.20040977162847373
+          }
+        },
+        "atr_bands": {
+          "n": 203528,
+          "coverage_80": 0.8056647406417463,
+          "coverage_by_step": [
+            0.8029902519555049,
+            0.806208482370976,
+            0.8077954875987579
+          ],
+          "winkler": 3.797127901185785,
+          "winkler_by_step": [
+            2.642526078942502,
+            3.8820452677803425,
+            4.8668123568345125
+          ],
+          "pinball_close": 0.2444155221488675,
+          "pinball_all": 0.2229864572570968,
+          "range_iou": 0.36602246781374237,
+          "close_mae_atr": 0.7070675526560479,
+          "categories": {
+            "same": 0.08245384746406718,
+            "close": 0.7232108931776791,
+            "wrong": 0.19433525935825374
+          },
+          "categories_step1": {
+            "same": 0.1175415667623128,
+            "close": 0.6854486851931921,
+            "wrong": 0.19700974804449511
+          },
+          "details": {
+            "k_by_fold": {
+              "0": [
+                0.7307,
+                1.0817,
+                1.3695
+              ],
+              "1": [
+                0.7307,
+                1.0798,
+                1.3663
+              ],
+              "2": [
+                0.7306,
+                1.0791,
+                1.365
+              ],
+              "3": [
+                0.7304,
+                1.0781,
+                1.3616
+              ],
+              "4": [
+                0.7297,
+                1.0764,
+                1.3597
+              ],
+              "5": [
+                0.7291,
+                1.0755,
+                1.3586
+              ]
+            }
+          }
+        },
+        "rolling_quantiles": {
+          "n": 203528,
+          "coverage_80": 0.7916142578252952,
+          "coverage_by_step": [
+            0.7943673597735939,
+            0.7911736960025156,
+            0.789301717699776
+          ],
+          "winkler": 3.8361836872090262,
+          "winkler_by_step": [
+            2.6576408484794203,
+            3.918059026475544,
+            4.932851186672115
+          ],
+          "pinball_close": 0.2462165425159707,
+          "pinball_all": 0.224500539242147,
+          "range_iou": 0.36786090091199913,
+          "close_mae_atr": 0.7100625176540188,
+          "categories": {
+            "same": 0.08721486314741297,
+            "close": 0.7043993946778822,
+            "wrong": 0.20838574217470487
+          },
+          "categories_step1": {
+            "same": 0.12135430997209229,
+            "close": 0.6730130498015016,
+            "wrong": 0.2056326402264062
+          },
+          "details": {
+            "window_bars": 250
+          }
+        },
+        "analog_v1": {
+          "n": 23999,
+          "coverage_80": 0.805616900704196,
+          "coverage_by_step": [
+            0.8025334388932872,
+            0.8045335222300929,
+            0.8097837409892079
+          ],
+          "winkler": 3.7968798918621847,
+          "winkler_by_step": [
+            2.6256597365119054,
+            3.8924725130975006,
+            4.872507425977149
+          ],
+          "pinball_close": 0.24465609382827744,
+          "pinball_all": null,
+          "range_iou": 0.3179474227051061,
+          "close_mae_atr": 0.7085605845972276,
+          "categories": {
+            "same": 0.03676542078142145,
+            "close": 0.7688514799227746,
+            "wrong": 0.194383099295804
+          },
+          "categories_step1": {
+            "same": 0.04721030042918455,
+            "close": 0.7553231384641027,
+            "wrong": 0.1974665611067128
+          },
+          "details": {
+            "replayed": 24000,
+            "with_bands": 23999,
+            "sampled": true,
+            "sample_per_instrument": 2000,
+            "pooled_library_read": true
+          }
+        }
+      },
+      "comparisons": {
+        "atr_bands": {
+          "n": 203528,
+          "n_dates": 680,
+          "n_months": 33,
+          "winkler_model": 10.340653432960204,
+          "winkler_baseline": 11.391383703557354,
+          "improvement": 0.09223903767450337,
+          "ci": [
+            0.08707050069155345,
+            0.09780909571546198
+          ],
+          "ci_month_blocks": [
+            0.08574170412388755,
+            0.09906308241239063
+          ]
+        },
+        "rolling_quantiles": {
+          "n": 203528,
+          "n_dates": 680,
+          "n_months": 33,
+          "winkler_model": 10.340653432960204,
+          "winkler_baseline": 11.50855106162708,
+          "improvement": 0.10148085735666512,
+          "ci": [
+            0.09664266337315153,
+            0.10661453455724278
+          ],
+          "ci_month_blocks": [
+            0.09528503256859105,
+            0.10812016219152337
+          ]
+        },
+        "analog_v1": {
+          "n": 23999,
+          "n_dates": 680,
+          "n_months": 33,
+          "winkler_model": 10.332795799934663,
+          "winkler_baseline": 11.390639675586554,
+          "improvement": 0.09286957587809197,
+          "ci": [
+            0.08578123540520974,
+            0.10031006445455766
+          ],
+          "ci_month_blocks": [
+            0.08311733229050149,
+            0.10274586325128622
+          ]
+        }
+      },
+      "best_baseline": "atr_bands",
+      "gate": {
+        "coverage_80": 0.7986796247526958,
+        "coverage_within": [
+          0.76,
+          0.84
+        ],
+        "best_baseline": "atr_bands",
+        "improvement": 0.09223903767450337,
+        "min_improvement": 0.05,
+        "ci": [
+          0.08707050069155345,
+          0.09780909571546198
+        ],
+        "ci_level": 0.95,
+        "ci_lower_above": 0.0,
+        "checks": {
+          "coverage": true,
+          "improvement": true,
+          "ci_lower": true
+        },
+        "pass": true
+      },
+      "by_fold": [
+        {
+          "fold": 0,
+          "n": 36600,
+          "coverage_80": 0.7979781420765027,
+          "winkler": 3.314010861333602,
+          "test_start": "2022-12-31T18:30:00+00:00",
+          "test_end": "2023-06-30T18:30:00+00:00"
+        },
+        {
+          "fold": 1,
+          "n": 36898,
+          "coverage_80": 0.7970350696514716,
+          "winkler": 3.462782470013317,
+          "test_start": "2023-06-30T18:30:00+00:00",
+          "test_end": "2023-12-31T18:30:00+00:00"
+        },
+        {
+          "fold": 2,
+          "n": 36468,
+          "coverage_80": 0.8012047091514022,
+          "winkler": 3.446595350974291,
+          "test_start": "2023-12-31T18:30:00+00:00",
+          "test_end": "2024-06-30T18:30:00+00:00"
+        },
+        {
+          "fold": 3,
+          "n": 37500,
+          "coverage_80": 0.7958844444444444,
+          "winkler": 3.4577519709595044,
+          "test_start": "2024-06-30T18:30:00+00:00",
+          "test_end": "2024-12-31T18:30:00+00:00"
+        },
+        {
+          "fold": 4,
+          "n": 36898,
+          "coverage_80": 0.796818255732018,
+          "winkler": 3.605925570544437,
+          "test_start": "2024-12-31T18:30:00+00:00",
+          "test_end": "2025-06-30T18:30:00+00:00"
+        },
+        {
+          "fold": 5,
+          "n": 19164,
+          "coverage_80": 0.8074340777847353,
+          "winkler": 3.343110988949059,
+          "test_start": "2025-06-30T18:30:00+00:00",
+          "test_end": "2025-09-30T18:30:00+00:00"
+        }
+      ],
+      "by_instrument": [
+        {
+          "instrument": "NSE:NIFTY50",
+          "n": 16961,
+          "coverage_80": 0.80466953599434,
+          "winkler": 3.7190426895253803,
+          "categories": {
+            "same": 0.07422911384941926,
+            "close": 0.7304404221449207,
+            "wrong": 0.19533046400566004
+          },
+          "improvement_vs_best": 0.10086851724621948
+        },
+        {
+          "instrument": "NSE:BANKNIFTY",
+          "n": 16961,
+          "coverage_80": 0.8041978656918813,
+          "winkler": 3.56061612588276,
+          "categories": {
+            "same": 0.07409154334453551,
+            "close": 0.7301063223473458,
+            "wrong": 0.19580213430811863
+          },
+          "improvement_vs_best": 0.08509522303529893
+        },
+        {
+          "instrument": "NSE:RELIANCE",
+          "n": 16959,
+          "coverage_80": 0.7996933781472965,
+          "winkler": 3.424172287837658,
+          "categories": {
+            "same": 0.06653301098728305,
+            "close": 0.7331603671600133,
+            "wrong": 0.2003066218527036
+          },
+          "improvement_vs_best": 0.09513857399318615
+        },
+        {
+          "instrument": "NSE:HDFCBANK",
+          "n": 16961,
+          "coverage_80": 0.8011320087259006,
+          "winkler": 3.3470208687781398,
+          "categories": {
+            "same": 0.06961067547117898,
+            "close": 0.7315213332547216,
+            "wrong": 0.1988679912740994
+          },
+          "improvement_vs_best": 0.09727614979371346
+        },
+        {
+          "instrument": "NSE:ICICIBANK",
+          "n": 16961,
+          "coverage_80": 0.8089931804335436,
+          "winkler": 3.2539626523526404,
+          "categories": {
+            "same": 0.07031818092486686,
+            "close": 0.7386749995086768,
+            "wrong": 0.19100681956645638
+          },
+          "improvement_vs_best": 0.0878742952253545
+        },
+        {
+          "instrument": "NSE:INFY",
+          "n": 16961,
+          "coverage_80": 0.792248884696264,
+          "winkler": 3.6331484155586686,
+          "categories": {
+            "same": 0.0732857732445021,
+            "close": 0.7189631114517618,
+            "wrong": 0.20775111530373602
+          },
+          "improvement_vs_best": 0.135912489755583
+        },
+        {
+          "instrument": "NSE:TCS",
+          "n": 16961,
+          "coverage_80": 0.7911090147986557,
+          "winkler": 3.4927093232334934,
+          "categories": {
+            "same": 0.07010199870290666,
+            "close": 0.721007016095749,
+            "wrong": 0.20889098520134425
+          },
+          "improvement_vs_best": 0.11215769388540742
+        },
+        {
+          "instrument": "NSE:SBIN",
+          "n": 16961,
+          "coverage_80": 0.803392095591848,
+          "winkler": 3.358564460579546,
+          "categories": {
+            "same": 0.0730302851640037,
+            "close": 0.7303618104278443,
+            "wrong": 0.19660790440815204
+          },
+          "improvement_vs_best": 0.06866950187583165
+        },
+        {
+          "instrument": "NSE:BHARTIARTL",
+          "n": 16961,
+          "coverage_80": 0.795177171157361,
+          "winkler": 3.337174493236774,
+          "categories": {
+            "same": 0.0748580075860307,
+            "close": 0.7203191635713303,
+            "wrong": 0.204822828842639
+          },
+          "improvement_vs_best": 0.0806120488730595
+        },
+        {
+          "instrument": "NSE:ITC",
+          "n": 16959,
+          "coverage_80": 0.7959588812233426,
+          "winkler": 3.3845734660271463,
+          "categories": {
+            "same": 0.07624270298956307,
+            "close": 0.7197161782337795,
+            "wrong": 0.20404111877665743
+          },
+          "improvement_vs_best": 0.0688837760740969
+        },
+        {
+          "instrument": "NSE:LT",
+          "n": 16961,
+          "coverage_80": 0.7892026806595523,
+          "winkler": 3.4948873028147136,
+          "categories": {
+            "same": 0.07244069728593047,
+            "close": 0.7167619833736218,
+            "wrong": 0.21079731934044768
+          },
+          "improvement_vs_best": 0.09279232471184129
+        },
+        {
+          "instrument": "NSE:AXISBANK",
+          "n": 16961,
+          "coverage_80": 0.7983805986282255,
+          "winkler": 3.3567316202841107,
+          "categories": {
+            "same": 0.06996442819802291,
+            "close": 0.7284161704302026,
+            "wrong": 0.20161940137177448
+          },
+          "improvement_vs_best": 0.07177550730008464
+        }
+      ],
+      "walk_forward_cached": true,
+      "training_folds": [
+        {
+          "fold": 0,
+          "test_start": "2022-12-31T18:30:00+00:00",
+          "test_end": "2023-06-30T18:30:00+00:00",
+          "train_rows": 406099,
+          "train_rows_used": 120000,
+          "train_last_ts": "2022-12-30T04:45:00+00:00",
+          "fit_seconds": 65.0
+        },
+        {
+          "fold": 1,
+          "test_start": "2023-06-30T18:30:00+00:00",
+          "test_end": "2023-12-31T18:30:00+00:00",
+          "train_rows": 442699,
+          "train_rows_used": 120000,
+          "train_last_ts": "2023-06-30T04:45:00+00:00",
+          "fit_seconds": 69.6
+        },
+        {
+          "fold": 2,
+          "test_start": "2023-12-31T18:30:00+00:00",
+          "test_end": "2024-06-30T18:30:00+00:00",
+          "train_rows": 479597,
+          "train_rows_used": 120000,
+          "train_last_ts": "2023-12-29T04:45:00+00:00",
+          "fit_seconds": 34.6
+        },
+        {
+          "fold": 3,
+          "test_start": "2024-06-30T18:30:00+00:00",
+          "test_end": "2024-12-31T18:30:00+00:00",
+          "train_rows": 516065,
+          "train_rows_used": 120000,
+          "train_last_ts": "2024-06-28T04:45:00+00:00",
+          "fit_seconds": 46.5
+        },
+        {
+          "fold": 4,
+          "test_start": "2024-12-31T18:30:00+00:00",
+          "test_end": "2025-06-30T18:30:00+00:00",
+          "train_rows": 553565,
+          "train_rows_used": 120000,
+          "train_last_ts": "2024-12-31T04:45:00+00:00",
+          "fit_seconds": 40.7
+        },
+        {
+          "fold": 5,
+          "test_start": "2025-06-30T18:30:00+00:00",
+          "test_end": "2025-09-30T18:30:00+00:00",
+          "train_rows": 590463,
+          "train_rows_used": 120000,
+          "train_last_ts": "2025-06-30T04:45:00+00:00",
+          "fit_seconds": 39.1
+        }
+      ],
+      "training_seconds": 295.5,
+      "runtime_seconds": {
+        "panel": 7.7,
+        "range_v1": 0.6,
+        "atr_bands": 1.4,
+        "rolling_quantiles": 13.1,
+        "analog_v1": 137.1,
+        "total": 166.0
+      },
+      "bootstrap_resamples": 2000,
+      "seed": 20260924
+    },
+    {
+      "model": "range_v1",
+      "exchange": "NSE",
+      "tf": "1h",
+      "period": "validation",
+      "start": "2022-12-31T18:30:00+00:00",
+      "end": "2025-09-30T18:30:00+00:00",
+      "instruments": [
+        "NSE:NIFTY50",
+        "NSE:BANKNIFTY",
+        "NSE:RELIANCE",
+        "NSE:HDFCBANK",
+        "NSE:ICICIBANK",
+        "NSE:INFY",
+        "NSE:TCS",
+        "NSE:SBIN",
+        "NSE:BHARTIARTL",
+        "NSE:ITC",
+        "NSE:LT",
+        "NSE:AXISBANK"
+      ],
+      "in_go_no_go_slice": true,
+      "units": "ATR(14) at the reference bar",
+      "steps": 3,
+      "n_forecasts": 56988,
+      "n_dates": 680,
+      "interval_alpha": 0.2,
+      "same_close_atr": 0.25,
+      "methods": {
+        "range_v1": {
+          "n": 56988,
+          "coverage_80": 0.8002912893942584,
+          "coverage_by_step": [
+            0.7990103179616761,
+            0.8018881167965186,
+            0.7999754334245807
+          ],
+          "winkler": 3.6455381524046744,
+          "winkler_by_step": [
+            2.4712868025423775,
+            3.7446949488914223,
+            4.720632705780225
+          ],
+          "pinball_close": 0.2449290646686033,
+          "pinball_all": 0.22043183290861096,
+          "range_iou": 0.36884791978873277,
+          "close_mae_atr": 0.740466757530685,
+          "categories": {
+            "same": 0.07765962424837977,
+            "close": 0.7226316651458786,
+            "wrong": 0.19970871060574155
+          },
+          "categories_step1": {
+            "same": 0.11133922931143399,
+            "close": 0.6876710886502422,
+            "wrong": 0.20098968203832385
+          }
+        },
+        "atr_bands": {
+          "n": 56988,
+          "coverage_80": 0.8071757796963104,
+          "coverage_by_step": [
+            0.8051870569242647,
+            0.8076963571278164,
+            0.8086439250368499
+          ],
+          "winkler": 3.9117785906563545,
+          "winkler_by_step": [
+            2.7881147037826275,
+            4.002229565590769,
+            4.944991502595666
+          ],
+          "pinball_close": 0.2538436656590831,
+          "pinball_all": 0.23186303222199783,
+          "range_iou": 0.34444151454845884,
+          "close_mae_atr": 0.7407062758232281,
+          "categories": {
+            "same": 0.10055918205002223,
+            "close": 0.7066165976462881,
+            "wrong": 0.19282422030368968
+          },
+          "categories_step1": {
+            "same": 0.1428721836176037,
+            "close": 0.6623148733066611,
+            "wrong": 0.19481294307573524
+          },
+          "details": {
+            "k_by_fold": {
+              "0": [
+                0.7638,
+                1.1932,
+                1.5238
+              ],
+              "1": [
+                0.7619,
+                1.1899,
+                1.5199
+              ],
+              "2": [
+                0.7631,
+                1.1902,
+                1.5207
+              ],
+              "3": [
+                0.7619,
+                1.1874,
+                1.5159
+              ],
+              "4": [
+                0.7608,
+                1.1847,
+                1.5122
+              ],
+              "5": [
+                0.7596,
+                1.1838,
+                1.5112
+              ]
+            }
+          }
+        },
+        "rolling_quantiles": {
+          "n": 56988,
+          "coverage_80": 0.791330338550806,
+          "coverage_by_step": [
+            0.793798694461992,
+            0.7916227977819892,
+            0.7885695234084369
+          ],
+          "winkler": 3.9524391109128834,
+          "winkler_by_step": [
+            2.806134128965128,
+            4.042525843492351,
+            5.0086573602811715
+          ],
+          "pinball_close": 0.2556879865671223,
+          "pinball_all": 0.23345495516028353,
+          "range_iou": 0.3436882395243877,
+          "close_mae_atr": 0.7436400972201573,
+          "categories": {
+            "same": 0.10064107063475351,
+            "close": 0.6906892679160525,
+            "wrong": 0.208669661449194
+          },
+          "categories_step1": {
+            "same": 0.14531129360567138,
+            "close": 0.6484874008563206,
+            "wrong": 0.206201305538008
+          },
+          "details": {
+            "window_bars": 250
+          }
+        },
+        "analog_v1": {
+          "n": 23994,
+          "coverage_80": 0.8033675085438026,
+          "coverage_by_step": [
+            0.8065766441610402,
+            0.8021171959656581,
+            0.8014086855047096
+          ],
+          "winkler": 3.931345697058941,
+          "winkler_by_step": [
+            2.787705716848581,
+            4.0216356552444275,
+            4.984695719083817
+          ],
+          "pinball_close": 0.2551850353226629,
+          "pinball_all": null,
+          "range_iou": 0.31293007381075205,
+          "close_mae_atr": 0.7448410725241893,
+          "categories": {
+            "same": 0.056444666722236116,
+            "close": 0.7469228418215665,
+            "wrong": 0.19663249145619738
+          },
+          "categories_step1": {
+            "same": 0.088480453446695,
+            "close": 0.7180961907143453,
+            "wrong": 0.19342335583895973
+          },
+          "details": {
+            "replayed": 24000,
+            "with_bands": 23994,
+            "sampled": true,
+            "sample_per_instrument": 2000,
+            "pooled_library_read": true
+          }
+        }
+      },
+      "comparisons": {
+        "atr_bands": {
+          "n": 56988,
+          "n_dates": 680,
+          "n_months": 33,
+          "winkler_model": 10.936614457214024,
+          "winkler_baseline": 11.73533577196906,
+          "improvement": 0.06806122383501434,
+          "ci": [
+            0.0622038292128422,
+            0.07408094088299659
+          ],
+          "ci_month_blocks": [
+            0.06327633959588193,
+            0.07278604140227964
+          ]
+        },
+        "rolling_quantiles": {
+          "n": 56988,
+          "n_dates": 680,
+          "n_months": 33,
+          "winkler_model": 10.936614457214024,
+          "winkler_baseline": 11.857317332738651,
+          "improvement": 0.07764849752165437,
+          "ci": [
+            0.0713585769020081,
+            0.08395826007341628
+          ],
+          "ci_month_blocks": [
+            0.07300762906405249,
+            0.08252623839688614
+          ]
+        },
+        "analog_v1": {
+          "n": 23994,
+          "n_dates": 680,
+          "n_months": 33,
+          "winkler_model": 11.030872017810287,
+          "winkler_baseline": 11.794037091176826,
+          "improvement": 0.06470770504337875,
+          "ci": [
+            0.05826332919787791,
+            0.0713207499148661
+          ],
+          "ci_month_blocks": [
+            0.05955271098056215,
+            0.07049612782790657
+          ]
+        }
+      },
+      "best_baseline": "analog_v1",
+      "gate": {
+        "coverage_80": 0.8002912893942584,
+        "coverage_within": [
+          0.76,
+          0.84
+        ],
+        "best_baseline": "analog_v1",
+        "improvement": 0.06470770504337875,
+        "min_improvement": 0.05,
+        "ci": [
+          0.05826332919787791,
+          0.0713207499148661
+        ],
+        "ci_level": 0.95,
+        "ci_lower_above": 0.0,
+        "checks": {
+          "coverage": true,
+          "improvement": true,
+          "ci_lower": true
+        },
+        "pass": true
+      },
+      "by_fold": [
+        {
+          "fold": 0,
+          "n": 10248,
+          "coverage_80": 0.8010994015092375,
+          "winkler": 3.520571005102436,
+          "test_start": "2022-12-31T18:30:00+00:00",
+          "test_end": "2023-06-30T18:30:00+00:00"
+        },
+        {
+          "fold": 1,
+          "n": 10332,
+          "coverage_80": 0.7972319008904375,
+          "winkler": 3.6961412393301822,
+          "test_start": "2023-06-30T18:30:00+00:00",
+          "test_end": "2023-12-31T18:30:00+00:00"
+        },
+        {
+          "fold": 2,
+          "n": 10236,
+          "coverage_80": 0.7984564282923017,
+          "winkler": 3.64157908909839,
+          "test_start": "2023-12-31T18:30:00+00:00",
+          "test_end": "2024-06-30T18:30:00+00:00"
+        },
+        {
+          "fold": 3,
+          "n": 10500,
+          "coverage_80": 0.7978412698412698,
+          "winkler": 3.7067319611211618,
+          "test_start": "2024-06-30T18:30:00+00:00",
+          "test_end": "2024-12-31T18:30:00+00:00"
+        },
+        {
+          "fold": 4,
+          "n": 10332,
+          "coverage_80": 0.7994579945799458,
+          "winkler": 3.7468595747753124,
+          "test_start": "2024-12-31T18:30:00+00:00",
+          "test_end": "2025-06-30T18:30:00+00:00"
+        },
+        {
+          "fold": 5,
+          "n": 5340,
+          "coverage_80": 0.8146067415730337,
+          "winkler": 3.4786784662596517,
+          "test_start": "2025-06-30T18:30:00+00:00",
+          "test_end": "2025-09-30T18:30:00+00:00"
+        }
+      ],
+      "by_instrument": [
+        {
+          "instrument": "NSE:NIFTY50",
+          "n": 4749,
+          "coverage_80": 0.7976416087597389,
+          "winkler": 3.914573428703541,
+          "categories": {
+            "same": 0.08528111181301326,
+            "close": 0.7123604969467257,
+            "wrong": 0.20235839124026112
+          },
+          "improvement_vs_best": 0.06584466226647812
+        },
+        {
+          "instrument": "NSE:BANKNIFTY",
+          "n": 4749,
+          "coverage_80": 0.8027654944900681,
+          "winkler": 3.819698032311509,
+          "categories": {
+            "same": 0.08808872043237173,
+            "close": 0.7146767740576964,
+            "wrong": 0.1972345055099319
+          },
+          "improvement_vs_best": 0.05112729452872278
+        },
+        {
+          "instrument": "NSE:RELIANCE",
+          "n": 4749,
+          "coverage_80": 0.8062048150487822,
+          "winkler": 3.6895112749747394,
+          "categories": {
+            "same": 0.07110268828525304,
+            "close": 0.7351021267635292,
+            "wrong": 0.1937951849512178
+          },
+          "improvement_vs_best": 0.06328929463823474
+        },
+        {
+          "instrument": "NSE:HDFCBANK",
+          "n": 4749,
+          "coverage_80": 0.7933600056152172,
+          "winkler": 3.606392908035232,
+          "categories": {
+            "same": 0.07896399241945673,
+            "close": 0.7143960131957605,
+            "wrong": 0.20663999438478275
+          },
+          "improvement_vs_best": 0.0662497065184543
+        },
+        {
+          "instrument": "NSE:ICICIBANK",
+          "n": 4749,
+          "coverage_80": 0.815540113708149,
+          "winkler": 3.402534098354542,
+          "categories": {
+            "same": 0.0666105144942795,
+            "close": 0.7489295992138696,
+            "wrong": 0.18445988629185092
+          },
+          "improvement_vs_best": 0.06291467989625099
+        },
+        {
+          "instrument": "NSE:INFY",
+          "n": 4749,
+          "coverage_80": 0.7788306310100372,
+          "winkler": 3.8891591746194023,
+          "categories": {
+            "same": 0.07671790552396995,
+            "close": 0.7021127254860673,
+            "wrong": 0.2211693689899628
+          },
+          "improvement_vs_best": 0.10288226975327941
+        },
+        {
+          "instrument": "NSE:TCS",
+          "n": 4749,
+          "coverage_80": 0.7948340001403804,
+          "winkler": 3.6955308526944735,
+          "categories": {
+            "same": 0.07840247069558504,
+            "close": 0.7164315294447954,
+            "wrong": 0.20516599985961956
+          },
+          "improvement_vs_best": 0.08433500202446687
+        },
+        {
+          "instrument": "NSE:SBIN",
+          "n": 4749,
+          "coverage_80": 0.8191198146978311,
+          "winkler": 3.6684205031833406,
+          "categories": {
+            "same": 0.08022741629816804,
+            "close": 0.7388923983996631,
+            "wrong": 0.18088018530216887
+          },
+          "improvement_vs_best": 0.0479220958042228
+        },
+        {
+          "instrument": "NSE:BHARTIARTL",
+          "n": 4749,
+          "coverage_80": 0.8027654944900681,
+          "winkler": 3.3661992650983996,
+          "categories": {
+            "same": 0.07798132940268127,
+            "close": 0.7247841650873869,
+            "wrong": 0.1972345055099319
+          },
+          "improvement_vs_best": 0.06361968762033421
+        },
+        {
+          "instrument": "NSE:ITC",
+          "n": 4749,
+          "coverage_80": 0.7989752228539342,
+          "winkler": 3.479518238512844,
+          "categories": {
+            "same": 0.07903418263494069,
+            "close": 0.7199410402189935,
+            "wrong": 0.20102477714606584
+          },
+          "improvement_vs_best": 0.04936676077435309
+        },
+        {
+          "instrument": "NSE:LT",
+          "n": 4749,
+          "coverage_80": 0.786481364497789,
+          "winkler": 3.6981473005139267,
+          "categories": {
+            "same": 0.07692847617042184,
+            "close": 0.7095528883273672,
+            "wrong": 0.21351863550221098
+          },
+          "improvement_vs_best": 0.06642238047220494
+        },
+        {
+          "instrument": "NSE:AXISBANK",
+          "n": 4749,
+          "coverage_80": 0.8069769074191058,
+          "winkler": 3.516772751854145,
+          "categories": {
+            "same": 0.07257668281041622,
+            "close": 0.7344002246086896,
+            "wrong": 0.19302309258089423
+          },
+          "improvement_vs_best": 0.043433943196749536
+        }
+      ],
+      "walk_forward_cached": true,
+      "training_folds": [
+        {
+          "fold": 0,
+          "test_start": "2022-12-31T18:30:00+00:00",
+          "test_end": "2023-06-30T18:30:00+00:00",
+          "train_rows": 113489,
+          "train_rows_used": 113489,
+          "train_last_ts": "2022-12-28T03:45:00+00:00",
+          "fit_seconds": 48.4
+        },
+        {
+          "fold": 1,
+          "test_start": "2023-06-30T18:30:00+00:00",
+          "test_end": "2023-12-31T18:30:00+00:00",
+          "train_rows": 123737,
+          "train_rows_used": 120000,
+          "train_last_ts": "2023-06-27T03:45:00+00:00",
+          "fit_seconds": 48.8
+        },
+        {
+          "fold": 2,
+          "test_start": "2023-12-31T18:30:00+00:00",
+          "test_end": "2024-06-30T18:30:00+00:00",
+          "train_rows": 134069,
+          "train_rows_used": 120000,
+          "train_last_ts": "2023-12-27T03:45:00+00:00",
+          "fit_seconds": 46.1
+        },
+        {
+          "fold": 3,
+          "test_start": "2024-06-30T18:30:00+00:00",
+          "test_end": "2024-12-31T18:30:00+00:00",
+          "train_rows": 144305,
+          "train_rows_used": 120000,
+          "train_last_ts": "2024-06-26T03:45:00+00:00",
+          "fit_seconds": 42.6
+        },
+        {
+          "fold": 4,
+          "test_start": "2024-12-31T18:30:00+00:00",
+          "test_end": "2025-06-30T18:30:00+00:00",
+          "train_rows": 154805,
+          "train_rows_used": 120000,
+          "train_last_ts": "2024-12-27T03:45:00+00:00",
+          "fit_seconds": 70.0
+        },
+        {
+          "fold": 5,
+          "test_start": "2025-06-30T18:30:00+00:00",
+          "test_end": "2025-09-30T18:30:00+00:00",
+          "train_rows": 165137,
+          "train_rows_used": 120000,
+          "train_last_ts": "2025-06-26T03:45:00+00:00",
+          "fit_seconds": 53.4
+        }
+      ],
+      "training_seconds": 309.3,
+      "runtime_seconds": {
+        "panel": 2.9,
+        "range_v1": 0.3,
+        "atr_bands": 0.3,
+        "rolling_quantiles": 3.4,
+        "analog_v1": 53.9,
+        "total": 62.5
+      },
+      "bootstrap_resamples": 2000,
+      "seed": 20260924
+    },
+    {
+      "model": "range_v1",
+      "exchange": "NSE",
+      "tf": "1D",
+      "period": "validation",
+      "start": "2018-12-31T18:30:00+00:00",
+      "end": "2025-09-30T18:30:00+00:00",
+      "instruments": [
+        "NSE:NIFTY50",
+        "NSE:BANKNIFTY",
+        "NSE:RELIANCE",
+        "NSE:HDFCBANK",
+        "NSE:ICICIBANK",
+        "NSE:INFY",
+        "NSE:TCS",
+        "NSE:SBIN",
+        "NSE:BHARTIARTL",
+        "NSE:ITC",
+        "NSE:LT",
+        "NSE:AXISBANK"
+      ],
+      "in_go_no_go_slice": true,
+      "units": "ATR(14) at the reference bar",
+      "steps": 3,
+      "n_forecasts": 20063,
+      "n_dates": 1672,
+      "interval_alpha": 0.2,
+      "same_close_atr": 0.25,
+      "methods": {
+        "range_v1": {
+          "n": 20063,
+          "coverage_80": 0.784528734486368,
+          "coverage_by_step": [
+            0.7887155460300055,
+            0.7864726112744854,
+            0.7783980461546129
+          ],
+          "winkler": 3.553964705974966,
+          "winkler_by_step": [
+            2.5185466979063085,
+            3.6365378326854065,
+            4.5068095873331835
+          ],
+          "pinball_close": 0.24283004980795195,
+          "pinball_all": 0.2215256948550485,
+          "range_iou": 0.34116856327769474,
+          "close_mae_atr": 0.7461873576527184,
+          "categories": {
+            "same": 0.07125886789945006,
+            "close": 0.7132698665869178,
+            "wrong": 0.21547126551363205
+          },
+          "categories_step1": {
+            "same": 0.10237751084085132,
+            "close": 0.6863380351891541,
+            "wrong": 0.2112844539699945
+          }
+        },
+        "atr_bands": {
+          "n": 20063,
+          "coverage_80": 0.7865390686005749,
+          "coverage_by_step": [
+            0.789413347953945,
+            0.7876688431440961,
+            0.7825350147036834
+          ],
+          "winkler": 3.579550485329798,
+          "winkler_by_step": [
+            2.5496464737235374,
+            3.6581788833099855,
+            4.530826098955872
+          ],
+          "pinball_close": 0.243515886977087,
+          "pinball_all": 0.22231187896652893,
+          "range_iou": 0.3366929825669601,
+          "close_mae_atr": 0.7451852247965624,
+          "categories": {
+            "same": 0.0683513598830351,
+            "close": 0.7181877087175398,
+            "wrong": 0.21346093139942515
+          },
+          "categories_step1": {
+            "same": 0.10167970891691173,
+            "close": 0.6877336390370333,
+            "wrong": 0.21058665204605492
+          },
+          "details": {
+            "k_by_fold": {
+              "0": [
+                0.7859,
+                1.1497,
+                1.4184
+              ],
+              "1": [
+                0.7863,
+                1.1501,
+                1.4197
+              ],
+              "2": [
+                0.7864,
+                1.1492,
+                1.4183
+              ],
+              "3": [
+                0.7881,
+                1.153,
+                1.424
+              ],
+              "4": [
+                0.7889,
+                1.1534,
+                1.4244
+              ],
+              "5": [
+                0.7885,
+                1.1548,
+                1.4257
+              ],
+              "6": [
+                0.7885,
+                1.1557,
+                1.4277
+              ],
+              "7": [
+                0.7906,
+                1.1579,
+                1.4314
+              ],
+              "8": [
+                0.7911,
+                1.1586,
+                1.4331
+              ],
+              "9": [
+                0.7908,
+                1.1571,
+                1.4319
+              ],
+              "10": [
+                0.7915,
+                1.1585,
+                1.4334
+              ],
+              "11": [
+                0.7924,
+                1.1595,
+                1.4356
+              ],
+              "12": [
+                0.7927,
+                1.1607,
+                1.4374
+              ],
+              "13": [
+                0.7928,
+                1.1606,
+                1.4368
+              ]
+            }
+          }
+        },
+        "rolling_quantiles": {
+          "n": 20063,
+          "coverage_80": 0.7926032996062403,
+          "coverage_by_step": [
+            0.7961919952150726,
+            0.7926531426008074,
+            0.7889647610028411
+          ],
+          "winkler": 3.5978223448412554,
+          "winkler_by_step": [
+            2.5588000514292437,
+            3.676598324953592,
+            4.558068658140931
+          ],
+          "pinball_close": 0.2443689995287071,
+          "pinball_all": 0.22326716683453504,
+          "range_iou": 0.33582330470803584,
+          "close_mae_atr": 0.7466495282039917,
+          "categories": {
+            "same": 0.06946452009503398,
+            "close": 0.7231387795112064,
+            "wrong": 0.20739670039375965
+          },
+          "categories_step1": {
+            "same": 0.10202860987888153,
+            "close": 0.694163385336191,
+            "wrong": 0.20380800478492747
+          },
+          "details": {
+            "window_bars": 250
+          }
+        },
+        "analog_v1": {
+          "n": 19997,
+          "coverage_80": 0.7809004684035938,
+          "coverage_by_step": [
+            0.7829674451167675,
+            0.7815672350852628,
+            0.7781667250087513
+          ],
+          "winkler": 3.586451511947622,
+          "winkler_by_step": [
+            2.556650097208785,
+            3.6668745592518563,
+            4.535829879382225
+          ],
+          "pinball_close": 0.2438304135221949,
+          "pinball_all": null,
+          "range_iou": 0.30724066331708766,
+          "close_mae_atr": 0.7456921787436449,
+          "categories": {
+            "same": 0.030271207347768832,
+            "close": 0.7506292610558251,
+            "wrong": 0.21909953159640613
+          },
+          "categories_step1": {
+            "same": 0.03970595589338401,
+            "close": 0.7432614892233835,
+            "wrong": 0.21703255488323248
+          },
+          "details": {
+            "replayed": 20063,
+            "with_bands": 19997,
+            "sampled": false,
+            "sample_per_instrument": null,
+            "pooled_library_read": true
+          }
+        }
+      },
+      "comparisons": {
+        "atr_bands": {
+          "n": 20063,
+          "n_dates": 1672,
+          "n_months": 81,
+          "winkler_model": 10.661894117924898,
+          "winkler_baseline": 10.738651455989395,
+          "improvement": 0.007147763234431448,
+          "ci": [
+            0.0031430473858325724,
+            0.0112366764571877
+          ],
+          "ci_month_blocks": [
+            0.0013180778482503157,
+            0.013063759533881355
+          ]
+        },
+        "rolling_quantiles": {
+          "n": 20063,
+          "n_dates": 1672,
+          "n_months": 81,
+          "winkler_model": 10.661894117924898,
+          "winkler_baseline": 10.793467034523765,
+          "improvement": 0.012190051276204428,
+          "ci": [
+            0.007928983201367552,
+            0.01641237477093422
+          ],
+          "ci_month_blocks": [
+            0.0059571870784101534,
+            0.018053203870925006
+          ]
+        },
+        "analog_v1": {
+          "n": 19997,
+          "n_dates": 1672,
+          "n_months": 81,
+          "winkler_model": 10.665711936869847,
+          "winkler_baseline": 10.759354535842867,
+          "improvement": 0.008703365862800183,
+          "ci": [
+            0.005076762433333746,
+            0.012404488519533389
+          ],
+          "ci_month_blocks": [
+            0.004599731828122235,
+            0.013171930460382434
+          ]
+        }
+      },
+      "best_baseline": "atr_bands",
+      "gate": {
+        "coverage_80": 0.784528734486368,
+        "coverage_within": [
+          0.76,
+          0.84
+        ],
+        "best_baseline": "atr_bands",
+        "improvement": 0.007147763234431448,
+        "min_improvement": 0.05,
+        "ci": [
+          0.0031430473858325724,
+          0.0112366764571877
+        ],
+        "ci_level": 0.95,
+        "ci_lower_above": 0.0,
+        "checks": {
+          "coverage": true,
+          "improvement": false,
+          "ci_lower": true
+        },
+        "pass": false
+      },
+      "by_fold": [
+        {
+          "fold": 0,
+          "n": 1464,
+          "coverage_80": 0.8142076502732241,
+          "winkler": 3.3551258954316214,
+          "test_start": "2018-12-31T18:30:00+00:00",
+          "test_end": "2019-06-30T18:30:00+00:00"
+        },
+        {
+          "fold": 1,
+          "n": 1476,
+          "coverage_80": 0.7710027100271003,
+          "winkler": 3.6298312658701484,
+          "test_start": "2019-06-30T18:30:00+00:00",
+          "test_end": "2019-12-31T18:30:00+00:00"
+        },
+        {
+          "fold": 2,
+          "n": 1476,
+          "coverage_80": 0.7260614272809395,
+          "winkler": 4.1215305461631555,
+          "test_start": "2019-12-31T18:30:00+00:00",
+          "test_end": "2020-06-30T18:30:00+00:00"
+        },
+        {
+          "fold": 3,
+          "n": 1547,
+          "coverage_80": 0.7683688860159449,
+          "winkler": 3.4153133304538823,
+          "test_start": "2020-06-30T18:30:00+00:00",
+          "test_end": "2020-12-31T18:30:00+00:00"
+        },
+        {
+          "fold": 4,
+          "n": 1464,
+          "coverage_80": 0.7918943533697632,
+          "winkler": 3.4736763229067753,
+          "test_start": "2020-12-31T18:30:00+00:00",
+          "test_end": "2021-06-30T18:30:00+00:00"
+        },
+        {
+          "fold": 5,
+          "n": 1512,
+          "coverage_80": 0.7757936507936508,
+          "winkler": 3.571279245781888,
+          "test_start": "2021-06-30T18:30:00+00:00",
+          "test_end": "2021-12-31T18:30:00+00:00"
+        },
+        {
+          "fold": 6,
+          "n": 1476,
+          "coverage_80": 0.7619692863595302,
+          "winkler": 3.4623070540143868,
+          "test_start": "2021-12-31T18:30:00+00:00",
+          "test_end": "2022-06-30T18:30:00+00:00"
+        },
+        {
+          "fold": 7,
+          "n": 1500,
+          "coverage_80": 0.7997777777777778,
+          "winkler": 3.36066273326344,
+          "test_start": "2022-06-30T18:30:00+00:00",
+          "test_end": "2022-12-31T18:30:00+00:00"
+        },
+        {
+          "fold": 8,
+          "n": 1464,
+          "coverage_80": 0.807832422586521,
+          "winkler": 3.327689935478682,
+          "test_start": "2022-12-31T18:30:00+00:00",
+          "test_end": "2023-06-30T18:30:00+00:00"
+        },
+        {
+          "fold": 9,
+          "n": 1488,
+          "coverage_80": 0.7970430107526881,
+          "winkler": 3.8214912009241866,
+          "test_start": "2023-06-30T18:30:00+00:00",
+          "test_end": "2023-12-31T18:30:00+00:00"
+        },
+        {
+          "fold": 10,
+          "n": 1476,
+          "coverage_80": 0.7827461607949413,
+          "winkler": 3.7567266338885963,
+          "test_start": "2023-12-31T18:30:00+00:00",
+          "test_end": "2024-06-30T18:30:00+00:00"
+        },
+        {
+          "fold": 11,
+          "n": 1512,
+          "coverage_80": 0.7876984126984127,
+          "winkler": 3.529502503771,
+          "test_start": "2024-06-30T18:30:00+00:00",
+          "test_end": "2024-12-31T18:30:00+00:00"
+        },
+        {
+          "fold": 12,
+          "n": 1476,
+          "coverage_80": 0.7994579945799458,
+          "winkler": 3.442904340131873,
+          "test_start": "2024-12-31T18:30:00+00:00",
+          "test_end": "2025-06-30T18:30:00+00:00"
+        },
+        {
+          "fold": 13,
+          "n": 732,
+          "coverage_80": 0.8169398907103825,
+          "winkler": 3.4273416454104777,
+          "test_start": "2025-06-30T18:30:00+00:00",
+          "test_end": "2025-09-30T18:30:00+00:00"
+        }
+      ],
+      "by_instrument": [
+        {
+          "instrument": "NSE:NIFTY50",
+          "n": 1672,
+          "coverage_80": 0.779505582137161,
+          "winkler": 3.7653369526698164,
+          "categories": {
+            "same": 0.0645933014354067,
+            "close": 0.7149122807017544,
+            "wrong": 0.2204944178628389
+          },
+          "improvement_vs_best": 0.024381522991912652
+        },
+        {
+          "instrument": "NSE:BANKNIFTY",
+          "n": 1671,
+          "coverage_80": 0.8021145022940355,
+          "winkler": 3.7560163231909502,
+          "categories": {
+            "same": 0.06483143826052264,
+            "close": 0.7372830640335128,
+            "wrong": 0.1978854977059645
+          },
+          "improvement_vs_best": 0.007518879060938621
+        },
+        {
+          "instrument": "NSE:RELIANCE",
+          "n": 1672,
+          "coverage_80": 0.7653508771929824,
+          "winkler": 3.7425669231459473,
+          "categories": {
+            "same": 0.07376395534290271,
+            "close": 0.6915869218500797,
+            "wrong": 0.23464912280701755
+          },
+          "improvement_vs_best": 0.0032356975717123815
+        },
+        {
+          "instrument": "NSE:HDFCBANK",
+          "n": 1672,
+          "coverage_80": 0.763755980861244,
+          "winkler": 3.6268204619106874,
+          "categories": {
+            "same": 0.0731658692185008,
+            "close": 0.6905901116427432,
+            "wrong": 0.23624401913875598
+          },
+          "improvement_vs_best": -0.004544235672856001
+        },
+        {
+          "instrument": "NSE:ICICIBANK",
+          "n": 1672,
+          "coverage_80": 0.80103668261563,
+          "winkler": 3.405878482015129,
+          "categories": {
+            "same": 0.0687799043062201,
+            "close": 0.7322567783094099,
+            "wrong": 0.19896331738437
+          },
+          "improvement_vs_best": 0.0022743906520618085
+        },
+        {
+          "instrument": "NSE:INFY",
+          "n": 1672,
+          "coverage_80": 0.7723285486443381,
+          "winkler": 3.733759866679827,
+          "categories": {
+            "same": 0.064792663476874,
+            "close": 0.7075358851674641,
+            "wrong": 0.22767145135566189
+          },
+          "improvement_vs_best": 0.008943760281004076
+        },
+        {
+          "instrument": "NSE:TCS",
+          "n": 1672,
+          "coverage_80": 0.777511961722488,
+          "winkler": 3.5089205060825583,
+          "categories": {
+            "same": 0.06618819776714513,
+            "close": 0.7113237639553429,
+            "wrong": 0.22248803827751196
+          },
+          "improvement_vs_best": 0.007564739927088171
+        },
+        {
+          "instrument": "NSE:SBIN",
+          "n": 1672,
+          "coverage_80": 0.7791068580542265,
+          "winkler": 3.576571859674828,
+          "categories": {
+            "same": 0.07874800637958533,
+            "close": 0.7003588516746412,
+            "wrong": 0.22089314194577353
+          },
+          "improvement_vs_best": 0.0073657841719322326
+        },
+        {
+          "instrument": "NSE:BHARTIARTL",
+          "n": 1672,
+          "coverage_80": 0.7980462519936204,
+          "winkler": 3.138221043665586,
+          "categories": {
+            "same": 0.07954545454545454,
+            "close": 0.7185007974481659,
+            "wrong": 0.20195374800637958
+          },
+          "improvement_vs_best": 0.010349337480113352
+        },
+        {
+          "instrument": "NSE:ITC",
+          "n": 1672,
+          "coverage_80": 0.7882775119617225,
+          "winkler": 3.3804367071394905,
+          "categories": {
+            "same": 0.08014354066985646,
+            "close": 0.7081339712918661,
+            "wrong": 0.2117224880382775
+          },
+          "improvement_vs_best": 0.007607304636398915
+        },
+        {
+          "instrument": "NSE:LT",
+          "n": 1672,
+          "coverage_80": 0.7910685805422647,
+          "winkler": 3.5526923397451973,
+          "categories": {
+            "same": 0.06818181818181818,
+            "close": 0.7228867623604466,
+            "wrong": 0.20893141945773525
+          },
+          "improvement_vs_best": 0.007544697489340058
+        },
+        {
+          "instrument": "NSE:AXISBANK",
+          "n": 1672,
+          "coverage_80": 0.7962519936204147,
+          "winkler": 3.4604758500482475,
+          "categories": {
+            "same": 0.07236842105263158,
+            "close": 0.7238835725677831,
+            "wrong": 0.20374800637958532
+          },
+          "improvement_vs_best": 0.0023784648015940935
+        }
+      ],
+      "walk_forward_cached": true,
+      "training_folds": [
+        {
+          "fold": 0,
+          "test_start": "2018-12-31T18:30:00+00:00",
+          "test_end": "2019-06-30T18:30:00+00:00",
+          "train_rows": 55444,
+          "train_rows_used": 55444,
+          "train_last_ts": "2018-11-30T03:45:00+00:00",
+          "fit_seconds": 24.9
+        },
+        {
+          "fold": 1,
+          "test_start": "2019-06-30T18:30:00+00:00",
+          "test_end": "2019-12-31T18:30:00+00:00",
+          "train_rows": 56908,
+          "train_rows_used": 56908,
+          "train_last_ts": "2019-05-30T03:45:00+00:00",
+          "fit_seconds": 17.0
+        },
+        {
+          "fold": 2,
+          "test_start": "2019-12-31T18:30:00+00:00",
+          "test_end": "2020-06-30T18:30:00+00:00",
+          "train_rows": 58384,
+          "train_rows_used": 58384,
+          "train_last_ts": "2019-12-02T03:45:00+00:00",
+          "fit_seconds": 25.1
+        },
+        {
+          "fold": 3,
+          "test_start": "2020-06-30T18:30:00+00:00",
+          "test_end": "2020-12-31T18:30:00+00:00",
+          "train_rows": 59860,
+          "train_rows_used": 59860,
+          "train_last_ts": "2020-06-02T03:45:00+00:00",
+          "fit_seconds": 16.4
+        },
+        {
+          "fold": 4,
+          "test_start": "2020-12-31T18:30:00+00:00",
+          "test_end": "2021-06-30T18:30:00+00:00",
+          "train_rows": 61407,
+          "train_rows_used": 61407,
+          "train_last_ts": "2020-12-02T03:45:00+00:00",
+          "fit_seconds": 15.1
+        },
+        {
+          "fold": 5,
+          "test_start": "2021-06-30T18:30:00+00:00",
+          "test_end": "2021-12-31T18:30:00+00:00",
+          "train_rows": 62871,
+          "train_rows_used": 62871,
+          "train_last_ts": "2021-06-02T03:45:00+00:00",
+          "fit_seconds": 17.8
+        },
+        {
+          "fold": 6,
+          "test_start": "2021-12-31T18:30:00+00:00",
+          "test_end": "2022-06-30T18:30:00+00:00",
+          "train_rows": 64383,
+          "train_rows_used": 64383,
+          "train_last_ts": "2021-12-03T03:45:00+00:00",
+          "fit_seconds": 20.0
+        },
+        {
+          "fold": 7,
+          "test_start": "2022-06-30T18:30:00+00:00",
+          "test_end": "2022-12-31T18:30:00+00:00",
+          "train_rows": 65859,
+          "train_rows_used": 65859,
+          "train_last_ts": "2022-06-02T03:45:00+00:00",
+          "fit_seconds": 15.8
+        },
+        {
+          "fold": 8,
+          "test_start": "2022-12-31T18:30:00+00:00",
+          "test_end": "2023-06-30T18:30:00+00:00",
+          "train_rows": 67359,
+          "train_rows_used": 67359,
+          "train_last_ts": "2022-12-02T03:45:00+00:00",
+          "fit_seconds": 25.1
+        },
+        {
+          "fold": 9,
+          "test_start": "2023-06-30T18:30:00+00:00",
+          "test_end": "2023-12-31T18:30:00+00:00",
+          "train_rows": 68823,
+          "train_rows_used": 68823,
+          "train_last_ts": "2023-06-01T03:45:00+00:00",
+          "fit_seconds": 22.1
+        },
+        {
+          "fold": 10,
+          "test_start": "2023-12-31T18:30:00+00:00",
+          "test_end": "2024-06-30T18:30:00+00:00",
+          "train_rows": 70311,
+          "train_rows_used": 70311,
+          "train_last_ts": "2023-11-30T03:45:00+00:00",
+          "fit_seconds": 25.9
+        },
+        {
+          "fold": 11,
+          "test_start": "2024-06-30T18:30:00+00:00",
+          "test_end": "2024-12-31T18:30:00+00:00",
+          "train_rows": 71787,
+          "train_rows_used": 71787,
+          "train_last_ts": "2024-05-30T03:45:00+00:00",
+          "fit_seconds": 35.5
+        },
+        {
+          "fold": 12,
+          "test_start": "2024-12-31T18:30:00+00:00",
+          "test_end": "2025-06-30T18:30:00+00:00",
+          "train_rows": 73299,
+          "train_rows_used": 73299,
+          "train_last_ts": "2024-12-02T03:45:00+00:00",
+          "fit_seconds": 22.8
+        },
+        {
+          "fold": 13,
+          "test_start": "2025-06-30T18:30:00+00:00",
+          "test_end": "2025-09-30T18:30:00+00:00",
+          "train_rows": 74775,
+          "train_rows_used": 74775,
+          "train_last_ts": "2025-06-02T03:45:00+00:00",
+          "fit_seconds": 21.4
+        }
+      ],
+      "training_seconds": 304.9,
+      "runtime_seconds": {
+        "panel": 2.8,
+        "range_v1": 0.1,
+        "atr_bands": 0.3,
+        "rolling_quantiles": 1.4,
+        "analog_v1": 44.2,
+        "total": 50.1
+      },
+      "bootstrap_resamples": 2000,
+      "seed": 20260924
+    },
+    {
+      "model": "range_v1",
+      "exchange": "BSE",
+      "tf": "5m",
+      "period": "validation",
+      "start": "2022-12-31T18:30:00+00:00",
+      "end": "2025-09-30T18:30:00+00:00",
+      "instruments": [
+        "BSE:SENSEX"
+      ],
+      "in_go_no_go_slice": false,
+      "units": "ATR(14) at the reference bar",
+      "steps": 3,
+      "n_forecasts": 50889,
+      "n_dates": 680,
+      "interval_alpha": 0.2,
+      "same_close_atr": 0.25,
+      "methods": {
+        "range_v1": {
+          "n": 50889,
+          "coverage_80": 0.7983978200920959,
+          "coverage_by_step": [
+            0.7995244551867791,
+            0.7987973825384661,
+            0.7968716225510425
+          ],
+          "winkler": 3.7283258781627566,
+          "winkler_by_step": [
+            2.604302375162926,
+            3.8071488276240832,
+            4.773526431701261
+          ],
+          "pinball_close": 0.2529903176930693,
+          "pinball_all": 0.22475953474864316,
+          "range_iou": 0.36979473517052697,
+          "close_mae_atr": 0.7722767305258642,
+          "categories": {
+            "same": 0.06600640609955,
+            "close": 0.7323914139925458,
+            "wrong": 0.20160217990790413
+          },
+          "categories_step1": {
+            "same": 0.092672286741732,
+            "close": 0.7068521684450471,
+            "wrong": 0.20047554481322094
+          }
+        },
+        "atr_bands": {
+          "n": 50889,
+          "coverage_80": 0.8087078412492549,
+          "coverage_by_step": [
+            0.8046336143370866,
+            0.8090550020633143,
+            0.8124349073473639
+          ],
+          "winkler": 4.072933333899738,
+          "winkler_by_step": [
+            2.817486207164131,
+            4.16400606424356,
+            5.2373077302915245
+          ],
+          "pinball_close": 0.26484025520235316,
+          "pinball_all": 0.23779687312295866,
+          "range_iou": 0.3589372319001118,
+          "close_mae_atr": 0.7744548644341714,
+          "categories": {
+            "same": 0.0680369693515953,
+            "close": 0.7406708718976596,
+            "wrong": 0.1912921587507451
+          },
+          "categories_step1": {
+            "same": 0.0959932401894319,
+            "close": 0.7086403741476547,
+            "wrong": 0.1953663856629134
+          },
+          "details": {
+            "k_by_fold": {
+              "0": [
+                0.8114,
+                1.187,
+                1.4853
+              ],
+              "1": [
+                0.8136,
+                1.1894,
+                1.489
+              ],
+              "2": [
+                0.8111,
+                1.1828,
+                1.478
+              ],
+              "3": [
+                0.8096,
+                1.1787,
+                1.4696
+              ],
+              "4": [
+                0.8069,
+                1.1743,
+                1.4613
+              ],
+              "5": [
+                0.8081,
+                1.1753,
+                1.4625
+              ]
+            }
+          }
+        },
+        "rolling_quantiles": {
+          "n": 50889,
+          "coverage_80": 0.7920244715622892,
+          "coverage_by_step": [
+            0.7945921515455207,
+            0.7924305842126982,
+            0.7890506789286487
+          ],
+          "winkler": 4.106251998257576,
+          "winkler_by_step": [
+            2.8293730588152806,
+            4.195044563137032,
+            5.294338372820413
+          ],
+          "pinball_close": 0.26638913447097956,
+          "pinball_all": 0.2390498794262973,
+          "range_iou": 0.35997891430499623,
+          "close_mae_atr": 0.7770844071743622,
+          "categories": {
+            "same": 0.07154787871642201,
+            "close": 0.7204765928458672,
+            "wrong": 0.20797552843771083
+          },
+          "categories_step1": {
+            "same": 0.10035567607930987,
+            "close": 0.6942364754662108,
+            "wrong": 0.20540784845447935
+          },
+          "details": {
+            "window_bars": 250
+          }
+        },
+        "analog_v1": {
+          "n": 1999,
+          "coverage_80": 0.8094047023511756,
+          "coverage_by_step": [
+            0.8029014507253627,
+            0.8129064532266133,
+            0.8124062031015508
+          ],
+          "winkler": 4.10537366790755,
+          "winkler_by_step": [
+            2.815558853094449,
+            4.146690707086838,
+            5.35387144354136
+          ],
+          "pinball_close": 0.26613358101295775,
+          "pinball_all": null,
+          "range_iou": 0.323418735594652,
+          "close_mae_atr": 0.7757267524962368,
+          "categories": {
+            "same": 0.02834750708687677,
+            "close": 0.7810571952642988,
+            "wrong": 0.1905952976488244
+          },
+          "categories_step1": {
+            "same": 0.048024012006003,
+            "close": 0.7548774387193596,
+            "wrong": 0.19709854927463732
+          },
+          "details": {
+            "replayed": 2000,
+            "with_bands": 1999,
+            "sampled": true,
+            "sample_per_instrument": 2000,
+            "pooled_library_read": true
+          }
+        }
+      },
+      "comparisons": {
+        "atr_bands": {
+          "n": 50889,
+          "n_dates": 680,
+          "n_months": 33,
+          "winkler_model": 11.18497763448827,
+          "winkler_baseline": 12.218800001699215,
+          "improvement": 0.0846091569603542,
+          "ci": [
+            0.07698683211059096,
+            0.09270519174401541
+          ],
+          "ci_month_blocks": [
+            0.07431087988497675,
+            0.09434272637430113
+          ]
+        },
+        "rolling_quantiles": {
+          "n": 50889,
+          "n_dates": 680,
+          "n_months": 33,
+          "winkler_model": 11.18497763448827,
+          "winkler_baseline": 12.318755994772724,
+          "improvement": 0.09203675766981312,
+          "ci": [
+            0.084583859372121,
+            0.10000576754500176
+          ],
+          "ci_month_blocks": [
+            0.08231660877447695,
+            0.10141202844306038
+          ]
+        },
+        "analog_v1": {
+          "n": 1999,
+          "n_dates": 640,
+          "n_months": 33,
+          "winkler_model": 11.289922752727444,
+          "winkler_baseline": 12.31612100372265,
+          "improvement": 0.08332154666920111,
+          "ci": [
+            0.05882905517756594,
+            0.11087019355010962
+          ],
+          "ci_month_blocks": [
+            0.05847801808706169,
+            0.11117089391441858
+          ]
+        }
+      },
+      "best_baseline": "analog_v1",
+      "gate": {
+        "coverage_80": 0.7983978200920959,
+        "coverage_within": [
+          0.76,
+          0.84
+        ],
+        "best_baseline": "analog_v1",
+        "improvement": 0.08332154666920111,
+        "min_improvement": 0.05,
+        "ci": [
+          0.05882905517756594,
+          0.11087019355010962
+        ],
+        "ci_level": 0.95,
+        "ci_lower_above": 0.0,
+        "checks": {
+          "coverage": true,
+          "improvement": true,
+          "ci_lower": true
+        },
+        "pass": true
+      },
+      "by_fold": [
+        {
+          "fold": 0,
+          "n": 9150,
+          "coverage_80": 0.8065573770491803,
+          "winkler": 3.622029674825121,
+          "test_start": "2022-12-31T18:30:00+00:00",
+          "test_end": "2023-06-30T18:30:00+00:00"
+        },
+        {
+          "fold": 1,
+          "n": 9225,
+          "coverage_80": 0.8048780487804879,
+          "winkler": 3.585639059353004,
+          "test_start": "2023-06-30T18:30:00+00:00",
+          "test_end": "2023-12-31T18:30:00+00:00"
+        },
+        {
+          "fold": 2,
+          "n": 9117,
+          "coverage_80": 0.7963145771635406,
+          "winkler": 3.673589479488052,
+          "test_start": "2023-12-31T18:30:00+00:00",
+          "test_end": "2024-06-30T18:30:00+00:00"
+        },
+        {
+          "fold": 3,
+          "n": 9375,
+          "coverage_80": 0.8031644444444445,
+          "winkler": 3.795282576830122,
+          "test_start": "2024-06-30T18:30:00+00:00",
+          "test_end": "2024-12-31T18:30:00+00:00"
+        },
+        {
+          "fold": 4,
+          "n": 9225,
+          "coverage_80": 0.7747786811201446,
+          "winkler": 4.096207660702617,
+          "test_start": "2024-12-31T18:30:00+00:00",
+          "test_end": "2025-06-30T18:30:00+00:00"
+        },
+        {
+          "fold": 5,
+          "n": 4797,
+          "coverage_80": 0.8104370787297617,
+          "winkler": 3.4711858775039817,
+          "test_start": "2025-06-30T18:30:00+00:00",
+          "test_end": "2025-09-30T18:30:00+00:00"
+        }
+      ],
+      "by_instrument": [
+        {
+          "instrument": "BSE:SENSEX",
+          "n": 50889,
+          "coverage_80": 0.7983978200920959,
+          "winkler": 3.7283258781627566,
+          "categories": {
+            "same": 0.06600640609955,
+            "close": 0.7323914139925458,
+            "wrong": 0.20160217990790413
+          },
+          "improvement_vs_best": 0.08332154666920111
+        }
+      ],
+      "walk_forward_cached": true,
+      "training_folds": [
+        {
+          "fold": 0,
+          "test_start": "2022-12-31T18:30:00+00:00",
+          "test_end": "2023-06-30T18:30:00+00:00",
+          "train_rows": 65755,
+          "train_rows_used": 65755,
+          "train_last_ts": "2022-12-30T08:15:00+00:00",
+          "fit_seconds": 15.1
+        },
+        {
+          "fold": 1,
+          "test_start": "2023-06-30T18:30:00+00:00",
+          "test_end": "2023-12-31T18:30:00+00:00",
+          "train_rows": 74905,
+          "train_rows_used": 74905,
+          "train_last_ts": "2023-06-30T08:15:00+00:00",
+          "fit_seconds": 20.0
+        },
+        {
+          "fold": 2,
+          "test_start": "2023-12-31T18:30:00+00:00",
+          "test_end": "2024-06-30T18:30:00+00:00",
+          "train_rows": 84130,
+          "train_rows_used": 84130,
+          "train_last_ts": "2023-12-29T08:15:00+00:00",
+          "fit_seconds": 23.1
+        },
+        {
+          "fold": 3,
+          "test_start": "2024-06-30T18:30:00+00:00",
+          "test_end": "2024-12-31T18:30:00+00:00",
+          "train_rows": 93247,
+          "train_rows_used": 93247,
+          "train_last_ts": "2024-06-28T08:15:00+00:00",
+          "fit_seconds": 23.9
+        },
+        {
+          "fold": 4,
+          "test_start": "2024-12-31T18:30:00+00:00",
+          "test_end": "2025-06-30T18:30:00+00:00",
+          "train_rows": 102622,
+          "train_rows_used": 102622,
+          "train_last_ts": "2024-12-31T08:15:00+00:00",
+          "fit_seconds": 23.6
+        },
+        {
+          "fold": 5,
+          "test_start": "2025-06-30T18:30:00+00:00",
+          "test_end": "2025-09-30T18:30:00+00:00",
+          "train_rows": 111847,
+          "train_rows_used": 111847,
+          "train_last_ts": "2025-06-30T08:15:00+00:00",
+          "fit_seconds": 28.7
+        }
+      ],
+      "training_seconds": 134.4,
+      "runtime_seconds": {
+        "panel": 1.5,
+        "range_v1": 0.1,
+        "atr_bands": 0.2,
+        "rolling_quantiles": 2.4,
+        "analog_v1": 22.4,
+        "total": 28.3
+      },
+      "bootstrap_resamples": 2000,
+      "seed": 20260924
+    },
+    {
+      "model": "range_v1",
+      "exchange": "BSE",
+      "tf": "15m",
+      "period": "validation",
+      "start": "2022-12-31T18:30:00+00:00",
+      "end": "2025-09-30T18:30:00+00:00",
+      "instruments": [
+        "BSE:SENSEX"
+      ],
+      "in_go_no_go_slice": false,
+      "units": "ATR(14) at the reference bar",
+      "steps": 3,
+      "n_forecasts": 16961,
+      "n_dates": 680,
+      "interval_alpha": 0.2,
+      "same_close_atr": 0.25,
+      "methods": {
+        "range_v1": {
+          "n": 16961,
+          "coverage_80": 0.7865495352082228,
+          "coverage_by_step": [
+            0.7875125287424091,
+            0.7893402511644361,
+            0.7827958257178232
+          ],
+          "winkler": 3.7813858456779776,
+          "winkler_by_step": [
+            2.6097110455832557,
+            3.869696979916719,
+            4.864749511533958
+          ],
+          "pinball_close": 0.25395032316691474,
+          "pinball_all": 0.22817718464121112,
+          "range_iou": 0.37047163932521454,
+          "close_mae_atr": 0.7674247698658928,
+          "categories": {
+            "same": 0.07324646738596388,
+            "close": 0.7133030678222589,
+            "wrong": 0.2134504647917772
+          },
+          "categories_step1": {
+            "same": 0.10247037320912682,
+            "close": 0.6850421555332822,
+            "wrong": 0.21248747125759093
+          }
+        },
+        "atr_bands": {
+          "n": 16961,
+          "coverage_80": 0.8023111844820471,
+          "coverage_by_step": [
+            0.7993042863038736,
+            0.8039620305406521,
+            0.8036672366016154
+          ],
+          "winkler": 4.197932652917984,
+          "winkler_by_step": [
+            2.8877329049473923,
+            4.293422475771187,
+            5.412642578035373
+          ],
+          "pinball_close": 0.2677209105719343,
+          "pinball_all": 0.24368216178785784,
+          "range_iou": 0.3584014635846749,
+          "close_mae_atr": 0.7667389328480092,
+          "categories": {
+            "same": 0.0803411748521117,
+            "close": 0.7219700096299353,
+            "wrong": 0.19768881551795295
+          },
+          "categories_step1": {
+            "same": 0.11267024349979364,
+            "close": 0.6866340428040799,
+            "wrong": 0.2006957136961264
+          },
+          "details": {
+            "k_by_fold": {
+              "0": [
+                0.7575,
+                1.1462,
+                1.4629
+              ],
+              "1": [
+                0.7609,
+                1.1517,
+                1.4681
+              ],
+              "2": [
+                0.7602,
+                1.1526,
+                1.468
+              ],
+              "3": [
+                0.761,
+                1.1494,
+                1.463
+              ],
+              "4": [
+                0.7607,
+                1.1437,
+                1.4608
+              ],
+              "5": [
+                0.7597,
+                1.143,
+                1.4608
+              ]
+            }
+          }
+        },
+        "rolling_quantiles": {
+          "n": 16961,
+          "coverage_80": 0.7914627675254997,
+          "coverage_by_step": [
+            0.7934084075231413,
+            0.7914038087376923,
+            0.7895760863156653
+          ],
+          "winkler": 4.242866014967694,
+          "winkler_by_step": [
+            2.9044186342817513,
+            4.33330148610295,
+            5.490877924518381
+          ],
+          "pinball_close": 0.2696783598206962,
+          "pinball_all": 0.24540133694211247,
+          "range_iou": 0.3570676487963277,
+          "close_mae_atr": 0.7694969559306385,
+          "categories": {
+            "same": 0.07943714010573276,
+            "close": 0.7120256274197669,
+            "wrong": 0.20853723247450032
+          },
+          "categories_step1": {
+            "same": 0.1101939744118861,
+            "close": 0.6832144331112552,
+            "wrong": 0.20659159247685868
+          },
+          "details": {
+            "window_bars": 250
+          }
+        },
+        "analog_v1": {
+          "n": 1985,
+          "coverage_80": 0.8080604534005038,
+          "coverage_by_step": [
+            0.8095717884130983,
+            0.8035264483627204,
+            0.8110831234256927
+          ],
+          "winkler": 4.25940213075368,
+          "winkler_by_step": [
+            2.8781540417774245,
+            4.331369076753718,
+            5.5686832737298975
+          ],
+          "pinball_close": 0.27052504516312115,
+          "pinball_all": null,
+          "range_iou": 0.3337880509803174,
+          "close_mae_atr": 0.771269844827991,
+          "categories": {
+            "same": 0.04433249370277078,
+            "close": 0.763727959697733,
+            "wrong": 0.19193954659949622
+          },
+          "categories_step1": {
+            "same": 0.0654911838790932,
+            "close": 0.744080604534005,
+            "wrong": 0.19042821158690176
+          },
+          "details": {
+            "replayed": 2000,
+            "with_bands": 1985,
+            "sampled": true,
+            "sample_per_instrument": 2000,
+            "pooled_library_read": true
+          }
+        }
+      },
+      "comparisons": {
+        "atr_bands": {
+          "n": 16961,
+          "n_dates": 680,
+          "n_months": 33,
+          "winkler_model": 11.344157537033933,
+          "winkler_baseline": 12.593797958753953,
+          "improvement": 0.09922665313614898,
+          "ci": [
+            0.08781740188709733,
+            0.11143053679406964
+          ],
+          "ci_month_blocks": [
+            0.08576779155423765,
+            0.11274924758211158
+          ]
+        },
+        "rolling_quantiles": {
+          "n": 16961,
+          "n_dates": 680,
+          "n_months": 33,
+          "winkler_model": 11.344157537033933,
+          "winkler_baseline": 12.728598044903082,
+          "improvement": 0.10876614242866456,
+          "ci": [
+            0.09768358391649314,
+            0.12072436012035635
+          ],
+          "ci_month_blocks": [
+            0.09542116176205147,
+            0.122271923569814
+          ]
+        },
+        "analog_v1": {
+          "n": 1985,
+          "n_dates": 650,
+          "n_months": 33,
+          "winkler_model": 11.256535435098245,
+          "winkler_baseline": 12.778206392261039,
+          "improvement": 0.11908329780025895,
+          "ci": [
+            0.09241024746978427,
+            0.14490225060971257
+          ],
+          "ci_month_blocks": [
+            0.09111099171415937,
+            0.14537286129663607
+          ]
+        }
+      },
+      "best_baseline": "atr_bands",
+      "gate": {
+        "coverage_80": 0.7865495352082228,
+        "coverage_within": [
+          0.76,
+          0.84
+        ],
+        "best_baseline": "atr_bands",
+        "improvement": 0.09922665313614898,
+        "min_improvement": 0.05,
+        "ci": [
+          0.08781740188709733,
+          0.11143053679406964
+        ],
+        "ci_level": 0.95,
+        "ci_lower_above": 0.0,
+        "checks": {
+          "coverage": true,
+          "improvement": true,
+          "ci_lower": true
+        },
+        "pass": true
+      },
+      "by_fold": [
+        {
+          "fold": 0,
+          "n": 3050,
+          "coverage_80": 0.7841530054644809,
+          "winkler": 3.602812880746654,
+          "test_start": "2022-12-31T18:30:00+00:00",
+          "test_end": "2023-06-30T18:30:00+00:00"
+        },
+        {
+          "fold": 1,
+          "n": 3075,
+          "coverage_80": 0.7825474254742547,
+          "winkler": 3.7477647943031496,
+          "test_start": "2023-06-30T18:30:00+00:00",
+          "test_end": "2023-12-31T18:30:00+00:00"
+        },
+        {
+          "fold": 2,
+          "n": 3039,
+          "coverage_80": 0.7861138532411978,
+          "winkler": 3.7331251574491637,
+          "test_start": "2023-12-31T18:30:00+00:00",
+          "test_end": "2024-06-30T18:30:00+00:00"
+        },
+        {
+          "fold": 3,
+          "n": 3125,
+          "coverage_80": 0.78976,
+          "winkler": 3.8676332298819225,
+          "test_start": "2024-06-30T18:30:00+00:00",
+          "test_end": "2024-12-31T18:30:00+00:00"
+        },
+        {
+          "fold": 4,
+          "n": 3075,
+          "coverage_80": 0.776910569105691,
+          "winkler": 4.124579183842108,
+          "test_start": "2024-12-31T18:30:00+00:00",
+          "test_end": "2025-06-30T18:30:00+00:00"
+        },
+        {
+          "fold": 5,
+          "n": 1597,
+          "coverage_80": 0.8119390523898977,
+          "winkler": 3.449422111835442,
+          "test_start": "2025-06-30T18:30:00+00:00",
+          "test_end": "2025-09-30T18:30:00+00:00"
+        }
+      ],
+      "by_instrument": [
+        {
+          "instrument": "BSE:SENSEX",
+          "n": 16961,
+          "coverage_80": 0.7865495352082228,
+          "winkler": 3.7813858456779776,
+          "categories": {
+            "same": 0.07324646738596388,
+            "close": 0.7133030678222589,
+            "wrong": 0.2134504647917772
+          },
+          "improvement_vs_best": 0.09922665313614898
+        }
+      ],
+      "walk_forward_cached": true,
+      "training_folds": [
+        {
+          "fold": 0,
+          "test_start": "2022-12-31T18:30:00+00:00",
+          "test_end": "2023-06-30T18:30:00+00:00",
+          "train_rows": 21899,
+          "train_rows_used": 21899,
+          "train_last_ts": "2022-12-30T04:45:00+00:00",
+          "fit_seconds": 8.8
+        },
+        {
+          "fold": 1,
+          "test_start": "2023-06-30T18:30:00+00:00",
+          "test_end": "2023-12-31T18:30:00+00:00",
+          "train_rows": 24949,
+          "train_rows_used": 24949,
+          "train_last_ts": "2023-06-30T04:45:00+00:00",
+          "fit_seconds": 19.4
+        },
+        {
+          "fold": 2,
+          "test_start": "2023-12-31T18:30:00+00:00",
+          "test_end": "2024-06-30T18:30:00+00:00",
+          "train_rows": 28024,
+          "train_rows_used": 28024,
+          "train_last_ts": "2023-12-29T04:45:00+00:00",
+          "fit_seconds": 12.1
+        },
+        {
+          "fold": 3,
+          "test_start": "2024-06-30T18:30:00+00:00",
+          "test_end": "2024-12-31T18:30:00+00:00",
+          "train_rows": 31063,
+          "train_rows_used": 31063,
+          "train_last_ts": "2024-06-28T04:45:00+00:00",
+          "fit_seconds": 10.1
+        },
+        {
+          "fold": 4,
+          "test_start": "2024-12-31T18:30:00+00:00",
+          "test_end": "2025-06-30T18:30:00+00:00",
+          "train_rows": 34188,
+          "train_rows_used": 34188,
+          "train_last_ts": "2024-12-31T04:45:00+00:00",
+          "fit_seconds": 10.0
+        },
+        {
+          "fold": 5,
+          "test_start": "2025-06-30T18:30:00+00:00",
+          "test_end": "2025-09-30T18:30:00+00:00",
+          "train_rows": 37263,
+          "train_rows_used": 37263,
+          "train_last_ts": "2025-06-30T04:45:00+00:00",
+          "fit_seconds": 13.0
+        }
+      ],
+      "training_seconds": 73.4,
+      "runtime_seconds": {
+        "panel": 0.5,
+        "range_v1": 0.4,
+        "atr_bands": 0.1,
+        "rolling_quantiles": 0.8,
+        "analog_v1": 7.5,
+        "total": 10.0
+      },
+      "bootstrap_resamples": 2000,
+      "seed": 20260924
+    },
+    {
+      "model": "range_v1",
+      "exchange": "BSE",
+      "tf": "1h",
+      "period": "validation",
+      "start": "2022-12-31T18:30:00+00:00",
+      "end": "2025-09-30T18:30:00+00:00",
+      "instruments": [
+        "BSE:SENSEX"
+      ],
+      "in_go_no_go_slice": false,
+      "units": "ATR(14) at the reference bar",
+      "steps": 3,
+      "n_forecasts": 4749,
+      "n_dates": 680,
+      "interval_alpha": 0.2,
+      "same_close_atr": 0.25,
+      "methods": {
+        "range_v1": {
+          "n": 4749,
+          "coverage_80": 0.7765143538990664,
+          "coverage_by_step": [
+            0.7772162560539061,
+            0.7770056854074542,
+            0.7753211202358391
+          ],
+          "winkler": 3.9609667452817976,
+          "winkler_by_step": [
+            2.674952359066421,
+            4.075481747082344,
+            5.132466129696628
+          ],
+          "pinball_close": 0.266743441462701,
+          "pinball_all": 0.24141377696185623,
+          "range_iou": 0.34659667859149146,
+          "close_mae_atr": 0.8082672997198469,
+          "categories": {
+            "same": 0.07917456306590862,
+            "close": 0.6973397908331579,
+            "wrong": 0.22348564610093352
+          },
+          "categories_step1": {
+            "same": 0.10696988839755737,
+            "close": 0.6702463676563487,
+            "wrong": 0.2227837439460939
+          }
+        },
+        "atr_bands": {
+          "n": 4749,
+          "coverage_80": 0.8008001684565171,
+          "coverage_by_step": [
+            0.8026953042745841,
+            0.7997473152242578,
+            0.7999578858707096
+          ],
+          "winkler": 4.240491293284435,
+          "winkler_by_step": [
+            3.0314808897129684,
+            4.337380425838149,
+            5.352612564302189
+          ],
+          "pinball_close": 0.27539005284364276,
+          "pinball_all": 0.25213438384637765,
+          "range_iou": 0.32687459363648025,
+          "close_mae_atr": 0.8042420584049695,
+          "categories": {
+            "same": 0.1018460026672282,
+            "close": 0.6989541657892889,
+            "wrong": 0.19919983154348284
+          },
+          "categories_step1": {
+            "same": 0.14866287639503054,
+            "close": 0.6540324278795536,
+            "wrong": 0.19730469572541587
+          },
+          "details": {
+            "k_by_fold": {
+              "0": [
+                0.806,
+                1.2873,
+                1.65
+              ],
+              "1": [
+                0.8028,
+                1.2835,
+                1.6465
+              ],
+              "2": [
+                0.8026,
+                1.2894,
+                1.6626
+              ],
+              "3": [
+                0.8047,
+                1.2892,
+                1.6615
+              ],
+              "4": [
+                0.8028,
+                1.2832,
+                1.6563
+              ],
+              "5": [
+                0.8014,
+                1.2855,
+                1.6536
+              ]
+            }
+          }
+        },
+        "rolling_quantiles": {
+          "n": 4749,
+          "coverage_80": 0.79181582087457,
+          "coverage_by_step": [
+            0.7940619077700568,
+            0.7934301958307012,
+            0.7879553590229522
+          ],
+          "winkler": 4.293429261187031,
+          "winkler_by_step": [
+            3.059387765403395,
+            4.381859423621475,
+            5.439040594536221
+          ],
+          "pinball_close": 0.27765589910052063,
+          "pinball_all": 0.25421296283912787,
+          "range_iou": 0.3237266516484701,
+          "close_mae_atr": 0.8072495423657179,
+          "categories": {
+            "same": 0.09482698111883203,
+            "close": 0.696988839755738,
+            "wrong": 0.2081841791254299
+          },
+          "categories_step1": {
+            "same": 0.14066119182985892,
+            "close": 0.6534007159401979,
+            "wrong": 0.20593809222994314
+          },
+          "details": {
+            "window_bars": 250
+          }
+        },
+        "analog_v1": {
+          "n": 1961,
+          "coverage_80": 0.8045215026347102,
+          "coverage_by_step": [
+            0.817440081591025,
+            0.7939826619071902,
+            0.8021417644059153
+          ],
+          "winkler": 4.262461350728815,
+          "winkler_by_step": [
+            2.9913527588337514,
+            4.4480449469715895,
+            5.347986346381104
+          ],
+          "pinball_close": 0.2764334953702366,
+          "pinball_all": null,
+          "range_iou": 0.30424770717430444,
+          "close_mae_atr": 0.8061087020756569,
+          "categories": {
+            "same": 0.06238313785483597,
+            "close": 0.7421383647798742,
+            "wrong": 0.19547849736528983
+          },
+          "categories_step1": {
+            "same": 0.10198878123406425,
+            "close": 0.7154513003569607,
+            "wrong": 0.182559918408975
+          },
+          "details": {
+            "replayed": 2000,
+            "with_bands": 1961,
+            "sampled": true,
+            "sample_per_instrument": 2000,
+            "pooled_library_read": true
+          }
+        }
+      },
+      "comparisons": {
+        "atr_bands": {
+          "n": 4749,
+          "n_dates": 680,
+          "n_months": 33,
+          "winkler_model": 11.882900235845392,
+          "winkler_baseline": 12.721473879853306,
+          "improvement": 0.06591796295993213,
+          "ci": [
+            0.052299455793187295,
+            0.07987008057258617
+          ],
+          "ci_month_blocks": [
+            0.05290316331295121,
+            0.07953948314182349
+          ]
+        },
+        "rolling_quantiles": {
+          "n": 4749,
+          "n_dates": 680,
+          "n_months": 33,
+          "winkler_model": 11.882900235845392,
+          "winkler_baseline": 12.880287783561092,
+          "improvement": 0.0774351912376251,
+          "ci": [
+            0.06324769025482203,
+            0.09183157468154912
+          ],
+          "ci_month_blocks": [
+            0.06419338926599928,
+            0.09077754556669987
+          ]
+        },
+        "analog_v1": {
+          "n": 1961,
+          "n_dates": 660,
+          "n_months": 33,
+          "winkler_model": 12.0372377930058,
+          "winkler_baseline": 12.787384052186445,
+          "improvement": 0.058662995974722465,
+          "ci": [
+            0.04180848484318391,
+            0.07515906580319813
+          ],
+          "ci_month_blocks": [
+            0.04405947024754579,
+            0.07233386389667723
+          ]
+        }
+      },
+      "best_baseline": "analog_v1",
+      "gate": {
+        "coverage_80": 0.7765143538990664,
+        "coverage_within": [
+          0.76,
+          0.84
+        ],
+        "best_baseline": "analog_v1",
+        "improvement": 0.058662995974722465,
+        "min_improvement": 0.05,
+        "ci": [
+          0.04180848484318391,
+          0.07515906580319813
+        ],
+        "ci_level": 0.95,
+        "ci_lower_above": 0.0,
+        "checks": {
+          "coverage": true,
+          "improvement": true,
+          "ci_lower": true
+        },
+        "pass": true
+      },
+      "by_fold": [
+        {
+          "fold": 0,
+          "n": 854,
+          "coverage_80": 0.7708821233411397,
+          "winkler": 3.784151871213915,
+          "test_start": "2022-12-31T18:30:00+00:00",
+          "test_end": "2023-06-30T18:30:00+00:00"
+        },
+        {
+          "fold": 1,
+          "n": 861,
+          "coverage_80": 0.7932636469221835,
+          "winkler": 3.9397787942767053,
+          "test_start": "2023-06-30T18:30:00+00:00",
+          "test_end": "2023-12-31T18:30:00+00:00"
+        },
+        {
+          "fold": 2,
+          "n": 853,
+          "coverage_80": 0.741305197342712,
+          "winkler": 3.9936968189820314,
+          "test_start": "2023-12-31T18:30:00+00:00",
+          "test_end": "2024-06-30T18:30:00+00:00"
+        },
+        {
+          "fold": 3,
+          "n": 875,
+          "coverage_80": 0.7748571428571429,
+          "winkler": 4.165626806906292,
+          "test_start": "2024-06-30T18:30:00+00:00",
+          "test_end": "2024-12-31T18:30:00+00:00"
+        },
+        {
+          "fold": 4,
+          "n": 861,
+          "coverage_80": 0.7742934572202865,
+          "winkler": 4.154001232852457,
+          "test_start": "2024-12-31T18:30:00+00:00",
+          "test_end": "2025-06-30T18:30:00+00:00"
+        },
+        {
+          "fold": 5,
+          "n": 445,
+          "coverage_80": 0.8299625468164794,
+          "winkler": 3.5026380434464874,
+          "test_start": "2025-06-30T18:30:00+00:00",
+          "test_end": "2025-09-30T18:30:00+00:00"
+        }
+      ],
+      "by_instrument": [
+        {
+          "instrument": "BSE:SENSEX",
+          "n": 4749,
+          "coverage_80": 0.7765143538990664,
+          "winkler": 3.9609667452817976,
+          "categories": {
+            "same": 0.07917456306590862,
+            "close": 0.6973397908331579,
+            "wrong": 0.22348564610093352
+          },
+          "improvement_vs_best": 0.058662995974722465
+        }
+      ],
+      "walk_forward_cached": true,
+      "training_folds": [
+        {
+          "fold": 0,
+          "test_start": "2022-12-31T18:30:00+00:00",
+          "test_end": "2023-06-30T18:30:00+00:00",
+          "train_rows": 6113,
+          "train_rows_used": 6113,
+          "train_last_ts": "2022-12-28T03:45:00+00:00",
+          "fit_seconds": 3.1
+        },
+        {
+          "fold": 1,
+          "test_start": "2023-06-30T18:30:00+00:00",
+          "test_end": "2023-12-31T18:30:00+00:00",
+          "train_rows": 6967,
+          "train_rows_used": 6967,
+          "train_last_ts": "2023-06-27T03:45:00+00:00",
+          "fit_seconds": 3.1
+        },
+        {
+          "fold": 2,
+          "test_start": "2023-12-31T18:30:00+00:00",
+          "test_end": "2024-06-30T18:30:00+00:00",
+          "train_rows": 7828,
+          "train_rows_used": 7828,
+          "train_last_ts": "2023-12-27T03:45:00+00:00",
+          "fit_seconds": 3.6
+        },
+        {
+          "fold": 3,
+          "test_start": "2024-06-30T18:30:00+00:00",
+          "test_end": "2024-12-31T18:30:00+00:00",
+          "train_rows": 8681,
+          "train_rows_used": 8681,
+          "train_last_ts": "2024-06-26T03:45:00+00:00",
+          "fit_seconds": 3.9
+        },
+        {
+          "fold": 4,
+          "test_start": "2024-12-31T18:30:00+00:00",
+          "test_end": "2025-06-30T18:30:00+00:00",
+          "train_rows": 9556,
+          "train_rows_used": 9556,
+          "train_last_ts": "2024-12-27T03:45:00+00:00",
+          "fit_seconds": 7.1
+        },
+        {
+          "fold": 5,
+          "test_start": "2025-06-30T18:30:00+00:00",
+          "test_end": "2025-09-30T18:30:00+00:00",
+          "train_rows": 10417,
+          "train_rows_used": 10417,
+          "train_last_ts": "2025-06-26T03:45:00+00:00",
+          "fit_seconds": 7.3
+        }
+      ],
+      "training_seconds": 28.1,
+      "runtime_seconds": {
+        "panel": 0.2,
+        "range_v1": 0.0,
+        "atr_bands": 0.0,
+        "rolling_quantiles": 0.2,
+        "analog_v1": 3.3,
+        "total": 4.2
+      },
+      "bootstrap_resamples": 2000,
+      "seed": 20260924
+    },
+    {
+      "model": "range_v1",
+      "exchange": "BSE",
+      "tf": "1D",
+      "period": "validation",
+      "start": "2018-12-31T18:30:00+00:00",
+      "end": "2025-09-30T18:30:00+00:00",
+      "instruments": [
+        "BSE:SENSEX"
+      ],
+      "in_go_no_go_slice": false,
+      "units": "ATR(14) at the reference bar",
+      "steps": 3,
+      "n_forecasts": 1672,
+      "n_dates": 1672,
+      "interval_alpha": 0.2,
+      "same_close_atr": 0.25,
+      "methods": {
+        "range_v1": {
+          "n": 1672,
+          "coverage_80": 0.7779106858054227,
+          "coverage_by_step": [
+            0.7763157894736842,
+            0.7799043062200957,
+            0.777511961722488
+          ],
+          "winkler": 3.808295370035016,
+          "winkler_by_step": [
+            2.6622166565294116,
+            3.9075697072688045,
+            4.855099746306832
+          ],
+          "pinball_close": 0.2634078072974464,
+          "pinball_all": 0.24122013815634966,
+          "range_iou": 0.30408551545733,
+          "close_mae_atr": 0.8187877697776753,
+          "categories": {
+            "same": 0.06359649122807018,
+            "close": 0.7143141945773525,
+            "wrong": 0.22208931419457736
+          },
+          "categories_step1": {
+            "same": 0.09389952153110048,
+            "close": 0.6824162679425837,
+            "wrong": 0.2236842105263158
+          }
+        },
+        "atr_bands": {
+          "n": 1672,
+          "coverage_80": 0.807615629984051,
+          "coverage_by_step": [
+            0.812200956937799,
+            0.7996411483253588,
+            0.8110047846889952
+          ],
+          "winkler": 3.7964416777688346,
+          "winkler_by_step": [
+            2.669089821879373,
+            3.8860220634480984,
+            4.834213147979034
+          ],
+          "pinball_close": 0.2635254352166494,
+          "pinball_all": 0.24047868920870136,
+          "range_iou": 0.30097898253686556,
+          "close_mae_atr": 0.8218642757461295,
+          "categories": {
+            "same": 0.060406698564593304,
+            "close": 0.7472089314194578,
+            "wrong": 0.19238437001594896
+          },
+          "categories_step1": {
+            "same": 0.09569377990430622,
+            "close": 0.7165071770334929,
+            "wrong": 0.18779904306220097
+          },
+          "details": {
+            "k_by_fold": {
+              "0": [
+                0.9107,
+                1.3452,
+                1.72
+              ],
+              "1": [
+                0.9107,
+                1.3484,
+                1.7153
+              ],
+              "2": [
+                0.907,
+                1.3394,
+                1.7099
+              ],
+              "3": [
+                0.9095,
+                1.3454,
+                1.7201
+              ],
+              "4": [
+                0.906,
+                1.341,
+                1.7108
+              ],
+              "5": [
+                0.9028,
+                1.3434,
+                1.7103
+              ],
+              "6": [
+                0.901,
+                1.344,
+                1.7102
+              ],
+              "7": [
+                0.9007,
+                1.3517,
+                1.7103
+              ],
+              "8": [
+                0.8976,
+                1.3448,
+                1.7091
+              ],
+              "9": [
+                0.8957,
+                1.3426,
+                1.7066
+              ],
+              "10": [
+                0.8964,
+                1.3447,
+                1.7075
+              ],
+              "11": [
+                0.8963,
+                1.3455,
+                1.707
+              ],
+              "12": [
+                0.8962,
+                1.3448,
+                1.7052
+              ],
+              "13": [
+                0.8994,
+                1.3461,
+                1.7082
+              ]
+            }
+          }
+        },
+        "rolling_quantiles": {
+          "n": 1672,
+          "coverage_80": 0.789872408293461,
+          "coverage_by_step": [
+            0.7900717703349283,
+            0.7876794258373205,
+            0.7918660287081339
+          ],
+          "winkler": 3.8381007273005627,
+          "winkler_by_step": [
+            2.6864317024117743,
+            3.921719056175371,
+            4.906151423314541
+          ],
+          "pinball_close": 0.26417165692114863,
+          "pinball_all": 0.24185620549439157,
+          "range_iou": 0.29873101303254207,
+          "close_mae_atr": 0.8174097960667792,
+          "categories": {
+            "same": 0.07057416267942583,
+            "close": 0.7192982456140351,
+            "wrong": 0.21012759170653908
+          },
+          "categories_step1": {
+            "same": 0.09629186602870814,
+            "close": 0.69377990430622,
+            "wrong": 0.20992822966507177
+          },
+          "details": {
+            "window_bars": 250
+          }
+        },
+        "analog_v1": {
+          "n": 1594,
+          "coverage_80": 0.7971560016729402,
+          "coverage_by_step": [
+            0.7961104140526977,
+            0.7910915934755333,
+            0.8042659974905897
+          ],
+          "winkler": 3.8240033761594994,
+          "winkler_by_step": [
+            2.6716959009104353,
+            3.9203956173124452,
+            4.879918610255619
+          ],
+          "pinball_close": 0.2635707692621539,
+          "pinball_all": null,
+          "range_iou": 0.26762959108194917,
+          "close_mae_atr": 0.816623940341023,
+          "categories": {
+            "same": 0.021748222501045588,
+            "close": 0.7754077791718946,
+            "wrong": 0.20284399832705982
+          },
+          "categories_step1": {
+            "same": 0.029485570890840654,
+            "close": 0.766624843161857,
+            "wrong": 0.2038895859473024
+          },
+          "details": {
+            "replayed": 1672,
+            "with_bands": 1594,
+            "sampled": false,
+            "sample_per_instrument": null,
+            "pooled_library_read": true
+          }
+        }
+      },
+      "comparisons": {
+        "atr_bands": {
+          "n": 1672,
+          "n_dates": 1672,
+          "n_months": 81,
+          "winkler_model": 11.424886110105048,
+          "winkler_baseline": 11.389325033306504,
+          "improvement": -0.0031223164405749237,
+          "ci": [
+            -0.012612384751202105,
+            0.0073759368106988766
+          ],
+          "ci_month_blocks": [
+            -0.014580632844334586,
+            0.008466922884439496
+          ]
+        },
+        "rolling_quantiles": {
+          "n": 1672,
+          "n_dates": 1672,
+          "n_months": 81,
+          "winkler_model": 11.424886110105048,
+          "winkler_baseline": 11.514302181901686,
+          "improvement": 0.007765652697319658,
+          "ci": [
+            -0.002789027134884958,
+            0.018289143223454665
+          ],
+          "ci_month_blocks": [
+            -0.005806556452510103,
+            0.0204564728405008
+          ]
+        },
+        "analog_v1": {
+          "n": 1594,
+          "n_dates": 1594,
+          "n_months": 81,
+          "winkler_model": 11.457408942707547,
+          "winkler_baseline": 11.472010128478502,
+          "improvement": 0.0012727661157401204,
+          "ci": [
+            -0.009998222267435396,
+            0.011793863162231327
+          ],
+          "ci_month_blocks": [
+            -0.012560124288612886,
+            0.015110608541102256
+          ]
+        }
+      },
+      "best_baseline": "atr_bands",
+      "gate": {
+        "coverage_80": 0.7779106858054227,
+        "coverage_within": [
+          0.76,
+          0.84
+        ],
+        "best_baseline": "atr_bands",
+        "improvement": -0.0031223164405749237,
+        "min_improvement": 0.05,
+        "ci": [
+          -0.012612384751202105,
+          0.0073759368106988766
+        ],
+        "ci_level": 0.95,
+        "ci_lower_above": 0.0,
+        "checks": {
+          "coverage": true,
+          "improvement": false,
+          "ci_lower": false
+        },
+        "pass": false
+      },
+      "by_fold": [
+        {
+          "fold": 0,
+          "n": 122,
+          "coverage_80": 0.8387978142076503,
+          "winkler": 3.612396055639116,
+          "test_start": "2018-12-31T18:30:00+00:00",
+          "test_end": "2019-06-30T18:30:00+00:00"
+        },
+        {
+          "fold": 1,
+          "n": 123,
+          "coverage_80": 0.8238482384823849,
+          "winkler": 3.6583218735246477,
+          "test_start": "2019-06-30T18:30:00+00:00",
+          "test_end": "2019-12-31T18:30:00+00:00"
+        },
+        {
+          "fold": 2,
+          "n": 123,
+          "coverage_80": 0.7289972899728997,
+          "winkler": 5.0052254493159,
+          "test_start": "2019-12-31T18:30:00+00:00",
+          "test_end": "2020-06-30T18:30:00+00:00"
+        },
+        {
+          "fold": 3,
+          "n": 129,
+          "coverage_80": 0.7545219638242894,
+          "winkler": 3.4621760453980714,
+          "test_start": "2020-06-30T18:30:00+00:00",
+          "test_end": "2020-12-31T18:30:00+00:00"
+        },
+        {
+          "fold": 4,
+          "n": 122,
+          "coverage_80": 0.773224043715847,
+          "winkler": 3.7406243567502564,
+          "test_start": "2020-12-31T18:30:00+00:00",
+          "test_end": "2021-06-30T18:30:00+00:00"
+        },
+        {
+          "fold": 5,
+          "n": 126,
+          "coverage_80": 0.7857142857142857,
+          "winkler": 3.660271684368136,
+          "test_start": "2021-06-30T18:30:00+00:00",
+          "test_end": "2021-12-31T18:30:00+00:00"
+        },
+        {
+          "fold": 6,
+          "n": 123,
+          "coverage_80": 0.7262872628726287,
+          "winkler": 3.7093634702931575,
+          "test_start": "2021-12-31T18:30:00+00:00",
+          "test_end": "2022-06-30T18:30:00+00:00"
+        },
+        {
+          "fold": 7,
+          "n": 125,
+          "coverage_80": 0.76,
+          "winkler": 3.436611226161321,
+          "test_start": "2022-06-30T18:30:00+00:00",
+          "test_end": "2022-12-31T18:30:00+00:00"
+        },
+        {
+          "fold": 8,
+          "n": 122,
+          "coverage_80": 0.7896174863387978,
+          "winkler": 3.6011232773625785,
+          "test_start": "2022-12-31T18:30:00+00:00",
+          "test_end": "2023-06-30T18:30:00+00:00"
+        },
+        {
+          "fold": 9,
+          "n": 124,
+          "coverage_80": 0.7634408602150538,
+          "winkler": 4.288361755710456,
+          "test_start": "2023-06-30T18:30:00+00:00",
+          "test_end": "2023-12-31T18:30:00+00:00"
+        },
+        {
+          "fold": 10,
+          "n": 123,
+          "coverage_80": 0.8021680216802168,
+          "winkler": 3.89237462133573,
+          "test_start": "2023-12-31T18:30:00+00:00",
+          "test_end": "2024-06-30T18:30:00+00:00"
+        },
+        {
+          "fold": 11,
+          "n": 126,
+          "coverage_80": 0.798941798941799,
+          "winkler": 3.8701229011886333,
+          "test_start": "2024-06-30T18:30:00+00:00",
+          "test_end": "2024-12-31T18:30:00+00:00"
+        },
+        {
+          "fold": 12,
+          "n": 123,
+          "coverage_80": 0.7452574525745257,
+          "winkler": 3.788223851260131,
+          "test_start": "2024-12-31T18:30:00+00:00",
+          "test_end": "2025-06-30T18:30:00+00:00"
+        },
+        {
+          "fold": 13,
+          "n": 61,
+          "coverage_80": 0.825136612021858,
+          "winkler": 3.404901643431252,
+          "test_start": "2025-06-30T18:30:00+00:00",
+          "test_end": "2025-09-30T18:30:00+00:00"
+        }
+      ],
+      "by_instrument": [
+        {
+          "instrument": "BSE:SENSEX",
+          "n": 1672,
+          "coverage_80": 0.7779106858054227,
+          "winkler": 3.808295370035016,
+          "categories": {
+            "same": 0.06359649122807018,
+            "close": 0.7143141945773525,
+            "wrong": 0.22208931419457736
+          },
+          "improvement_vs_best": -0.0031223164405749237
+        }
+      ],
+      "walk_forward_cached": true,
+      "training_folds": [
+        {
+          "fold": 0,
+          "test_start": "2018-12-31T18:30:00+00:00",
+          "test_end": "2019-06-30T18:30:00+00:00",
+          "train_rows": 3439,
+          "train_rows_used": 3439,
+          "train_last_ts": "2018-11-30T03:45:00+00:00",
+          "fit_seconds": 1.4
+        },
+        {
+          "fold": 1,
+          "test_start": "2019-06-30T18:30:00+00:00",
+          "test_end": "2019-12-31T18:30:00+00:00",
+          "train_rows": 3561,
+          "train_rows_used": 3561,
+          "train_last_ts": "2019-05-30T03:45:00+00:00",
+          "fit_seconds": 1.5
+        },
+        {
+          "fold": 2,
+          "test_start": "2019-12-31T18:30:00+00:00",
+          "test_end": "2020-06-30T18:30:00+00:00",
+          "train_rows": 3684,
+          "train_rows_used": 3684,
+          "train_last_ts": "2019-12-02T03:45:00+00:00",
+          "fit_seconds": 1.6
+        },
+        {
+          "fold": 3,
+          "test_start": "2020-06-30T18:30:00+00:00",
+          "test_end": "2020-12-31T18:30:00+00:00",
+          "train_rows": 3807,
+          "train_rows_used": 3807,
+          "train_last_ts": "2020-06-02T03:45:00+00:00",
+          "fit_seconds": 1.7
+        },
+        {
+          "fold": 4,
+          "test_start": "2020-12-31T18:30:00+00:00",
+          "test_end": "2021-06-30T18:30:00+00:00",
+          "train_rows": 3936,
+          "train_rows_used": 3936,
+          "train_last_ts": "2020-12-02T03:45:00+00:00",
+          "fit_seconds": 2.2
+        },
+        {
+          "fold": 5,
+          "test_start": "2021-06-30T18:30:00+00:00",
+          "test_end": "2021-12-31T18:30:00+00:00",
+          "train_rows": 4058,
+          "train_rows_used": 4058,
+          "train_last_ts": "2021-06-02T03:45:00+00:00",
+          "fit_seconds": 1.9
+        },
+        {
+          "fold": 6,
+          "test_start": "2021-12-31T18:30:00+00:00",
+          "test_end": "2022-06-30T18:30:00+00:00",
+          "train_rows": 4184,
+          "train_rows_used": 4184,
+          "train_last_ts": "2021-12-03T03:45:00+00:00",
+          "fit_seconds": 1.8
+        },
+        {
+          "fold": 7,
+          "test_start": "2022-06-30T18:30:00+00:00",
+          "test_end": "2022-12-31T18:30:00+00:00",
+          "train_rows": 4307,
+          "train_rows_used": 4307,
+          "train_last_ts": "2022-06-02T03:45:00+00:00",
+          "fit_seconds": 1.8
+        },
+        {
+          "fold": 8,
+          "test_start": "2022-12-31T18:30:00+00:00",
+          "test_end": "2023-06-30T18:30:00+00:00",
+          "train_rows": 4432,
+          "train_rows_used": 4432,
+          "train_last_ts": "2022-12-02T03:45:00+00:00",
+          "fit_seconds": 1.8
+        },
+        {
+          "fold": 9,
+          "test_start": "2023-06-30T18:30:00+00:00",
+          "test_end": "2023-12-31T18:30:00+00:00",
+          "train_rows": 4554,
+          "train_rows_used": 4554,
+          "train_last_ts": "2023-06-01T03:45:00+00:00",
+          "fit_seconds": 2.3
+        },
+        {
+          "fold": 10,
+          "test_start": "2023-12-31T18:30:00+00:00",
+          "test_end": "2024-06-30T18:30:00+00:00",
+          "train_rows": 4678,
+          "train_rows_used": 4678,
+          "train_last_ts": "2023-11-30T03:45:00+00:00",
+          "fit_seconds": 2.2
+        },
+        {
+          "fold": 11,
+          "test_start": "2024-06-30T18:30:00+00:00",
+          "test_end": "2024-12-31T18:30:00+00:00",
+          "train_rows": 4801,
+          "train_rows_used": 4801,
+          "train_last_ts": "2024-05-30T03:45:00+00:00",
+          "fit_seconds": 2.7
+        },
+        {
+          "fold": 12,
+          "test_start": "2024-12-31T18:30:00+00:00",
+          "test_end": "2025-06-30T18:30:00+00:00",
+          "train_rows": 4927,
+          "train_rows_used": 4927,
+          "train_last_ts": "2024-12-02T03:45:00+00:00",
+          "fit_seconds": 2.3
+        },
+        {
+          "fold": 13,
+          "test_start": "2025-06-30T18:30:00+00:00",
+          "test_end": "2025-09-30T18:30:00+00:00",
+          "train_rows": 5050,
+          "train_rows_used": 5050,
+          "train_last_ts": "2025-06-02T03:45:00+00:00",
+          "fit_seconds": 2.5
+        }
+      ],
+      "training_seconds": 27.7,
+      "runtime_seconds": {
+        "panel": 0.8,
+        "range_v1": 0.0,
+        "atr_bands": 0.0,
+        "rolling_quantiles": 0.1,
+        "analog_v1": 1.8,
+        "total": 3.4
+      },
+      "bootstrap_resamples": 2000,
+      "seed": 20260924
+    },
+    {
+      "model": "range_v1",
+      "exchange": "MCX",
+      "tf": "5m",
+      "period": "validation",
+      "start": "2022-12-31T18:30:00+00:00",
+      "end": "2025-09-30T18:30:00+00:00",
+      "instruments": [
+        "MCX:CRUDEOIL",
+        "MCX:NATURALGAS",
+        "MCX:GOLD",
+        "MCX:SILVER"
+      ],
+      "in_go_no_go_slice": false,
+      "units": "ATR(14) at the reference bar",
+      "steps": 3,
+      "n_forecasts": 464652,
+      "n_dates": 706,
+      "interval_alpha": 0.2,
+      "same_close_atr": 0.25,
+      "methods": {
+        "range_v1": {
+          "n": 464652,
+          "coverage_80": 0.7829594334397929,
+          "coverage_by_step": [
+            0.7826071985055483,
+            0.7826351764331155,
+            0.783635925380715
+          ],
+          "winkler": 3.917961371587144,
+          "winkler_by_step": [
+            2.8007858298426873,
+            4.0065051172652675,
+            4.946593167653478
+          ],
+          "pinball_close": 0.2653986140928202,
+          "pinball_all": 0.23662055786537517,
+          "range_iou": 0.3270929768491243,
+          "close_mae_atr": 0.8087994102394924,
+          "categories": {
+            "same": 0.06631701431035127,
+            "close": 0.7166424191294417,
+            "wrong": 0.21704056656020707
+          },
+          "categories_step1": {
+            "same": 0.09305458708883207,
+            "close": 0.6895526114167162,
+            "wrong": 0.21739280149445175
+          }
+        },
+        "atr_bands": {
+          "n": 464652,
+          "coverage_80": 0.7834572970739392,
+          "coverage_by_step": [
+            0.7827965875536961,
+            0.7834336234429207,
+            0.7841416802252008
+          ],
+          "winkler": 4.176380675585014,
+          "winkler_by_step": [
+            2.973404178049533,
+            4.261897352419448,
+            5.293840496286058
+          ],
+          "pinball_close": 0.274136468795214,
+          "pinball_all": 0.24617495089130312,
+          "range_iou": 0.3142962486415537,
+          "close_mae_atr": 0.8095426776542811,
+          "categories": {
+            "same": 0.0808024069626301,
+            "close": 0.7026548901113091,
+            "wrong": 0.2165427029260608
+          },
+          "categories_step1": {
+            "same": 0.11206666494494805,
+            "close": 0.6707299226087481,
+            "wrong": 0.2172034124463039
+          },
+          "details": {
+            "k_by_fold": {
+              "0": [
+                0.8382,
+                1.1839,
+                1.4603
+              ],
+              "1": [
+                0.8432,
+                1.1904,
+                1.4674
+              ],
+              "2": [
+                0.848,
+                1.1964,
+                1.475
+              ],
+              "3": [
+                0.8521,
+                1.2017,
+                1.4817
+              ],
+              "4": [
+                0.8554,
+                1.2064,
+                1.4867
+              ],
+              "5": [
+                0.8576,
+                1.21,
+                1.491
+              ]
+            }
+          }
+        },
+        "rolling_quantiles": {
+          "n": 464652,
+          "coverage_80": 0.7916218302442832,
+          "coverage_by_step": [
+            0.7934131349913484,
+            0.7921369110646247,
+            0.7893154446768764
+          ],
+          "winkler": 4.208332902646186,
+          "winkler_by_step": [
+            2.98208675439046,
+            4.291583027049958,
+            5.351328926498139
+          ],
+          "pinball_close": 0.27575286646203173,
+          "pinball_all": 0.24758551510788052,
+          "range_iou": 0.3117917952662348,
+          "close_mae_atr": 0.8128506182429531,
+          "categories": {
+            "same": 0.07792785425077979,
+            "close": 0.7136939759935034,
+            "wrong": 0.20837816975571682
+          },
+          "categories_step1": {
+            "same": 0.1071253325069084,
+            "close": 0.68628780248444,
+            "wrong": 0.20658686500865164
+          },
+          "details": {
+            "window_bars": 250
+          }
+        },
+        "analog_v1": {
+          "n": 8000,
+          "coverage_80": 0.7949166666666667,
+          "coverage_by_step": [
+            0.799875,
+            0.79475,
+            0.790125
+          ],
+          "winkler": 4.152175472328425,
+          "winkler_by_step": [
+            2.8625873773250867,
+            4.255287193105378,
+            5.3386518465548125
+          ],
+          "pinball_close": 0.27229377992097537,
+          "pinball_all": null,
+          "range_iou": 0.22048519364329286,
+          "close_mae_atr": 0.8033275850601672,
+          "categories": {
+            "same": 0.021875,
+            "close": 0.7730416666666666,
+            "wrong": 0.20508333333333334
+          },
+          "categories_step1": {
+            "same": 0.03175,
+            "close": 0.768125,
+            "wrong": 0.200125
+          },
+          "details": {
+            "replayed": 8000,
+            "with_bands": 8000,
+            "sampled": true,
+            "sample_per_instrument": 2000,
+            "pooled_library_read": true
+          }
+        }
+      },
+      "comparisons": {
+        "atr_bands": {
+          "n": 464652,
+          "n_dates": 706,
+          "n_months": 33,
+          "winkler_model": 11.753884114761432,
+          "winkler_baseline": 12.529142026755038,
+          "improvement": 0.061876376717424075,
+          "ci": [
+            0.059986154458145334,
+            0.0636134156348618
+          ],
+          "ci_month_blocks": [
+            0.059296362796167935,
+            0.06454082404030179
+          ]
+        },
+        "rolling_quantiles": {
+          "n": 464652,
+          "n_dates": 706,
+          "n_months": 33,
+          "winkler_model": 11.753884114761432,
+          "winkler_baseline": 12.624998707938557,
+          "improvement": 0.068999182758678,
+          "ci": [
+            0.06709084011630329,
+            0.07087811865967895
+          ],
+          "ci_month_blocks": [
+            0.06626251873625438,
+            0.07167279739004939
+          ]
+        },
+        "analog_v1": {
+          "n": 8000,
+          "n_dates": 705,
+          "n_months": 33,
+          "winkler_model": 11.751384074799716,
+          "winkler_baseline": 12.456526416985277,
+          "improvement": 0.05660826450173562,
+          "ci": [
+            0.04880476797648235,
+            0.06531180102567324
+          ],
+          "ci_month_blocks": [
+            0.047732307953617166,
+            0.06572001674082414
+          ]
+        }
+      },
+      "best_baseline": "analog_v1",
+      "gate": {
+        "coverage_80": 0.7829594334397929,
+        "coverage_within": [
+          0.76,
+          0.84
+        ],
+        "best_baseline": "analog_v1",
+        "improvement": 0.05660826450173562,
+        "min_improvement": 0.05,
+        "ci": [
+          0.04880476797648235,
+          0.06531180102567324
+        ],
+        "ci_level": 0.95,
+        "ci_lower_above": 0.0,
+        "checks": {
+          "coverage": true,
+          "improvement": true,
+          "ci_lower": true
+        },
+        "pass": true
+      },
+      "by_fold": [
+        {
+          "fold": 0,
+          "n": 84946,
+          "coverage_80": 0.7812021754997293,
+          "winkler": 3.862352163379068,
+          "test_start": "2022-12-31T18:30:00+00:00",
+          "test_end": "2023-06-30T18:30:00+00:00"
+        },
+        {
+          "fold": 1,
+          "n": 84042,
+          "coverage_80": 0.7884192824222809,
+          "winkler": 3.962345430587704,
+          "test_start": "2023-06-30T18:30:00+00:00",
+          "test_end": "2023-12-31T18:30:00+00:00"
+        },
+        {
+          "fold": 2,
+          "n": 83191,
+          "coverage_80": 0.782620716183241,
+          "winkler": 3.940254965550501,
+          "test_start": "2023-12-31T18:30:00+00:00",
+          "test_end": "2024-06-30T18:30:00+00:00"
+        },
+        {
+          "fold": 3,
+          "n": 85184,
+          "coverage_80": 0.780936952166291,
+          "winkler": 3.8733750528086492,
+          "test_start": "2024-06-30T18:30:00+00:00",
+          "test_end": "2024-12-31T18:30:00+00:00"
+        },
+        {
+          "fold": 4,
+          "n": 85035,
+          "coverage_80": 0.7786676074557535,
+          "winkler": 3.9662574765587406,
+          "test_start": "2024-12-31T18:30:00+00:00",
+          "test_end": "2025-06-30T18:30:00+00:00"
+        },
+        {
+          "fold": 5,
+          "n": 42254,
+          "coverage_80": 0.7890140578406778,
+          "winkler": 3.890276656082816,
+          "test_start": "2025-06-30T18:30:00+00:00",
+          "test_end": "2025-09-30T18:30:00+00:00"
+        }
+      ],
+      "by_instrument": [
+        {
+          "instrument": "MCX:CRUDEOIL",
+          "n": 120331,
+          "coverage_80": 0.7742477000939076,
+          "winkler": 3.8301743477292662,
+          "categories": {
+            "same": 0.0673004739704094,
+            "close": 0.7069472261234983,
+            "wrong": 0.22575229990609236
+          },
+          "improvement_vs_best": 0.054920685750673326
+        },
+        {
+          "instrument": "MCX:NATURALGAS",
+          "n": 120494,
+          "coverage_80": 0.7804206018556941,
+          "winkler": 3.7652801564440703,
+          "categories": {
+            "same": 0.06625226152339536,
+            "close": 0.7141683403322987,
+            "wrong": 0.21957939814430594
+          },
+          "improvement_vs_best": 0.053137460301227346
+        },
+        {
+          "instrument": "MCX:GOLD",
+          "n": 110288,
+          "coverage_80": 0.787114947531312,
+          "winkler": 4.143179684947744,
+          "categories": {
+            "same": 0.06738418202040718,
+            "close": 0.7197307655109048,
+            "wrong": 0.21288505246868805
+          },
+          "improvement_vs_best": 0.04022942008241259
+        },
+        {
+          "instrument": "MCX:SILVER",
+          "n": 113539,
+          "coverage_80": 0.7908501337279114,
+          "winkler": 3.954264257479904,
+          "categories": {
+            "same": 0.06430683142649955,
+            "close": 0.7265433023014118,
+            "wrong": 0.2091498662720886
+          },
+          "improvement_vs_best": 0.0762692966119114
+        }
+      ],
+      "walk_forward_cached": true,
+      "training_folds": [
+        {
+          "fold": 0,
+          "test_start": "2022-12-31T18:30:00+00:00",
+          "test_end": "2023-06-30T18:30:00+00:00",
+          "train_rows": 717427,
+          "train_rows_used": 120000,
+          "train_last_ts": "2022-12-30T16:40:00+00:00",
+          "fit_seconds": 30.1
+        },
+        {
+          "fold": 1,
+          "test_start": "2023-06-30T18:30:00+00:00",
+          "test_end": "2023-12-31T18:30:00+00:00",
+          "train_rows": 802373,
+          "train_rows_used": 120000,
+          "train_last_ts": "2023-06-30T16:15:00+00:00",
+          "fit_seconds": 27.6
+        },
+        {
+          "fold": 2,
+          "test_start": "2023-12-31T18:30:00+00:00",
+          "test_end": "2024-06-30T18:30:00+00:00",
+          "train_rows": 886415,
+          "train_rows_used": 120000,
+          "train_last_ts": "2023-12-29T16:40:00+00:00",
+          "fit_seconds": 36.3
+        },
+        {
+          "fold": 3,
+          "test_start": "2024-06-30T18:30:00+00:00",
+          "test_end": "2024-12-31T18:30:00+00:00",
+          "train_rows": 969606,
+          "train_rows_used": 120000,
+          "train_last_ts": "2024-06-28T16:15:00+00:00",
+          "fit_seconds": 33.2
+        },
+        {
+          "fold": 4,
+          "test_start": "2024-12-31T18:30:00+00:00",
+          "test_end": "2025-06-30T18:30:00+00:00",
+          "train_rows": 1054790,
+          "train_rows_used": 120000,
+          "train_last_ts": "2024-12-31T16:40:00+00:00",
+          "fit_seconds": 29.6
+        },
+        {
+          "fold": 5,
+          "test_start": "2025-06-30T18:30:00+00:00",
+          "test_end": "2025-09-30T18:30:00+00:00",
+          "train_rows": 1139825,
+          "train_rows_used": 120000,
+          "train_last_ts": "2025-06-30T16:15:00+00:00",
+          "fit_seconds": 29.0
+        }
+      ],
+      "training_seconds": 185.8,
+      "runtime_seconds": {
+        "panel": 10.1,
+        "range_v1": 1.0,
+        "atr_bands": 2.9,
+        "rolling_quantiles": 26.2,
+        "analog_v1": 260.4,
+        "total": 313.3
+      },
+      "bootstrap_resamples": 2000,
+      "seed": 20260924
+    },
+    {
+      "model": "range_v1",
+      "exchange": "MCX",
+      "tf": "15m",
+      "period": "validation",
+      "start": "2022-12-31T18:30:00+00:00",
+      "end": "2025-09-30T18:30:00+00:00",
+      "instruments": [
+        "MCX:CRUDEOIL",
+        "MCX:NATURALGAS",
+        "MCX:GOLD",
+        "MCX:SILVER"
+      ],
+      "in_go_no_go_slice": false,
+      "units": "ATR(14) at the reference bar",
+      "steps": 3,
+      "n_forecasts": 157084,
+      "n_dates": 706,
+      "interval_alpha": 0.2,
+      "same_close_atr": 0.25,
+      "methods": {
+        "range_v1": {
+          "n": 157084,
+          "coverage_80": 0.7874067377963383,
+          "coverage_by_step": [
+            0.7872348552366887,
+            0.7877823330192764,
+            0.7872030251330498
+          ],
+          "winkler": 3.7850413862140964,
+          "winkler_by_step": [
+            2.6556348425387,
+            3.8619619628848927,
+            4.837527353218697
+          ],
+          "pinball_close": 0.2556443208604083,
+          "pinball_all": 0.2284758035883719,
+          "range_iou": 0.3479039350121965,
+          "close_mae_atr": 0.7768576479196303,
+          "categories": {
+            "same": 0.06893339444713233,
+            "close": 0.718473343349206,
+            "wrong": 0.21259326220366173
+          },
+          "categories_step1": {
+            "same": 0.09405795625270556,
+            "close": 0.693176898983983,
+            "wrong": 0.21276514476331135
+          }
+        },
+        "atr_bands": {
+          "n": 157084,
+          "coverage_80": 0.7882364424978567,
+          "coverage_by_step": [
+            0.7877568689363652,
+            0.7886672099004355,
+            0.7882852486567696
+          ],
+          "winkler": 4.135135718896005,
+          "winkler_by_step": [
+            2.903484263289819,
+            4.221877757931851,
+            5.280045135466344
+          ],
+          "pinball_close": 0.26737235998683345,
+          "pinball_all": 0.24185495973365512,
+          "range_iou": 0.32673167339115233,
+          "close_mae_atr": 0.7772070161417998,
+          "categories": {
+            "same": 0.09876456757743203,
+            "close": 0.6894718749204247,
+            "wrong": 0.21176355750214323
+          },
+          "categories_step1": {
+            "same": 0.136493850423977,
+            "close": 0.6512630185123883,
+            "wrong": 0.21224313106363474
+          },
+          "details": {
+            "k_by_fold": {
+              "0": [
+                0.7899,
+                1.1512,
+                1.4448
+              ],
+              "1": [
+                0.7935,
+                1.1551,
+                1.4502
+              ],
+              "2": [
+                0.7965,
+                1.1591,
+                1.4539
+              ],
+              "3": [
+                0.7991,
+                1.1625,
+                1.4587
+              ],
+              "4": [
+                0.8012,
+                1.167,
+                1.4644
+              ],
+              "5": [
+                0.8028,
+                1.169,
+                1.4675
+              ]
+            }
+          }
+        },
+        "rolling_quantiles": {
+          "n": 157084,
+          "coverage_80": 0.7913388165991868,
+          "coverage_by_step": [
+            0.7937791245448296,
+            0.7911690560464465,
+            0.7890682692062846
+          ],
+          "winkler": 4.174812165547477,
+          "winkler_by_step": [
+            2.9167895061812863,
+            4.25836836023417,
+            5.349278630226975
+          ],
+          "pinball_close": 0.26914701463205093,
+          "pinball_all": 0.2433947662653789,
+          "range_iou": 0.32485500491711833,
+          "close_mae_atr": 0.77991965468281,
+          "categories": {
+            "same": 0.09523142607352329,
+            "close": 0.6961073905256635,
+            "wrong": 0.20866118340081316
+          },
+          "categories_step1": {
+            "same": 0.13160474650505463,
+            "close": 0.6621743780397749,
+            "wrong": 0.20622087545517048
+          },
+          "details": {
+            "window_bars": 250
+          }
+        },
+        "analog_v1": {
+          "n": 8000,
+          "coverage_80": 0.791,
+          "coverage_by_step": [
+            0.784375,
+            0.791625,
+            0.797
+          ],
+          "winkler": 4.115368323248403,
+          "winkler_by_step": [
+            2.9347990440664535,
+            4.202102002489517,
+            5.209203923189241
+          ],
+          "pinball_close": 0.26722935286393756,
+          "pinball_all": null,
+          "range_iou": 0.25348488943738146,
+          "close_mae_atr": 0.7803024525339447,
+          "categories": {
+            "same": 0.03208333333333333,
+            "close": 0.7589166666666667,
+            "wrong": 0.209
+          },
+          "categories_step1": {
+            "same": 0.042,
+            "close": 0.742375,
+            "wrong": 0.215625
+          },
+          "details": {
+            "replayed": 8000,
+            "with_bands": 8000,
+            "sampled": true,
+            "sample_per_instrument": 2000,
+            "pooled_library_read": true
+          }
+        }
+      },
+      "comparisons": {
+        "atr_bands": {
+          "n": 157084,
+          "n_dates": 706,
+          "n_months": 33,
+          "winkler_model": 11.355124158642289,
+          "winkler_baseline": 12.405407156688014,
+          "improvement": 0.08466332340244831,
+          "ci": [
+            0.08183693136853329,
+            0.08726997169014923
+          ],
+          "ci_month_blocks": [
+            0.08077294207382082,
+            0.08845353510527021
+          ]
+        },
+        "rolling_quantiles": {
+          "n": 157084,
+          "n_dates": 706,
+          "n_months": 33,
+          "winkler_model": 11.355124158642289,
+          "winkler_baseline": 12.524436496642432,
+          "improvement": 0.09336247090347038,
+          "ci": [
+            0.09037141906574934,
+            0.09625380500585408
+          ],
+          "ci_month_blocks": [
+            0.0893980499321265,
+            0.09709136720333066
+          ]
+        },
+        "analog_v1": {
+          "n": 8000,
+          "n_dates": 706,
+          "n_months": 33,
+          "winkler_model": 11.302625169815496,
+          "winkler_baseline": 12.34610496974521,
+          "improvement": 0.08451894767514279,
+          "ci": [
+            0.07686617861792336,
+            0.0924825449333159
+          ],
+          "ci_month_blocks": [
+            0.07520188094250253,
+            0.09397011951830755
+          ]
+        }
+      },
+      "best_baseline": "analog_v1",
+      "gate": {
+        "coverage_80": 0.7874067377963383,
+        "coverage_within": [
+          0.76,
+          0.84
+        ],
+        "best_baseline": "analog_v1",
+        "improvement": 0.08451894767514279,
+        "min_improvement": 0.05,
+        "ci": [
+          0.07686617861792336,
+          0.0924825449333159
+        ],
+        "ci_level": 0.95,
+        "ci_lower_above": 0.0,
+        "checks": {
+          "coverage": true,
+          "improvement": true,
+          "ci_lower": true
+        },
+        "pass": true
+      },
+      "by_fold": [
+        {
+          "fold": 0,
+          "n": 28752,
+          "coverage_80": 0.7878524392506029,
+          "winkler": 3.757743654669677,
+          "test_start": "2022-12-31T18:30:00+00:00",
+          "test_end": "2023-06-30T18:30:00+00:00"
+        },
+        {
+          "fold": 1,
+          "n": 28454,
+          "coverage_80": 0.7943112860523418,
+          "winkler": 3.8127611853131342,
+          "test_start": "2023-06-30T18:30:00+00:00",
+          "test_end": "2023-12-31T18:30:00+00:00"
+        },
+        {
+          "fold": 2,
+          "n": 28142,
+          "coverage_80": 0.7904673915618411,
+          "winkler": 3.7600256218158954,
+          "test_start": "2023-12-31T18:30:00+00:00",
+          "test_end": "2024-06-30T18:30:00+00:00"
+        },
+        {
+          "fold": 3,
+          "n": 28725,
+          "coverage_80": 0.783069335654192,
+          "winkler": 3.761090832681873,
+          "test_start": "2024-06-30T18:30:00+00:00",
+          "test_end": "2024-12-31T18:30:00+00:00"
+        },
+        {
+          "fold": 4,
+          "n": 28717,
+          "coverage_80": 0.782405311604044,
+          "winkler": 3.8369418124989876,
+          "test_start": "2024-12-31T18:30:00+00:00",
+          "test_end": "2025-06-30T18:30:00+00:00"
+        },
+        {
+          "fold": 5,
+          "n": 14294,
+          "coverage_80": 0.7855044074436827,
+          "winkler": 3.777882715728942,
+          "test_start": "2025-06-30T18:30:00+00:00",
+          "test_end": "2025-09-30T18:30:00+00:00"
+        }
+      ],
+      "by_instrument": [
+        {
+          "instrument": "MCX:CRUDEOIL",
+          "n": 40241,
+          "coverage_80": 0.7816074815900864,
+          "winkler": 3.6257648583628312,
+          "categories": {
+            "same": 0.06573726630385263,
+            "close": 0.7158702152862337,
+            "wrong": 0.2183925184099136
+          },
+          "improvement_vs_best": 0.06401908804730894
+        },
+        {
+          "instrument": "MCX:NATURALGAS",
+          "n": 40242,
+          "coverage_80": 0.7841889899441711,
+          "winkler": 3.71843713739499,
+          "categories": {
+            "same": 0.06896608849792091,
+            "close": 0.7152229014462502,
+            "wrong": 0.2158110100558289
+          },
+          "improvement_vs_best": 0.09726130312373271
+        },
+        {
+          "instrument": "MCX:GOLD",
+          "n": 37875,
+          "coverage_80": 0.7885324532453245,
+          "winkler": 3.9408368541296035,
+          "categories": {
+            "same": 0.07026622662266227,
+            "close": 0.7182662266226623,
+            "wrong": 0.21146754675467547
+          },
+          "improvement_vs_best": 0.08387972549709077
+        },
+        {
+          "instrument": "MCX:SILVER",
+          "n": 38726,
+          "coverage_80": 0.7956756012325914,
+          "winkler": 3.8673886875346932,
+          "categories": {
+            "same": 0.07091704109211727,
+            "close": 0.7247585601404741,
+            "wrong": 0.20432439876740863
+          },
+          "improvement_vs_best": 0.0920343746829243
+        }
+      ],
+      "walk_forward_cached": true,
+      "training_folds": [
+        {
+          "fold": 0,
+          "test_start": "2022-12-31T18:30:00+00:00",
+          "test_end": "2023-06-30T18:30:00+00:00",
+          "train_rows": 241508,
+          "train_rows_used": 120000,
+          "train_last_ts": "2022-12-30T13:15:00+00:00",
+          "fit_seconds": 26.5
+        },
+        {
+          "fold": 1,
+          "test_start": "2023-06-30T18:30:00+00:00",
+          "test_end": "2023-12-31T18:30:00+00:00",
+          "train_rows": 270260,
+          "train_rows_used": 120000,
+          "train_last_ts": "2023-06-30T12:45:00+00:00",
+          "fit_seconds": 26.8
+        },
+        {
+          "fold": 2,
+          "test_start": "2023-12-31T18:30:00+00:00",
+          "test_end": "2024-06-30T18:30:00+00:00",
+          "train_rows": 298714,
+          "train_rows_used": 120000,
+          "train_last_ts": "2023-12-29T13:15:00+00:00",
+          "fit_seconds": 44.5
+        },
+        {
+          "fold": 3,
+          "test_start": "2024-06-30T18:30:00+00:00",
+          "test_end": "2024-12-31T18:30:00+00:00",
+          "train_rows": 326856,
+          "train_rows_used": 120000,
+          "train_last_ts": "2024-06-28T12:45:00+00:00",
+          "fit_seconds": 35.2
+        },
+        {
+          "fold": 4,
+          "test_start": "2024-12-31T18:30:00+00:00",
+          "test_end": "2025-06-30T18:30:00+00:00",
+          "train_rows": 355581,
+          "train_rows_used": 120000,
+          "train_last_ts": "2024-12-31T13:15:00+00:00",
+          "fit_seconds": 35.2
+        },
+        {
+          "fold": 5,
+          "test_start": "2025-06-30T18:30:00+00:00",
+          "test_end": "2025-09-30T18:30:00+00:00",
+          "train_rows": 384298,
+          "train_rows_used": 120000,
+          "train_last_ts": "2025-06-30T12:45:00+00:00",
+          "fit_seconds": 33.9
+        }
+      ],
+      "training_seconds": 202.1,
+      "runtime_seconds": {
+        "panel": 3.1,
+        "range_v1": 0.3,
+        "atr_bands": 0.8,
+        "rolling_quantiles": 7.0,
+        "analog_v1": 67.0,
+        "total": 82.3
+      },
+      "bootstrap_resamples": 2000,
+      "seed": 20260924
+    },
+    {
+      "model": "range_v1",
+      "exchange": "MCX",
+      "tf": "1h",
+      "period": "validation",
+      "start": "2022-12-31T18:30:00+00:00",
+      "end": "2025-09-30T18:30:00+00:00",
+      "instruments": [
+        "MCX:CRUDEOIL",
+        "MCX:NATURALGAS",
+        "MCX:GOLD",
+        "MCX:SILVER"
+      ],
+      "in_go_no_go_slice": false,
+      "units": "ATR(14) at the reference bar",
+      "steps": 3,
+      "n_forecasts": 40806,
+      "n_dates": 706,
+      "interval_alpha": 0.2,
+      "same_close_atr": 0.25,
+      "methods": {
+        "range_v1": {
+          "n": 40806,
+          "coverage_80": 0.78937737914359,
+          "coverage_by_step": [
+            0.7883154438072832,
+            0.789418222810371,
+            0.7903984708131158
+          ],
+          "winkler": 3.8426451865755227,
+          "winkler_by_step": [
+            2.6568651185051686,
+            3.9269056546457586,
+            4.944164786575642
+          ],
+          "pinball_close": 0.2592647028527037,
+          "pinball_all": 0.23286486498168243,
+          "range_iou": 0.34133967859211906,
+          "close_mae_atr": 0.7870591798011178,
+          "categories": {
+            "same": 0.07211357806858469,
+            "close": 0.7172638010750053,
+            "wrong": 0.21062262085641
+          },
+          "categories_step1": {
+            "same": 0.10067146988188011,
+            "close": 0.6876439739254031,
+            "wrong": 0.21168455619271676
+          }
+        },
+        "atr_bands": {
+          "n": 40806,
+          "coverage_80": 0.7918688428172328,
+          "coverage_by_step": [
+            0.7914277312159976,
+            0.7920893986178503,
+            0.7920893986178503
+          ],
+          "winkler": 4.148723466543296,
+          "winkler_by_step": [
+            2.9144494094807967,
+            4.246521886887401,
+            5.28519910326169
+          ],
+          "pinball_close": 0.2695723086761034,
+          "pinball_all": 0.24541261822530677,
+          "range_iou": 0.3242882103599862,
+          "close_mae_atr": 0.7876891587479613,
+          "categories": {
+            "same": 0.09719975820549266,
+            "close": 0.6946690846117402,
+            "wrong": 0.20813115718276723
+          },
+          "categories_step1": {
+            "same": 0.14289565260010784,
+            "close": 0.6485320786158898,
+            "wrong": 0.20857226878400234
+          },
+          "details": {
+            "k_by_fold": {
+              "0": [
+                0.7904,
+                1.1902,
+                1.5097
+              ],
+              "1": [
+                0.7896,
+                1.1901,
+                1.509
+              ],
+              "2": [
+                0.7921,
+                1.1917,
+                1.5122
+              ],
+              "3": [
+                0.7941,
+                1.1947,
+                1.5159
+              ],
+              "4": [
+                0.7974,
+                1.2001,
+                1.5222
+              ],
+              "5": [
+                0.7986,
+                1.2026,
+                1.5244
+              ]
+            }
+          }
+        },
+        "rolling_quantiles": {
+          "n": 40806,
+          "coverage_80": 0.7902024212125668,
+          "coverage_by_step": [
+            0.7930941528206636,
+            0.7907660638141449,
+            0.7867470470028918
+          ],
+          "winkler": 4.198996804755361,
+          "winkler_by_step": [
+            2.93280647270663,
+            4.294906223167341,
+            5.369277718392113
+          ],
+          "pinball_close": 0.27173335607407445,
+          "pinball_all": 0.24731180822254117,
+          "range_iou": 0.32218811482619136,
+          "close_mae_atr": 0.7906007754933747,
+          "categories": {
+            "same": 0.09410380826349066,
+            "close": 0.6960986129490762,
+            "wrong": 0.20979757878743321
+          },
+          "categories_step1": {
+            "same": 0.13801891878645298,
+            "close": 0.6550752340342106,
+            "wrong": 0.20690584717933638
+          },
+          "details": {
+            "window_bars": 250
+          }
+        },
+        "analog_v1": {
+          "n": 7988,
+          "coverage_80": 0.792814221331998,
+          "coverage_by_step": [
+            0.7903104656985478,
+            0.7960691036554832,
+            0.7920630946419629
+          ],
+          "winkler": 4.192681168100839,
+          "winkler_by_step": [
+            2.9541856611038924,
+            4.299356087524644,
+            5.324501755673979
+          ],
+          "pinball_close": 0.2722205653476917,
+          "pinball_all": null,
+          "range_iou": 0.28176279924496905,
+          "close_mae_atr": 0.7947871584659824,
+          "categories": {
+            "same": 0.03939242196628276,
+            "close": 0.7534217993657153,
+            "wrong": 0.207185778668002
+          },
+          "categories_step1": {
+            "same": 0.05658487731597396,
+            "close": 0.7337255883825738,
+            "wrong": 0.20968953430145218
+          },
+          "details": {
+            "replayed": 8000,
+            "with_bands": 7988,
+            "sampled": true,
+            "sample_per_instrument": 2000,
+            "pooled_library_read": true
+          }
+        }
+      },
+      "comparisons": {
+        "atr_bands": {
+          "n": 40806,
+          "n_dates": 706,
+          "n_months": 33,
+          "winkler_model": 11.527935559726568,
+          "winkler_baseline": 12.446170399629887,
+          "improvement": 0.07377649593569968,
+          "ci": [
+            0.06924888285983483,
+            0.07827468586500454
+          ],
+          "ci_month_blocks": [
+            0.06972193710860283,
+            0.07801415186411842
+          ]
+        },
+        "rolling_quantiles": {
+          "n": 40806,
+          "n_dates": 706,
+          "n_months": 33,
+          "winkler_model": 11.527935559726568,
+          "winkler_baseline": 12.596990414266083,
+          "improvement": 0.08486589410505618,
+          "ci": [
+            0.08017081425110072,
+            0.08941769198613983
+          ],
+          "ci_month_blocks": [
+            0.08065982855006311,
+            0.08927453061189505
+          ]
+        },
+        "analog_v1": {
+          "n": 7988,
+          "n_dates": 706,
+          "n_months": 33,
+          "winkler_model": 11.68757417576241,
+          "winkler_baseline": 12.578043504302517,
+          "improvement": 0.0707955357473129,
+          "ci": [
+            0.0633981579047264,
+            0.07785365098635777
+          ],
+          "ci_month_blocks": [
+            0.06388306471401639,
+            0.07710665275490855
+          ]
+        }
+      },
+      "best_baseline": "analog_v1",
+      "gate": {
+        "coverage_80": 0.78937737914359,
+        "coverage_within": [
+          0.76,
+          0.84
+        ],
+        "best_baseline": "analog_v1",
+        "improvement": 0.0707955357473129,
+        "min_improvement": 0.05,
+        "ci": [
+          0.0633981579047264,
+          0.07785365098635777
+        ],
+        "ci_level": 0.95,
+        "ci_lower_above": 0.0,
+        "checks": {
+          "coverage": true,
+          "improvement": true,
+          "ci_lower": true
+        },
+        "pass": true
+      },
+      "by_fold": [
+        {
+          "fold": 0,
+          "n": 7437,
+          "coverage_80": 0.7926135090314195,
+          "winkler": 3.74422520073233,
+          "test_start": "2022-12-31T18:30:00+00:00",
+          "test_end": "2023-06-30T18:30:00+00:00"
+        },
+        {
+          "fold": 1,
+          "n": 7407,
+          "coverage_80": 0.7955987579316862,
+          "winkler": 3.9094378395445046,
+          "test_start": "2023-06-30T18:30:00+00:00",
+          "test_end": "2023-12-31T18:30:00+00:00"
+        },
+        {
+          "fold": 2,
+          "n": 7292,
+          "coverage_80": 0.7903638690802706,
+          "winkler": 3.8066127237254705,
+          "test_start": "2023-12-31T18:30:00+00:00",
+          "test_end": "2024-06-30T18:30:00+00:00"
+        },
+        {
+          "fold": 3,
+          "n": 7465,
+          "coverage_80": 0.7792810895289127,
+          "winkler": 3.9333699849160766,
+          "test_start": "2024-06-30T18:30:00+00:00",
+          "test_end": "2024-12-31T18:30:00+00:00"
+        },
+        {
+          "fold": 4,
+          "n": 7440,
+          "coverage_80": 0.7862007168458781,
+          "winkler": 3.8768666509178376,
+          "test_start": "2024-12-31T18:30:00+00:00",
+          "test_end": "2025-06-30T18:30:00+00:00"
+        },
+        {
+          "fold": 5,
+          "n": 3765,
+          "coverage_80": 0.7951305887560868,
+          "winkler": 3.727929823748988,
+          "test_start": "2025-06-30T18:30:00+00:00",
+          "test_end": "2025-09-30T18:30:00+00:00"
+        }
+      ],
+      "by_instrument": [
+        {
+          "instrument": "MCX:CRUDEOIL",
+          "n": 10301,
+          "coverage_80": 0.7842604277901822,
+          "winkler": 3.650170233386954,
+          "categories": {
+            "same": 0.06358605960586351,
+            "close": 0.7206743681843186,
+            "wrong": 0.21573957220981782
+          },
+          "improvement_vs_best": 0.04524547479991825
+        },
+        {
+          "instrument": "MCX:NATURALGAS",
+          "n": 10301,
+          "coverage_80": 0.7812186519108177,
+          "winkler": 3.8395362672303572,
+          "categories": {
+            "same": 0.06886062841795294,
+            "close": 0.7123580234928648,
+            "wrong": 0.2187813480891823
+          },
+          "improvement_vs_best": 0.08948466476209471
+        },
+        {
+          "instrument": "MCX:GOLD",
+          "n": 10025,
+          "coverage_80": 0.7966749792186201,
+          "winkler": 3.9366770834726585,
+          "categories": {
+            "same": 0.07820448877805486,
+            "close": 0.7184704904405652,
+            "wrong": 0.20332502078137987
+          },
+          "improvement_vs_best": 0.06654495146640615
+        },
+        {
+          "instrument": "MCX:SILVER",
+          "n": 10179,
+          "coverage_80": 0.7956249795330255,
+          "winkler": 3.947963951147309,
+          "categories": {
+            "same": 0.07803648033533091,
+            "close": 0.7175884991976946,
+            "wrong": 0.20437502046697448
+          },
+          "improvement_vs_best": 0.07898940290187284
+        }
+      ],
+      "walk_forward_cached": true,
+      "training_folds": [
+        {
+          "fold": 0,
+          "test_start": "2022-12-31T18:30:00+00:00",
+          "test_end": "2023-06-30T18:30:00+00:00",
+          "train_rows": 62340,
+          "train_rows_used": 62340,
+          "train_last_ts": "2022-12-29T12:30:00+00:00",
+          "fit_seconds": 17.4
+        },
+        {
+          "fold": 1,
+          "test_start": "2023-06-30T18:30:00+00:00",
+          "test_end": "2023-12-31T18:30:00+00:00",
+          "train_rows": 69777,
+          "train_rows_used": 69777,
+          "train_last_ts": "2023-06-29T12:30:00+00:00",
+          "fit_seconds": 15.4
+        },
+        {
+          "fold": 2,
+          "test_start": "2023-12-31T18:30:00+00:00",
+          "test_end": "2024-06-30T18:30:00+00:00",
+          "train_rows": 77184,
+          "train_rows_used": 77184,
+          "train_last_ts": "2023-12-28T12:30:00+00:00",
+          "fit_seconds": 18.1
+        },
+        {
+          "fold": 3,
+          "test_start": "2024-06-30T18:30:00+00:00",
+          "test_end": "2024-12-31T18:30:00+00:00",
+          "train_rows": 84476,
+          "train_rows_used": 84476,
+          "train_last_ts": "2024-06-27T12:30:00+00:00",
+          "fit_seconds": 24.3
+        },
+        {
+          "fold": 4,
+          "test_start": "2024-12-31T18:30:00+00:00",
+          "test_end": "2025-06-30T18:30:00+00:00",
+          "train_rows": 91941,
+          "train_rows_used": 91941,
+          "train_last_ts": "2024-12-30T12:30:00+00:00",
+          "fit_seconds": 25.6
+        },
+        {
+          "fold": 5,
+          "test_start": "2025-06-30T18:30:00+00:00",
+          "test_end": "2025-09-30T18:30:00+00:00",
+          "train_rows": 99381,
+          "train_rows_used": 99381,
+          "train_last_ts": "2025-06-27T12:30:00+00:00",
+          "fit_seconds": 22.8
+        }
+      ],
+      "training_seconds": 123.6,
+      "runtime_seconds": {
+        "panel": 1.4,
+        "range_v1": 0.3,
+        "atr_bands": 0.2,
+        "rolling_quantiles": 1.8,
+        "analog_v1": 21.9,
+        "total": 26.9
+      },
+      "bootstrap_resamples": 2000,
+      "seed": 20260924
+    },
+    {
+      "model": "range_v1",
+      "exchange": "MCX",
+      "tf": "1D",
+      "period": "validation",
+      "start": "2018-12-31T18:30:00+00:00",
+      "end": "2025-09-30T18:30:00+00:00",
+      "instruments": [
+        "MCX:CRUDEOIL",
+        "MCX:NATURALGAS",
+        "MCX:GOLD",
+        "MCX:SILVER"
+      ],
+      "in_go_no_go_slice": false,
+      "units": "ATR(14) at the reference bar",
+      "steps": 3,
+      "n_forecasts": 6910,
+      "n_dates": 1735,
+      "interval_alpha": 0.2,
+      "same_close_atr": 0.25,
+      "methods": {
+        "range_v1": {
+          "n": 6910,
+          "coverage_80": 0.762807525325615,
+          "coverage_by_step": [
+            0.7701881331403763,
+            0.7603473227206946,
+            0.7578871201157742
+          ],
+          "winkler": 3.784685624142488,
+          "winkler_by_step": [
+            2.708989355285071,
+            3.8504691364925607,
+            4.794598380649831
+          ],
+          "pinball_close": 0.25738652799355516,
+          "pinball_all": 0.23358887301463824,
+          "range_iou": 0.3161273304653433,
+          "close_mae_atr": 0.7873820431328332,
+          "categories": {
+            "same": 0.06058851905451037,
+            "close": 0.7022190062711047,
+            "wrong": 0.23719247467438495
+          },
+          "categories_step1": {
+            "same": 0.09160636758321274,
+            "close": 0.6785817655571635,
+            "wrong": 0.22981186685962374
+          }
+        },
+        "atr_bands": {
+          "n": 6910,
+          "coverage_80": 0.8001447178002894,
+          "coverage_by_step": [
+            0.8027496382054993,
+            0.7984081041968162,
+            0.7992764109985528
+          ],
+          "winkler": 3.7504751051294587,
+          "winkler_by_step": [
+            2.681765630100294,
+            3.827528260095765,
+            4.742131425192318
+          ],
+          "pinball_close": 0.25519754985387316,
+          "pinball_all": 0.23180760009736967,
+          "range_iou": 0.3187223299964977,
+          "close_mae_atr": 0.7810902780973474,
+          "categories": {
+            "same": 0.0653159671972986,
+            "close": 0.7348287506029908,
+            "wrong": 0.19985528219971058
+          },
+          "categories_step1": {
+            "same": 0.10086830680173661,
+            "close": 0.7018813314037626,
+            "wrong": 0.19725036179450073
+          },
+          "details": {
+            "k_by_fold": {
+              "0": [
+                0.9083,
+                1.2655,
+                1.5603
+              ],
+              "1": [
+                0.8787,
+                1.2354,
+                1.5565
+              ],
+              "2": [
+                0.861,
+                1.2641,
+                1.5578
+              ],
+              "3": [
+                0.8724,
+                1.2861,
+                1.5975
+              ],
+              "4": [
+                0.8676,
+                1.2663,
+                1.5847
+              ],
+              "5": [
+                0.8557,
+                1.2392,
+                1.5481
+              ],
+              "6": [
+                0.8638,
+                1.2502,
+                1.5583
+              ],
+              "7": [
+                0.8663,
+                1.2465,
+                1.5446
+              ],
+              "8": [
+                0.8621,
+                1.2457,
+                1.5458
+              ],
+              "9": [
+                0.8528,
+                1.2387,
+                1.5204
+              ],
+              "10": [
+                0.8485,
+                1.2393,
+                1.5211
+              ],
+              "11": [
+                0.8534,
+                1.2447,
+                1.5408
+              ],
+              "12": [
+                0.86,
+                1.2486,
+                1.5464
+              ],
+              "13": [
+                0.8608,
+                1.2463,
+                1.5465
+              ]
+            }
+          }
+        },
+        "rolling_quantiles": {
+          "n": 6866,
+          "coverage_80": 0.7914846101563259,
+          "coverage_by_step": [
+            0.7931838042528401,
+            0.790707835712205,
+            0.7905621905039324
+          ],
+          "winkler": 3.7691656934600375,
+          "winkler_by_step": [
+            2.69322571370576,
+            3.8483090923890195,
+            4.765962274285332
+          ],
+          "pinball_close": 0.2559225799967053,
+          "pinball_all": 0.2327926005662205,
+          "range_iou": 0.31709434562919797,
+          "close_mae_atr": 0.7817023412882245,
+          "categories": {
+            "same": 0.06529760170890378,
+            "close": 0.7261870084474221,
+            "wrong": 0.20851538984367415
+          },
+          "categories_step1": {
+            "same": 0.09627148266822022,
+            "close": 0.6969123215846199,
+            "wrong": 0.20681619574715993
+          },
+          "details": {
+            "window_bars": 250
+          }
+        },
+        "analog_v1": {
+          "n": 6455,
+          "coverage_80": 0.7871933901368449,
+          "coverage_by_step": [
+            0.7846630518977536,
+            0.7893106119287374,
+            0.7876065065840434
+          ],
+          "winkler": 3.77832379081348,
+          "winkler_by_step": [
+            2.7033992339474584,
+            3.8555442508444857,
+            4.776027887648494
+          ],
+          "pinball_close": 0.2566709739865077,
+          "pinball_all": null,
+          "range_iou": 0.2934437030305166,
+          "close_mae_atr": 0.7843610857563501,
+          "categories": {
+            "same": 0.028246837077201135,
+            "close": 0.7589465530596436,
+            "wrong": 0.21280660986315517
+          },
+          "categories_step1": {
+            "same": 0.04848954298993029,
+            "close": 0.7361735089078234,
+            "wrong": 0.21533694810224632
+          },
+          "details": {
+            "replayed": 6910,
+            "with_bands": 6455,
+            "sampled": false,
+            "sample_per_instrument": null,
+            "pooled_library_read": true
+          }
+        }
+      },
+      "comparisons": {
+        "atr_bands": {
+          "n": 6910,
+          "n_dates": 1735,
+          "n_months": 81,
+          "winkler_model": 11.354056872427464,
+          "winkler_baseline": 11.251425315388376,
+          "improvement": -0.009121649405495313,
+          "ci": [
+            -0.015243900590447923,
+            -0.003130094879887243
+          ],
+          "ci_month_blocks": [
+            -0.017905291422259075,
+            -0.0006410438689685965
+          ]
+        },
+        "rolling_quantiles": {
+          "n": 6866,
+          "n_dates": 1724,
+          "n_months": 81,
+          "winkler_model": 11.361988218728547,
+          "winkler_baseline": 11.307497080380113,
+          "improvement": -0.0048190274081949536,
+          "ci": [
+            -0.011355505711423406,
+            0.0012366909598828916
+          ],
+          "ci_month_blocks": [
+            -0.0135275157685655,
+            0.0035820199133144433
+          ]
+        },
+        "analog_v1": {
+          "n": 6455,
+          "n_dates": 1735,
+          "n_months": 81,
+          "winkler_model": 11.350479846375567,
+          "winkler_baseline": 11.334971372440439,
+          "improvement": -0.0013681970095515972,
+          "ci": [
+            -0.007712453515073924,
+            0.004885279485804552
+          ],
+          "ci_month_blocks": [
+            -0.008941278403031843,
+            0.006378987296986766
+          ]
+        }
+      },
+      "best_baseline": "atr_bands",
+      "gate": {
+        "coverage_80": 0.762807525325615,
+        "coverage_within": [
+          0.76,
+          0.84
+        ],
+        "best_baseline": "atr_bands",
+        "improvement": -0.009121649405495313,
+        "min_improvement": 0.05,
+        "ci": [
+          -0.015243900590447923,
+          -0.003130094879887243
+        ],
+        "ci_level": 0.95,
+        "ci_lower_above": 0.0,
+        "checks": {
+          "coverage": true,
+          "improvement": false,
+          "ci_lower": false
+        },
+        "pass": false
+      },
+      "by_fold": [
+        {
+          "fold": 0,
+          "n": 483,
+          "coverage_80": 0.7805383022774327,
+          "winkler": 3.8659454745473822,
+          "test_start": "2018-12-31T18:30:00+00:00",
+          "test_end": "2019-06-30T18:30:00+00:00"
+        },
+        {
+          "fold": 1,
+          "n": 520,
+          "coverage_80": 0.7493589743589744,
+          "winkler": 3.7708301921112417,
+          "test_start": "2019-06-30T18:30:00+00:00",
+          "test_end": "2019-12-31T18:30:00+00:00"
+        },
+        {
+          "fold": 2,
+          "n": 508,
+          "coverage_80": 0.7355643044619422,
+          "winkler": 4.5669462261745934,
+          "test_start": "2019-12-31T18:30:00+00:00",
+          "test_end": "2020-06-30T18:30:00+00:00"
+        },
+        {
+          "fold": 3,
+          "n": 524,
+          "coverage_80": 0.7665394402035624,
+          "winkler": 4.016860459255808,
+          "test_start": "2020-06-30T18:30:00+00:00",
+          "test_end": "2020-12-31T18:30:00+00:00"
+        },
+        {
+          "fold": 4,
+          "n": 508,
+          "coverage_80": 0.8221784776902887,
+          "winkler": 3.3368953310754983,
+          "test_start": "2020-12-31T18:30:00+00:00",
+          "test_end": "2021-06-30T18:30:00+00:00"
+        },
+        {
+          "fold": 5,
+          "n": 527,
+          "coverage_80": 0.7678684376976597,
+          "winkler": 3.799514204150585,
+          "test_start": "2021-06-30T18:30:00+00:00",
+          "test_end": "2021-12-31T18:30:00+00:00"
+        },
+        {
+          "fold": 6,
+          "n": 508,
+          "coverage_80": 0.7513123359580053,
+          "winkler": 3.697125192584954,
+          "test_start": "2021-12-31T18:30:00+00:00",
+          "test_end": "2022-06-30T18:30:00+00:00"
+        },
+        {
+          "fold": 7,
+          "n": 517,
+          "coverage_80": 0.7672469374597034,
+          "winkler": 3.411471594137042,
+          "test_start": "2022-06-30T18:30:00+00:00",
+          "test_end": "2022-12-31T18:30:00+00:00"
+        },
+        {
+          "fold": 8,
+          "n": 511,
+          "coverage_80": 0.8140900195694716,
+          "winkler": 3.36186322044953,
+          "test_start": "2022-12-31T18:30:00+00:00",
+          "test_end": "2023-06-30T18:30:00+00:00"
+        },
+        {
+          "fold": 9,
+          "n": 512,
+          "coverage_80": 0.767578125,
+          "winkler": 3.6874556678036847,
+          "test_start": "2023-06-30T18:30:00+00:00",
+          "test_end": "2023-12-31T18:30:00+00:00"
+        },
+        {
+          "fold": 10,
+          "n": 512,
+          "coverage_80": 0.7526041666666666,
+          "winkler": 3.708103431893202,
+          "test_start": "2023-12-31T18:30:00+00:00",
+          "test_end": "2024-06-30T18:30:00+00:00"
+        },
+        {
+          "fold": 11,
+          "n": 516,
+          "coverage_80": 0.7021963824289406,
+          "winkler": 3.974536298742898,
+          "test_start": "2024-06-30T18:30:00+00:00",
+          "test_end": "2024-12-31T18:30:00+00:00"
+        },
+        {
+          "fold": 12,
+          "n": 516,
+          "coverage_80": 0.7680878552971576,
+          "winkler": 3.9025424503232773,
+          "test_start": "2024-12-31T18:30:00+00:00",
+          "test_end": "2025-06-30T18:30:00+00:00"
+        },
+        {
+          "fold": 13,
+          "n": 248,
+          "coverage_80": 0.706989247311828,
+          "winkler": 3.995493992682426,
+          "test_start": "2025-06-30T18:30:00+00:00",
+          "test_end": "2025-09-30T18:30:00+00:00"
+        }
+      ],
+      "by_instrument": [
+        {
+          "instrument": "MCX:CRUDEOIL",
+          "n": 1731,
+          "coverage_80": 0.7808588484498363,
+          "winkler": 3.5879417946922647,
+          "categories": {
+            "same": 0.05796264201810129,
+            "close": 0.722896206431735,
+            "wrong": 0.21914115155016367
+          },
+          "improvement_vs_best": -0.009303384601230702
+        },
+        {
+          "instrument": "MCX:NATURALGAS",
+          "n": 1735,
+          "coverage_80": 0.7417867435158502,
+          "winkler": 3.6486441408809163,
+          "categories": {
+            "same": 0.048222862632084536,
+            "close": 0.6935638808837656,
+            "wrong": 0.25821325648414983
+          },
+          "improvement_vs_best": -0.014139358284336767
+        },
+        {
+          "instrument": "MCX:GOLD",
+          "n": 1709,
+          "coverage_80": 0.7675053637604837,
+          "winkler": 3.9189093520831055,
+          "categories": {
+            "same": 0.06885118002730642,
+            "close": 0.6986541837331773,
+            "wrong": 0.2324946362395163
+          },
+          "improvement_vs_best": -0.0038114225780843114
+        },
+        {
+          "instrument": "MCX:SILVER",
+          "n": 1735,
+          "coverage_80": 0.7611911623439,
+          "winkler": 3.984805042693869,
+          "categories": {
+            "same": 0.06743515850144093,
+            "close": 0.6937560038424592,
+            "wrong": 0.2388088376560999
+          },
+          "improvement_vs_best": -0.009558294915400722
+        }
+      ],
+      "walk_forward_cached": true,
+      "training_folds": [
+        {
+          "fold": 0,
+          "test_start": "2018-12-31T18:30:00+00:00",
+          "test_end": "2019-06-30T18:30:00+00:00",
+          "train_rows": 884,
+          "train_rows_used": 884,
+          "train_last_ts": "2018-11-30T03:30:00+00:00",
+          "fit_seconds": 1.3
+        },
+        {
+          "fold": 1,
+          "test_start": "2019-06-30T18:30:00+00:00",
+          "test_end": "2019-12-31T18:30:00+00:00",
+          "train_rows": 1367,
+          "train_rows_used": 1367,
+          "train_last_ts": "2019-05-31T03:30:00+00:00",
+          "fit_seconds": 0.8
+        },
+        {
+          "fold": 2,
+          "test_start": "2019-12-31T18:30:00+00:00",
+          "test_end": "2020-06-30T18:30:00+00:00",
+          "train_rows": 1887,
+          "train_rows_used": 1887,
+          "train_last_ts": "2019-12-02T03:30:00+00:00",
+          "fit_seconds": 1.0
+        },
+        {
+          "fold": 3,
+          "test_start": "2020-06-30T18:30:00+00:00",
+          "test_end": "2020-12-31T18:30:00+00:00",
+          "train_rows": 2395,
+          "train_rows_used": 2395,
+          "train_last_ts": "2020-06-02T03:30:00+00:00",
+          "fit_seconds": 1.6
+        },
+        {
+          "fold": 4,
+          "test_start": "2020-12-31T18:30:00+00:00",
+          "test_end": "2021-06-30T18:30:00+00:00",
+          "train_rows": 2919,
+          "train_rows_used": 2919,
+          "train_last_ts": "2020-12-02T03:30:00+00:00",
+          "fit_seconds": 1.9
+        },
+        {
+          "fold": 5,
+          "test_start": "2021-06-30T18:30:00+00:00",
+          "test_end": "2021-12-31T18:30:00+00:00",
+          "train_rows": 3427,
+          "train_rows_used": 3427,
+          "train_last_ts": "2021-06-02T03:30:00+00:00",
+          "fit_seconds": 1.4
+        },
+        {
+          "fold": 6,
+          "test_start": "2021-12-31T18:30:00+00:00",
+          "test_end": "2022-06-30T18:30:00+00:00",
+          "train_rows": 3954,
+          "train_rows_used": 3954,
+          "train_last_ts": "2021-12-03T03:30:00+00:00",
+          "fit_seconds": 1.7
+        },
+        {
+          "fold": 7,
+          "test_start": "2022-06-30T18:30:00+00:00",
+          "test_end": "2022-12-31T18:30:00+00:00",
+          "train_rows": 4462,
+          "train_rows_used": 4462,
+          "train_last_ts": "2022-06-02T03:30:00+00:00",
+          "fit_seconds": 2.0
+        },
+        {
+          "fold": 8,
+          "test_start": "2022-12-31T18:30:00+00:00",
+          "test_end": "2023-06-30T18:30:00+00:00",
+          "train_rows": 4979,
+          "train_rows_used": 4979,
+          "train_last_ts": "2022-12-02T03:30:00+00:00",
+          "fit_seconds": 2.0
+        },
+        {
+          "fold": 9,
+          "test_start": "2023-06-30T18:30:00+00:00",
+          "test_end": "2023-12-31T18:30:00+00:00",
+          "train_rows": 5490,
+          "train_rows_used": 5490,
+          "train_last_ts": "2023-06-02T03:30:00+00:00",
+          "fit_seconds": 2.8
+        },
+        {
+          "fold": 10,
+          "test_start": "2023-12-31T18:30:00+00:00",
+          "test_end": "2024-06-30T18:30:00+00:00",
+          "train_rows": 6002,
+          "train_rows_used": 6002,
+          "train_last_ts": "2023-11-30T03:30:00+00:00",
+          "fit_seconds": 2.7
+        },
+        {
+          "fold": 11,
+          "test_start": "2024-06-30T18:30:00+00:00",
+          "test_end": "2024-12-31T18:30:00+00:00",
+          "train_rows": 6514,
+          "train_rows_used": 6514,
+          "train_last_ts": "2024-05-31T03:30:00+00:00",
+          "fit_seconds": 3.0
+        },
+        {
+          "fold": 12,
+          "test_start": "2024-12-31T18:30:00+00:00",
+          "test_end": "2025-06-30T18:30:00+00:00",
+          "train_rows": 7030,
+          "train_rows_used": 7030,
+          "train_last_ts": "2024-12-02T03:30:00+00:00",
+          "fit_seconds": 3.4
+        },
+        {
+          "fold": 13,
+          "test_start": "2025-06-30T18:30:00+00:00",
+          "test_end": "2025-09-30T18:30:00+00:00",
+          "train_rows": 7546,
+          "train_rows_used": 7546,
+          "train_last_ts": "2025-06-02T03:30:00+00:00",
+          "fit_seconds": 3.5
+        }
+      ],
+      "training_seconds": 29.1,
+      "runtime_seconds": {
+        "panel": 0.3,
+        "range_v1": 0.0,
+        "atr_bands": 0.0,
+        "rolling_quantiles": 0.2,
+        "analog_v1": 19.7,
+        "total": 21.2
+      },
+      "bootstrap_resamples": 2000,
+      "seed": 20260924
+    }
+  ]
+}

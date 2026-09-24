@@ -16,6 +16,7 @@ from candly.ledger.models import (
     AccuracyResponse,
     AccuracySummary,
     CalibrationBin,
+    CategoryShares,
     GroupStat,
     RollingPoint,
 )
@@ -51,6 +52,15 @@ def _calibration(p: np.ndarray, y: np.ndarray) -> tuple[list[CalibrationBin], fl
             )
         )
     return bins, (ece if p.size else None)
+
+
+def category_shares(steps: list[dict]) -> CategoryShares | None:
+    """Shares of same / close / wrong over graded steps that carry a category (grades made before the
+    categories existed have none)."""
+    cats = [s.get("category") for s in steps if s.get("category") is not None]
+    if not cats:
+        return None
+    return CategoryShares(**{k: cats.count(k) / len(cats) for k in ("same", "close", "wrong")})
 
 
 def accuracy_from_frame(df: pd.DataFrame) -> AccuracyResponse:
@@ -144,4 +154,10 @@ def accuracy_from_frame(df: pd.DataFrame) -> AccuracyResponse:
                     brier=_mean(sub["brier"]),
                 )
             )
-    return AccuracyResponse(summary=summary, calibration=bins, rolling=rolling, by_group=by_group)
+    return AccuracyResponse(
+        summary=summary,
+        calibration=bins,
+        rolling=rolling,
+        by_group=by_group,
+        category_shares=category_shares(steps),
+    )

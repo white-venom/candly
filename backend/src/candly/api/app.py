@@ -1,3 +1,4 @@
+import threading
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -23,6 +24,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     register_pipeline_jobs(get_scheduler())
     start_scheduler()
+    # Fill the scanner cache in the background so the first scanner request after a restart is fast.
+    threading.Thread(target=analytics.warm_scanner, name="warm-scanner", daemon=True).start()
     try:
         yield
     finally:

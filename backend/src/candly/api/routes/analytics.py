@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+import logging
 import math
+import time
+from collections.abc import Iterable
+from concurrent.futures import ThreadPoolExecutor, wait
 from typing import Literal
 
 import pandas as pd
@@ -12,12 +16,16 @@ from pydantic import BaseModel
 from candly.core.calendar import get_calendar
 from candly.core.instruments import EXCHANGES, Instrument, UnknownInstrument, get_instrument, load_watchlist
 from candly.core.schema import CANDLE_COLUMNS
-from candly.core.timeframes import validate_tf
+from candly.core.timeframes import INTRADAY, validate_tf
 from candly.features.context import compute_context, has_meaningful_volume
 from candly.features.expiry import expiry_with_source
 from candly.features.levels import Level, key_levels, levels_as_of, previous_trading_day
-from candly.forecast import Forecast, make_forecast
-from candly.forecast.timing import to_unix
+from candly.forecast import RANGE_METHOD, Forecast, RangeUnavailable, make_forecast, make_range_forecast
+from candly.forecast.analog import METHOD as ANALOG_METHOD
+from candly.forecast.jobs import ANALOG_TFS, between, memoized
+from candly.forecast.latest import Latest, latest, remember
+from candly.forecast.range import covers
+from candly.forecast.timing import last_expected_closed_bar, stale_grace, to_unix
 from candly.indicators import CATALOG_BY_NAME, INDICATOR_CATALOG, compute_indicators, resolve_names
 from candly.ledger import AccuracyResponse, Ledger, LedgerEntry, default_ledger_path
 from candly.ledger.accuracy import accuracy_from_frame
@@ -25,7 +33,10 @@ from candly.patterns import PATTERN_INFO, detect_patterns
 from candly.research.config import load_research_config
 from candly.research.scorecard import ScorecardMeta, ScoreStats, load_scorecard
 
+log = logging.getLogger(__name__)
 router = APIRouter(tags=["analytics"])
+FORMING_BUDGET_SECONDS = 1.0
+_forming_pool = ThreadPoolExecutor(max_workers=8, thread_name_prefix="forming")
 
 Direction = Literal["bullish", "bearish", "neutral"]
 Pane = Literal["price", "oscillator", "volume"]
@@ -155,6 +166,7 @@ class ScannerRow(BaseModel):
     abstain: bool
     abstain_reason: str | None
     score: float
+    expected_move_pct: float | None = None  # signed: p50 close of the last step vs the last close
     direction: Direction
     top_signal: TopSignal | None
     rel_volume: float | None
@@ -410,16 +422,54 @@ def levels(instrument: str, tf: str) -> LevelsResponse:
     )
 
 
+FORECAST_METHODS = (RANGE_METHOD, ANALOG_METHOD)
+
+
+def _context_loader(instrument_id: str, tf: str, start=None, end=None) -> pd.DataFrame | None:
+    """Context series (market index, India VIX) for range and regime forecasts, with the store's
+    start <= ts <= end cut; a missing series is simply left out."""
+    try:
+        df = _load_candles(instrument_id, tf)
+    except ImportError:
+        return None
+    return between(df, start, end)
+
+
+def _make_forecast(
+    instrument_id: str,
+    tf: str,
+    df: pd.DataFrame,
+    card,
+    steps: int | None,
+    now: pd.Timestamp,
+    method: str | None,
+) -> Forecast:
+    """range_v1 by default, falling back to analog_v1 while no range model covers the instrument; an
+    explicit method is never swapped. Raises RangeUnavailable (explicit range_v1) or ValueError."""
+    if method in (None, RANGE_METHOD):
+        try:
+            return make_range_forecast(instrument_id, tf, df, now, steps=steps, load=_context_loader)
+        except RangeUnavailable:
+            if method == RANGE_METHOD:
+                raise
+    return make_forecast(instrument_id, tf, df, card, steps, now=now)
+
+
 @router.get("/forecast", response_model=Forecast)
-def forecast(instrument: str, tf: str, steps: int | None = None) -> Forecast:
+def forecast(instrument: str, tf: str, steps: int | None = None, method: str | None = None) -> Forecast:
+    """range_v1 unless `method=analog_v1`. Without a saved range model for the instrument's exchange
+    and timeframe, the default falls back to analog_v1 (the response's `method` says which ran), while
+    an explicit `method=range_v1` returns 503."""
     tf = _tf(tf)
     inst = _instrument(instrument)
     if steps is not None and not 1 <= steps <= 10:
         raise HTTPException(400, "steps must be between 1 and 10")
+    if method is not None and method not in FORECAST_METHODS:
+        raise HTTPException(400, f"method must be one of {', '.join(FORECAST_METHODS)}")
     df = _candles(instrument, tf)
     try:
-        fc = make_forecast(instrument, tf, df, load_scorecard(tf, inst.exchange), steps, now=_now())
-    except ValueError as exc:
+        fc = _make_forecast(instrument, tf, df, load_scorecard(tf, inst.exchange), steps, _now(), method)
+    except (ValueError, RangeUnavailable) as exc:
         raise HTTPException(503, str(exc)) from None
     if not fc.abstain:
         from candly.llm import get_explanation
@@ -483,39 +533,95 @@ def _mark_stale(rows: list[ScannerRow], now: pd.Timestamp) -> list[ScannerRow]:
     return out
 
 
-@router.get("/scanner", response_model=list[ScannerRow])
-def scanner(tf: str = "1D") -> list[ScannerRow]:
-    tf = _tf(tf)
-    cards = {}
-    now = _now()
-    rows = []
-    for inst in load_watchlist():
-        if tf not in inst.timeframes or not inst.tradable:
-            continue
-        if inst.exchange not in cards:
-            cards[inst.exchange] = load_scorecard(tf, inst.exchange)
-        card = cards[inst.exchange]
+def _scanner_entry(inst: Instrument, tf: str, card, now: pd.Timestamp, load) -> Latest | None:
+    """The forecast to show for `inst`: the forecast cycle's latest one while it is current (its bar is
+    at least the last one due by now minus the stale grace, or no newer bar has been stored), else one
+    made now for the last closed bar (range_v1; analog_v1 only on its cheap timeframes)."""
+    entry = latest(inst.id, tf)
+    if entry is not None:
+        due = last_expected_closed_bar(inst.exchange, tf, now - stale_grace(tf))
+        if due is None or entry.ref_ts >= due:
+            return entry
         try:
-            df = _load_candles(inst.id, tf)
+            stored = _series_last(inst.id, tf)
         except ImportError:
-            raise HTTPException(503, "candle store is not available yet") from None
-        if df is None or df.empty:
-            continue
-        df = df.reset_index(drop=True)
+            stored = None
+        if stored is not None and entry.ref_ts >= stored:
+            return entry
+    if tf not in ANALOG_TFS and not covers(inst.id, tf):
+        return None
+    try:
+        df = _load_candles(inst.id, tf)
+    except ImportError:
+        raise HTTPException(503, "candle store is not available yet") from None
+    if df is None or df.empty:
+        return None
+    df = df.reset_index(drop=True)
+    try:
+        fc = make_range_forecast(inst.id, tf, df, now, load=load)
+    except RangeUnavailable:
+        if tf not in ANALOG_TFS:
+            return None
         try:
             fc = make_forecast(inst.id, tf, df, card, now=now)
         except ValueError:
+            return None
+    except ValueError:
+        return None
+    return remember(fc, df)
+
+
+def _stale_now(fc: Forecast, exchange: str, tf: str, now: pd.Timestamp) -> str | None:
+    """A kept forecast whose bar is older than the one due by now (after the stale grace) is stale."""
+    if (fc.abstain_reason or "").startswith("stale data"):
+        return None
+    due = last_expected_closed_bar(exchange, tf, now - stale_grace(tf))
+    ref_ts = pd.Timestamp(fc.ref_time, unit="s", tz="UTC")
+    if due is None or ref_ts >= due:
+        return None
+    return f"stale data: last closed bar {ref_ts.isoformat()}, expected {due.isoformat()}"
+
+
+def _forming_bars(ids: list[str], tf: str) -> dict[str, pd.Series | None]:
+    """Live bars fetched concurrently within FORMING_BUDGET_SECONDS. Each is one broker request (the
+    source client rate-limits them and caches for a few seconds); one that misses the budget keeps
+    loading in the background and only drops that row's forming signal from this response."""
+    jobs = {i: _forming_pool.submit(_get_forming, i, tf) for i in ids}
+    wait(jobs.values(), timeout=FORMING_BUDGET_SECONDS)
+    return {i: job.result() if job.done() and job.exception() is None else None for i, job in jobs.items()}
+
+
+@router.get("/scanner", response_model=list[ScannerRow])
+def scanner(tf: str = "1D") -> list[ScannerRow]:
+    """Rows come from the forecasts the forecast cycle keeps in memory (candly.forecast.latest); an
+    instrument is forecast here only when it has none that is current."""
+    tf = _tf(tf)
+    cards = {}
+    now = _now()
+    load = memoized(_context_loader)
+    listed = [i for i in load_watchlist() if tf in i.timeframes and i.tradable]
+    forming_bars = _forming_bars([i.id for i in listed], tf)
+    rows = []
+    for inst in listed:
+        if inst.exchange not in cards:
+            cards[inst.exchange] = load_scorecard(tf, inst.exchange)
+        card = cards[inst.exchange]
+        entry = _scanner_entry(inst, tf, card, now, load)
+        if entry is None:
             continue
-        forming_bar = _get_forming(inst.id, tf)
-        forming = detect_patterns(df, tf, forming_bar=forming_bar) if forming_bar is not None else None
+        fc = entry.forecast
+        forming_bar = forming_bars[inst.id]
+        forming = (
+            detect_patterns(entry.tail, tf, forming_bar=forming_bar) if forming_bar is not None else None
+        )
         forming = (
             forming[forming["state"] == "forming"]
             if forming is not None
             else pd.DataFrame(columns=["pattern"])
         )
-        closes = df["close"]
-        ref_pos = int(pd.Index(df["ts"]).get_indexer([pd.Timestamp(fc.ref_time, unit="s", tz="UTC")])[0])
-        prev = float(closes.iloc[ref_pos - 1]) if ref_pos > 0 else float(closes.iloc[ref_pos])
+        prev = entry.prev_close if entry.prev_close is not None else fc.ref_close
+        stale = _stale_now(fc, inst.exchange, tf, now)
+        abstain = fc.abstain or stale is not None
         edge = (fc.p_up - fc.base_rate) if fc.p_up is not None and fc.base_rate is not None else None
         rows.append(
             ScannerRow(
@@ -527,11 +633,12 @@ def scanner(tf: str = "1D") -> list[ScannerRow]:
                 change_pct=100.0 * (fc.ref_close / prev - 1.0),
                 p_up=fc.p_up,
                 base_rate=fc.base_rate,
-                abstain=fc.abstain,
-                abstain_reason=fc.abstain_reason,
-                score=abs(edge) if (edge is not None and not fc.abstain) else 0.0,
+                abstain=abstain,
+                abstain_reason=stale or fc.abstain_reason,
+                score=abs(edge) if (edge is not None and not abstain) else 0.0,
+                expected_move_pct=fc.expected_move_pct,
                 direction="neutral"
-                if fc.abstain or edge is None or edge == 0
+                if abstain or edge is None or edge == 0
                 else ("bullish" if edge > 0 else "bearish"),
                 top_signal=_top_signal(fc, forming, card, inst.id),
                 rel_volume=fc.context.rel_volume if fc.context else None,
@@ -540,6 +647,29 @@ def scanner(tf: str = "1D") -> list[ScannerRow]:
             )
         )
     return sorted(_mark_stale(rows, now), key=lambda r: r.score, reverse=True)
+
+
+def warm_scanner(tfs: Iterable[str] = ("1D", *INTRADAY)) -> dict[str, float]:
+    """Fill the scanner's forecasts (candly.forecast.latest) the way a cold /api/scanner request would,
+    and return the seconds each timeframe took. For a background thread at startup: the forecast cycles
+    refill them only at their next bar close (1D: once a day), so without it the first scanner request
+    after a restart computes every row (8-11 s on the laptop)."""
+    out = {}
+    for tf in tfs:
+        started = time.perf_counter()
+        now, load, cards = _now(), memoized(_context_loader), {}
+        for inst in load_watchlist():
+            if tf not in inst.timeframes or not inst.tradable:
+                continue
+            if inst.exchange not in cards:
+                cards[inst.exchange] = load_scorecard(tf, inst.exchange)
+            try:
+                _scanner_entry(inst, tf, cards[inst.exchange], now, load)
+            except Exception:
+                log.warning("scanner warm-up failed for %s %s", inst.id, tf, exc_info=True)
+        out[tf] = round(time.perf_counter() - started, 1)
+    log.info("scanner warm-up: %s", out)
+    return out
 
 
 def _scorecard_exchange(exchange: str | None, instrument: str | None) -> str:

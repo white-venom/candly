@@ -14,7 +14,8 @@ import pandas as pd
 from candly.core.instruments import exchange_of
 from candly.forecast.models import Candle, Forecast
 from candly.forecast.timing import future_bar_times
-from candly.ledger.models import Grade, StepGrade
+from candly.ledger.models import Category, Grade, StepGrade
+from candly.research.pivot_config import load_pivot_config
 
 
 def target_times(forecast: Forecast) -> list[pd.Timestamp]:
@@ -66,7 +67,20 @@ def _sign(x: float) -> int:
     return (x > 0) - (x < 0)
 
 
+def candle_category(pred: Candle, act: Candle, band, atr: float, same_atr: float) -> Category | None:
+    """pivot.yaml candle_accuracy: "wrong" when the close is outside the p10-p90 band (checked first, so
+    same + close = band coverage); "same" when the close is within `same_atr` ATR of the p50 and the bar's
+    high and low stay inside the ghost candle's; otherwise "close". None without a band."""
+    if band is None:
+        return None
+    if not band.p10 <= act.close <= band.p90:
+        return "wrong"
+    near = abs(act.close - band.p50) <= same_atr * atr
+    return "same" if near and act.high <= pred.high and act.low >= pred.low else "close"
+
+
 def grade_step(step: int, pred: Candle, act: Candle, atr: float, band=None) -> StepGrade:
+    same_atr = load_pivot_config().candle_accuracy.same_close_atr
     return StepGrade(
         step=step,
         close_err_pct=100.0 * abs(pred.close - act.close) / act.close,
@@ -77,6 +91,7 @@ def grade_step(step: int, pred: Candle, act: Candle, atr: float, band=None) -> S
         body_iou=interval_iou((pred.open, pred.close), (act.open, act.close)),
         color_match=_sign(pred.close - pred.open) == _sign(act.close - act.open),
         in_band_80=band is not None and band.p10 <= act.close <= band.p90,
+        category=candle_category(pred, act, band, atr, same_atr),
     )
 
 

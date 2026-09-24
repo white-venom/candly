@@ -655,6 +655,11 @@ def _load_cached(stamp: tuple[tuple[str, str, int | None], ...]) -> Scorecard:
     return Scorecard(meta, **frames)
 
 
+def clear_scorecard_cache() -> None:
+    """Drop every loaded build (a long research run that walks all timeframes frees them as it goes)."""
+    _load_cached.cache_clear()
+
+
 def load_scorecard(tf: str, exchange: str = PLAIN_NAMES_EXCHANGE) -> Scorecard | None:
     """The persisted build of `exchange` (NSE by default) for `tf`, or None before its first build."""
     paths = scorecard_paths(tf, exchange)

@@ -11,6 +11,7 @@ from candly.api.routes import analytics
 from candly.core.calendar import get_calendar, reload_calendar
 from candly.core.schema import empty_candles
 from candly.data import clock
+from candly.forecast import latest
 from candly.forecast.jobs import run_forecast_cycle
 from candly.indicators import INDICATOR_CATALOG
 from candly.indicators.functions import atr as atr_fn
@@ -53,6 +54,14 @@ FORECAST_KEYS = {
 
 def load(instrument_id, tf, start=None, end=None):
     return FRAMES.get((instrument_id, tf), empty_candles())
+
+
+@pytest.fixture(autouse=True)
+def no_kept_forecasts():
+    """The scanner serves the forecast cycle's in-memory forecasts; never let one leak between tests."""
+    latest.clear()
+    yield
+    latest.clear()
 
 
 @pytest.fixture

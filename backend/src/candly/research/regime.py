@@ -24,43 +24,34 @@ import json
 import os
 import tempfile
 from dataclasses import dataclass
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-# LightGBM 4.7 needs msvcp140.dll >= 14.40 (older runtimes crash in std::mutex). On Windows scikit-learn
-# preloads its own recent copy, so it must be imported before lightgbm binds to an older system one.
-import sklearn
-from sklearn.isotonic import IsotonicRegression
-
-# isort: split
-import lightgbm as lgb
 import numpy as np
 import pandas as pd
-import yaml
+import sklearn
 from pydantic import BaseModel
+from sklearn.isotonic import IsotonicRegression
 
 from candly.core.calendar import IST, get_calendar
 from candly.core.instruments import exchange_of, get_instrument, load_watchlist
 from candly.core.schema import validate_candles
 from candly.core.settings import REPO_ROOT, get_settings
-from candly.research.config import ist_midnight_utc, load_research_config
+from candly.research.config import load_research_config
 from candly.research.data import CandleLoader, default_loader, load_research_candles
 from candly.research.labels import forward_labels
+from candly.research.lgbm import lgb
+from candly.research.pivot_config import REGIME_NAME as MODEL_NAME
+from candly.research.pivot_config import REGIME_TIMEFRAME as TIMEFRAME
+from candly.research.pivot_config import PivotConfig, load_pivot_config
 from candly.research.regime_features import (
     FEATURE_COLUMNS,
-    FEATURE_GROUPS,
     REQUIRED_COLUMNS,
     regime_features,
 )
 
-MODEL_NAME = "regime_v1"
-ALGO = "lightgbm_classifier_isotonic"
-TIMEFRAME = "1D"
-TARGET = "close[t+h] > close[t] (flat closes dropped)"
-BASELINES = ("base_rate", "trend_rule_ema200", "momentum_sign_20d")
-PASS_RULE = "at least one horizon passes every check"
 MARKET_ID = "NSE:NIFTY50"
 VIX_ID = "NSE:INDIAVIX"
 SEED = 20260924
@@ -92,155 +83,6 @@ STALE_AFTER = timedelta(days=7)
 
 VALIDATION_REPORT = "2026-09-24-regime-v1-validation.json"
 HASHED_CONFIGS = ("pivot.yaml", "research.yaml", "costs.yaml", "watchlist.yaml")
-
-
-# --- pivot.yaml ------------------------------------------------------------------------------------
-
-
-@dataclass(frozen=True)
-class WalkForwardSpec:
-    retrain_every_months: int
-    purge_bars: int
-    embargo_bars: int
-    expanding: bool
-
-
-@dataclass(frozen=True)
-class RegimeGate:
-    brier_skill_ci_lower_above: float
-    calibration_min_p: float
-    min_scored: int
-    top_decile_expectancy_after_cost_positive: bool
-    pass_rule: str
-
-
-@dataclass(frozen=True)
-class RegimeSpec:
-    name: str
-    algo: str
-    timeframe: str
-    horizons_days: tuple[int, ...]
-    target: str
-    feature_groups: tuple[str, ...]
-    baselines: tuple[str, ...]
-    go_no_go_2: RegimeGate
-
-
-@dataclass(frozen=True)
-class PivotConfig:
-    daily_start: date
-    holdout_start: date
-    train_end: dict[str, date]
-    walk_forward: WalkForwardSpec
-    regime_model: RegimeSpec
-    sha256: str
-
-    @property
-    def daily_start_utc(self) -> pd.Timestamp:
-        return ist_midnight_utc(self.daily_start)
-
-    @property
-    def holdout_start_utc(self) -> pd.Timestamp:
-        return ist_midnight_utc(self.holdout_start)
-
-    def train_end_utc(self, tf: str = TIMEFRAME) -> pd.Timestamp:
-        return ist_midnight_utc(self.train_end["1D" if tf == "1D" else "intraday"])
-
-
-_PIVOT_KEYS: dict[str, set[str]] = {
-    "": {"data", "range_model", "regime_model", "candle_accuracy", "holdout_rule"},
-    "data": {"daily_start", "holdout_start", "train_end", "walk_forward"},
-    "data.walk_forward": {"retrain_every_months", "purge_bars", "embargo_bars", "expanding"},
-    "regime_model": {
-        "name", "algo", "timeframe", "horizons_days", "target", "feature_groups", "baselines", "go_no_go_2",
-    },
-    "regime_model.go_no_go_2": {
-        "brier_skill_ci_lower_above", "calibration_min_p", "min_scored",
-        "top_decile_expectancy_after_cost_positive", "pass_rule",
-    },
-}
-
-
-def _section(raw: dict, name: str) -> dict:
-    """The section with exactly the known keys: an unknown key or a missing one is an error, so a
-    pre-registered setting can never be silently ignored."""
-    if not isinstance(raw, dict):
-        raise ValueError(f"pivot.yaml {name or 'top level'} must be a mapping")
-    keys = set(raw)
-    unknown, missing = sorted(keys - _PIVOT_KEYS[name]), sorted(_PIVOT_KEYS[name] - keys)
-    if unknown or missing:
-        raise ValueError(f"pivot.yaml {name or 'top level'}: unknown keys {unknown}, missing keys {missing}")
-    return raw
-
-
-def _expect(value, allowed, key: str):
-    if value != allowed:
-        raise ValueError(f"pivot.yaml {key}={value!r} is not implemented; regime_v1 implements {allowed!r}")
-    return value
-
-
-def _as_date(value) -> date:
-    return date.fromisoformat(value) if isinstance(value, str) else value
-
-
-@lru_cache(maxsize=4)
-def _pivot_cached(path: str, mtime: float) -> PivotConfig:
-    text = Path(path).read_bytes()
-    raw = _section(yaml.safe_load(text), "")
-    data = _section(raw["data"], "data")
-    wf = _section(data["walk_forward"], "data.walk_forward")
-    rm = _section(raw["regime_model"], "regime_model")
-    gate = _section(rm["go_no_go_2"], "regime_model.go_no_go_2")
-    train_end = {str(k): _as_date(v) for k, v in data["train_end"].items()}
-    if set(train_end) != {"1D", "intraday"}:
-        raise ValueError("pivot.yaml data.train_end needs exactly the keys 1D and intraday")
-    holdout = _as_date(data["holdout_start"])
-    research_holdout = load_research_config().holdout_start
-    if holdout != research_holdout:
-        raise ValueError(f"pivot.yaml holdout_start {holdout} differs from research.yaml {research_holdout}")
-    _expect(bool(wf["expanding"]), True, "data.walk_forward.expanding")
-    horizons = tuple(int(h) for h in rm["horizons_days"])
-    if not horizons or any(h < 1 for h in horizons):
-        raise ValueError("pivot.yaml regime_model.horizons_days must be positive integers")
-    groups = tuple(str(g) for g in rm["feature_groups"])
-    _expect(sorted(groups), sorted(FEATURE_GROUPS), "regime_model.feature_groups")
-    baselines = tuple(str(b) for b in rm["baselines"])
-    _expect(sorted(baselines), sorted(BASELINES), "regime_model.baselines")
-    return PivotConfig(
-        daily_start=_as_date(data["daily_start"]),
-        holdout_start=holdout,
-        train_end=train_end,
-        walk_forward=WalkForwardSpec(
-            retrain_every_months=int(wf["retrain_every_months"]),
-            purge_bars=int(wf["purge_bars"]),
-            embargo_bars=int(wf["embargo_bars"]),
-            expanding=True,
-        ),
-        regime_model=RegimeSpec(
-            name=_expect(str(rm["name"]), MODEL_NAME, "regime_model.name"),
-            algo=_expect(str(rm["algo"]), ALGO, "regime_model.algo"),
-            timeframe=_expect(str(rm["timeframe"]), TIMEFRAME, "regime_model.timeframe"),
-            horizons_days=horizons,
-            target=_expect(str(rm["target"]), TARGET, "regime_model.target"),
-            feature_groups=groups,
-            baselines=baselines,
-            go_no_go_2=RegimeGate(
-                brier_skill_ci_lower_above=float(gate["brier_skill_ci_lower_above"]),
-                calibration_min_p=float(gate["calibration_min_p"]),
-                min_scored=int(gate["min_scored"]),
-                top_decile_expectancy_after_cost_positive=bool(gate["top_decile_expectancy_after_cost_positive"]),
-                pass_rule=_expect(str(gate["pass_rule"]), PASS_RULE, "regime_model.go_no_go_2.pass_rule"),
-            ),
-        ),
-        sha256=hashlib.sha256(text).hexdigest(),
-    )
-
-
-def load_pivot_config(path: Path | None = None) -> PivotConfig:
-    """Strict reader for config/pivot.yaml: the data section and regime_model are parsed and checked
-    against what this module implements; the other sections are only checked to exist."""
-    path = path or get_settings().config_dir / "pivot.yaml"
-    return _pivot_cached(str(path), path.stat().st_mtime)
 
 
 def config_hashes() -> dict[str, str]:
