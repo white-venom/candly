@@ -337,6 +337,17 @@ If it fails, we stop and rethink before building on it. Likely pivots: forecast 
 5. **Holdout:** evaluated once per model, after the validation results are written up.
 6. **Our own ML models produce every number;** Claude only explains.
 
+## 20b. Edge search (2026-09-24)
+
+Direction from a single instrument's own candles failed three honest tests: the candlestick scorecards, analog_v1 and regime_v1. regime_v1 had Brier skill −0.03 at both 5 and 20 days.
+
+The search moves to where edges are documented. The tests are pre-registered in `config/edge_search.yaml` before the data was downloaded:
+- **A. xs_v1:** which of the Nifty 200 stocks beat the market over 5 and 20 days (cross-sectional ranking, long-only top decile, after costs).
+- **B. vol_v1:** does our volatility forecast beat India VIX (the option market) at predicting realised volatility, and does trading only on disagreement beat always selling volatility?
+- **C. oi_v1:** option-chain positioning (OI, PCR, IV skew, expiry flows). Logging started today, and the test is pre-registered before the first look at the data.
+
+A pass is a lead, not a strategy. Real option prices, margins and tail risk come before any money.
+
 ## 20. Open questions
 
 - Fyers symbol formats, and how `cont_flag` behaves for MCX continuous futures. Verify when the keys arrive.

@@ -1,0 +1,54 @@
+# Edge search, pre-registered 2026-09-24 BEFORE the Nifty 200 data was downloaded and before any of these
+# tests was run. Direction from a single instrument's own candles failed three honest tests (candlestick
+# scorecards, analog_v1, regime_v1). These tests look where edges are documented instead: relative moves
+# across many stocks, and volatility vs option-implied volatility. Log any later change in PLAN.md.
+
+common:
+  holdout_start: 2025-10-01        # locked; evaluated once per test after validation is written up
+  costs: config/costs.yaml         # every return is reported after costs
+  bootstrap: {kind: date_block, resamples: 2000, ci_level: 0.95, seed: 20260924}
+
+# --- Test A: which stocks beat the market (cross-sectional) -----------------------------------------
+cross_section:
+  name: xs_v1
+  universe: config/universe_nifty200.yaml   # current constituents: survivorship-biased, results are an upper bound
+  benchmark: equal_weight_universe
+  horizons_days: [5, 20]
+  rebalance: {5: weekly_first_trading_day, 20: monthly_first_trading_day}
+  train_end: 2016-01-01            # validation 2016-01-01 .. holdout_start; retrain yearly, expanding window
+  purge_days: 20
+  min_price_inr: 20                # skip penny-priced names at the rebalance date (causal)
+  feature_groups: [reversal_1w, return_1m, momentum_12_1, volatility_60d, distance_52w_high, volume_change,
+                   beta_1y, sector_relative_return, turnover]
+  model: lightgbm_lambdarank       # plus the single-factor baselines below
+  baselines: [reversal_1w, momentum_12_1, low_volatility]
+  portfolio: {long: top_decile, weighting: equal, short: none}   # long-only: cash equity can't be shorted overnight
+  metrics: [rank_ic_mean, rank_ic_t, top_decile_excess_after_cost_annual, weekly_hit_rate_vs_benchmark, turnover, max_drawdown_excess]
+  pass_if:
+    rank_ic_ci_lower_above: 0.0
+    top_decile_excess_after_cost_ci_lower_above: 0.0
+    beats_best_baseline: true      # the model's after-cost excess must exceed the best single factor's
+    rule: "at least one horizon passes every check"
+
+# --- Test B: is our volatility forecast better than the option market's? ---------------------------
+volatility:
+  name: vol_v1
+  underlying: NSE:NIFTY50
+  implied: NSE:INDIAVIX            # 30-day implied volatility, annualised %
+  horizons_days: [5, 20]
+  train_end: 2016-01-01
+  forecast: realized_vol_model     # LightGBM on the range_v1 volatility feature groups, daily
+  baselines: [india_vix, har_rv, ewma_rv]   # HAR = standard heterogeneous autoregressive realised-vol model
+  loss: qlike                      # standard loss for variance forecasts
+  pnl_proxy: variance_swap         # short-vol P&L = implied variance - realised variance (no option prices yet)
+  pass_if:
+    qlike_improvement_vs_vix_ci_lower_above: 0.0      # our forecast predicts realised vol better than VIX
+    conditional_vs_always_short_sharpe_ci_lower_above: 0.0   # trading only when our forecast disagrees beats always selling
+    rule: "at least one horizon passes both checks"
+  caveat: "a pass is a lead, not a strategy: real option prices, margins and tail risk are checked on logged option chains before anything is traded"
+
+# --- Test C (later): option-chain positioning, needs >= 30 sessions of logged chains ------------------
+options_flow:
+  name: oi_v1
+  status: logging_started_2026-09-24
+  pre_register_before: "the first look at the logged data"
